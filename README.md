@@ -42,7 +42,7 @@ and `claude-settings`), saying so in a comment.
 name, ids, permission mode) survive verbatim, and everything else (tool_input, tool_response,
 `cwd`, `transcript_path`, prompts) becomes `{type, length}`, with no hash. `--full` (on `init` or
 `log`) logs raw payloads including commands, paths and file contents; such a log must not be
-shared, attached to an issue or committed. Environment variables are not read unless `--i-understand-this-reads-env-var-names` is passed; then only the names (never values) of variables containing PROJECT, WORKSPACE or HARNESS are logged.
+shared, attached to an issue or committed. Environment variables are not read unless `--env-be-very-careful` is passed; then only the names (never values) of variables containing PROJECT, WORKSPACE or HARNESS are logged.
 
 Each log line has top-level `event`, `tool_name` and `session_id` (null when absent) next to
 `ts` and `keys`. `discover summary` tabulates per-event top-level keys, per-tool tool_input

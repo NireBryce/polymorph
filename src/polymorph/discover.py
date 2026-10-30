@@ -52,7 +52,7 @@ def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = 
     """Hook command: absolute interpreter and log path, so it works from any cwd."""
     if out is None:
         out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
-    flag = ("" if redact else " --full") + (" --i-understand-this-reads-env-var-names" if env else "")
+    flag = ("" if redact else " --full") + (" --env-be-very-careful" if env else "")
     return f"{shlex.quote(sys.executable)} -m polymorph discover log{flag} --out {shlex.quote(str(Path(out).resolve()))}"
 
 
@@ -281,7 +281,7 @@ def _redact_payload(raw):
     return out
 
 
-# Only with --i-understand-this-reads-env-var-names: names (never values) of variables that say where the project is.
+# Only with --env-be-very-careful: names (never values) of variables that say where the project is.
 _ENV_NAME = re.compile(r"PROJECT|WORKSPACE|HARNESS", re.I)
 
 

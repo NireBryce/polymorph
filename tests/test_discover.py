@@ -66,7 +66,7 @@ class DiscoverTests(unittest.TestCase):
 
     def test_env_flag_logs_only_project_like_names(self):
         out = self.d / "e.jsonl"
-        run_cli(["discover", "log", "--i-understand-this-reads-env-var-names", "--out", str(out)], "{}",
+        run_cli(["discover", "log", "--env-be-very-careful", "--out", str(out)], "{}",
                 env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE", "FOO_PROJECT_DIR": "/home/x/p", "HOME": "/home/x"})
         text = out.read_text()
         self.assertEqual(json.loads(text)["env_keys"], ["FOO_PROJECT_DIR"])

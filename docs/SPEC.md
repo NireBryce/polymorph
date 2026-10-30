@@ -113,7 +113,7 @@ polymorph discover reload-check --config-path P --scratch-log F [--finish]
 polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
 ```
 
-Discovery log line: `{ts, event, tool_name, session_id, env_keys (empty unless `--i-understand-this-reads-env-var-names`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
+Discovery log line: `{ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
 By default every value in `raw` except structural ones (event, tool name, ids, permission mode) becomes `{type, length}`; `--full` logs raw payloads.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
