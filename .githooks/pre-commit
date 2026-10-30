@@ -1,0 +1,5 @@
+#!/bin/sh
+# Cheap checks before a commit; the full set is `just preflight`.
+set -e
+python3 tests/docs.py
+python3 tests/lint.py
