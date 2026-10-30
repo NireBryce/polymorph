@@ -41,8 +41,21 @@ def _parser() -> argparse.ArgumentParser:
     di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
                     help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
     di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph-discovery)")
+    di.add_argument("--redact", action="store_true", help="bake --redact into the logger command")
     dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
     dl.add_argument("--out", required=True)
+    dl.add_argument("--redact", action="store_true",
+                    help="replace tool_input/tool_response values with {type, length, sha256}")
+    dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
+    dr.add_argument("--config-path", required=True)
+    dr.add_argument("--scratch-log", required=True)
+    dr.add_argument("--finish", action="store_true", help="report, then remove the temporary hook")
+    dr.add_argument("--event-name", default="PreToolUse")
+    dr.add_argument("--matcher", default="*")
+    dr.add_argument("--shape", default=None, choices=["claude-settings", "claude-like"],
+                    help="default: detected from the existing file")
+    dm = ds.add_parser("summary", help="table of keys, tools and counts in a discovery log")
+    dm.add_argument("file")
     dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
     dd.add_argument("file")
     dd.add_argument("--name", required=True)
@@ -53,12 +66,23 @@ def _cmd_discover(args) -> int:
     from . import discover
 
     if args.dcmd == "log":
-        discover.log_stdin(args.out)
+        discover.log_stdin(args.out, redact=args.redact)
         return 0
     if args.dcmd == "init":
         p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
-                                shape=args.shape, log_dir=args.log_dir)
+                                shape=args.shape, log_dir=args.log_dir, redact=args.redact)
         print(f"wrote {p}")
+        return 0
+    if args.dcmd == "summary":
+        print(discover.summarize(args.file), end="")
+        return 0
+    if args.dcmd == "reload-check":
+        if args.finish:
+            seen, msg = discover.reload_check_finish(args.config_path, args.scratch_log)
+            print(msg)
+            return 0 if seen else 1
+        print(discover.reload_check_start(args.config_path, args.scratch_log, args.event_name,
+                                          args.matcher, shape=args.shape))
         return 0
     print(discover.draft_mapping(args.file, args.name), end="")
     return 0

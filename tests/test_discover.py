@@ -98,7 +98,9 @@ class DiscoverTests(unittest.TestCase):
         self.assertNotIn("verified =", text)
         self.assertIn("5 observed payloads", text)
         self.assertIn('"run_shell"', text)
-        self.assertNotIn("mcp__x__y", text)
+        tools_sec = text.split("[tools]")[1].split("[events]")[0]
+        self.assertNotIn('"mcp__x__y"', tools_sec)
+        self.assertIn("mcp__x__y (1 calls): mcp tool", text)
         self.assertIn('"shell.command" = "tool_input.command"', text)
         self.assertIn('pre_tool = "PreToolUse"', text)
 
@@ -115,9 +117,6 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("name = \"zz\"", r.stdout)
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class InitShapeTest(unittest.TestCase):
@@ -148,3 +147,221 @@ class InitAddsEventsTest(unittest.TestCase):
             discover.init_config("t", str(cfg), "PreToolUse")
             discover.init_config("t", str(cfg), "PostToolUse")
             self.assertEqual(sorted(json.loads(cfg.read_text())["hooks"]), ["PostToolUse", "PreToolUse"])
+
+
+CLAUDE_PAYLOADS = [
+    {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "s1", "cwd": "/w",
+     "tool_input": {"command": "echo SECRETCMD"}},
+    {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "s1", "cwd": "/w",
+     "tool_input": {"command": "ls", "description": "d"}},
+    {"hook_event_name": "PostToolUse", "tool_name": "Read", "session_id": "s2", "cwd": "/w",
+     "tool_input": {"file_path": "/etc/hostsfile"}, "tool_response": {"content": "FILEBODY"}},
+    {"hook_event_name": "PreToolUse", "tool_name": "Grep", "session_id": "s2", "cwd": "/w",
+     "tool_input": {"pattern": "needle", "path": "/srv"}},
+    {"hook_event_name": "PreToolUse", "tool_name": "Monitor", "session_id": "s2", "cwd": "/w",
+     "tool_input": {"x": 1}},
+]
+
+
+def _mk(d, payloads, redact=False):
+    f = Path(d) / "l.jsonl"
+    for p in payloads:
+        discover.log_stdin(str(f), io.StringIO(json.dumps(p)), redact=redact)
+    return f
+
+
+class TopLevelFieldsTest(unittest.TestCase):
+    def test_event_tool_session_top_level(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS[:1] + [{"x": 1}])
+            a, b = [json.loads(l) for l in f.read_text().splitlines()]
+            self.assertEqual((a["event"], a["tool_name"], a["session_id"]), ("PreToolUse", "Bash", "s1"))
+            self.assertEqual((b["event"], b["tool_name"], b["session_id"]), (None, None, None))
+
+    def test_draft_and_summary_use_top_level_not_raw(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS)
+            lines = [json.loads(l) for l in f.read_text().splitlines()]
+            for r in lines:           # corrupt raw: top-level must win
+                r["raw"] = {"cwd": "/w", "hook_event_name": "PreToolUse"}
+            f.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+            self.assertIn("Bash", discover.draft_mapping(f, "h"))
+            self.assertIn("Monitor", discover.summarize(f))
+
+
+class DraftEvidenceTest(unittest.TestCase):
+    def test_counts_paths_guesses_unclassified(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS)
+            text = discover.draft_mapping(f, "t3")
+            m = Path(d) / "m.toml"
+            m.write_text(text)
+            self.assertEqual(validate_mapping(m), [])
+            self.assertIn('"shell.command" = "tool_input.command"   # 2/2 Bash', text)
+            self.assertIn('"read.file_path" = "tool_input.file_path"   # 1/1 Read', text)
+            self.assertIn('"read.pattern" = "tool_input.pattern"   # 1/1 Grep', text)
+            self.assertIn('"read.path" = "tool_input.path"   # 1/1 Grep', text)
+            self.assertIn("# guessed from name", text)
+            self.assertIn("#   Monitor (1 calls): no name heuristic matched", text)
+            self.assertNotIn("verified =", text)
+            for leak in ("SECRETCMD", "/etc/hostsfile", "needle", "/srv", "FILEBODY"):
+                self.assertNotIn(leak, text)
+
+    def test_infers_claude_config_only_with_evidence(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = discover.draft_mapping(_mk(d, CLAUDE_PAYLOADS), "t3")
+            self.assertIn('config_path = ".claude/settings.json"   # inferred', text)
+            self.assertIn('template = "claude-settings"   # inferred', text)
+        with tempfile.TemporaryDirectory() as d:
+            text = discover.draft_mapping(_mk(d, [{"tool_name": "Bash", "cwd": "/w"}]), "t3")
+            self.assertIn("unknown: set to the real location", text)
+            self.assertNotIn("inferred", text)
+
+
+class SummaryTest(unittest.TestCase):
+    def test_summary_table(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS)
+            out = discover.summarize(f)
+            self.assertIn("payloads: 5", out)
+            self.assertIn("sessions: 2", out)
+            self.assertIn("PreToolUse", out)
+            self.assertIn("command 2/2", out)
+            self.assertIn("pattern 1/1", out)
+            self.assertNotIn("SECRETCMD", out)
+            r = run_cli(["discover", "summary", str(f)])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("per tool", r.stdout)
+
+
+class RedactTest(unittest.TestCase):
+    def test_redact_values_keep_keys(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS[:3], redact=True)
+            text = f.read_text()
+            for leak in ("SECRETCMD", "/etc/hostsfile", "FILEBODY"):
+                self.assertNotIn(leak, text)
+            r = json.loads(text.splitlines()[0])
+            c = r["raw"]["tool_input"]["command"]
+            self.assertEqual((c["type"], c["length"]), ("string", len("echo SECRETCMD")))
+            self.assertEqual(len(c["sha256"]), 12)
+            self.assertEqual(r["tool_input_keys"], ["command"])
+            self.assertEqual(r["tool_name"], "Bash")
+            self.assertTrue(r["redacted"])
+            self.assertEqual(json.loads(text.splitlines()[2])["raw"]["tool_response"]["content"]["type"], "string")
+
+    def test_default_is_full_capture_and_init_bakes_redact(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS[:1])
+            self.assertIn("SECRETCMD", f.read_text())
+            cfg = Path(d) / "s.json"
+            discover.init_config("h", str(cfg), log_dir=d, redact=True)
+            self.assertIn("discover log --redact --out",
+                          json.loads(cfg.read_text())["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+            cfg2 = Path(d) / "s2.json"
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg2), "--redact"])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("--redact", cfg2.read_text())
+
+    def test_cli_redact_non_json_not_leaked(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "l.jsonl"
+            r = run_cli(["discover", "log", "--redact", "--out", str(out)], "TOPSECRET not json")
+            self.assertEqual((r.returncode, r.stdout), (0, ""))
+            self.assertNotIn("TOPSECRET", out.read_text())
+
+
+class ErrorSidecarTest(unittest.TestCase):
+    def test_non_json_and_non_object_recorded(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "h.jsonl"
+            for stdin in ("nope {", "[1]", "{}"):
+                r = run_cli(["discover", "log", "--out", str(out)], stdin)
+                self.assertEqual((r.returncode, r.stdout), (0, ""))
+            errs = [json.loads(l) for l in (Path(d) / "h.errors.jsonl").read_text().splitlines()]
+            self.assertEqual(len(errs), 2)
+            self.assertIn("not JSON", errs[0]["error"])
+            self.assertNotIn("nope", json.dumps(errs))
+
+    def test_unwritable_log_goes_to_sidecar_when_possible(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "h.jsonl").mkdir()          # a directory where the log file should be
+            r = run_cli(["discover", "log", "--out", str(Path(d) / "h.jsonl")], "{}")
+            self.assertEqual((r.returncode, r.stdout), (0, ""))
+            err = (Path(d) / "h.errors.jsonl").read_text()
+            self.assertIn("IsADirectoryError", err)
+
+    def test_unwritable_everywhere_still_silent(self):
+        r = run_cli(["discover", "log", "--out", "/proc/nope/x.jsonl"], "{}")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "", ""))
+
+
+class ReloadCheckTest(unittest.TestCase):
+    def _args(self, d):
+        return ["--config-path", str(Path(d) / "settings.json"), "--scratch-log", str(Path(d) / "scratch.jsonl")]
+
+    def test_start_finish_restores_bytes_seen(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "settings.json"
+            orig = b'{ "model":"x",\n "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type":"command","command":"keep"}]}]}}'
+            cfg.write_bytes(orig)
+            r = run_cli(["discover", "reload-check", *self._args(d)])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("--finish", r.stdout)
+            doc = json.loads(cfg.read_text())
+            groups = doc["hooks"]["PreToolUse"]
+            self.assertEqual(len(groups), 2)                       # appended beside existing
+            self.assertEqual(groups[0]["hooks"][0]["command"], "keep")
+            self.assertIn("scratch.jsonl", groups[1]["hooks"][0]["command"])
+            run_cli(["discover", "log", "--out", str(Path(d) / "scratch.jsonl")], "{}")
+            r = run_cli(["discover", "reload-check", "--finish", *self._args(d)])
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("RELOADED", r.stdout)
+            self.assertEqual(cfg.read_bytes(), orig)
+
+    def test_finish_not_seen_still_removes_hook(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "settings.json"
+            run_cli(["discover", "reload-check", *self._args(d)])      # file did not exist
+            self.assertTrue(cfg.exists())
+            r = run_cli(["discover", "reload-check", "--finish", *self._args(d)])
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("NOT SEEN", r.stdout)
+            self.assertFalse(cfg.exists())
+
+    def test_finish_after_foreign_edit_strips_by_marker(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "settings.json"
+            cfg.write_text('{"a": 1}')
+            run_cli(["discover", "reload-check", *self._args(d)])
+            doc = json.loads(cfg.read_text())
+            doc["b"] = 2
+            cfg.write_text(json.dumps(doc))
+            run_cli(["discover", "reload-check", "--finish", *self._args(d)])
+            after = json.loads(cfg.read_text())
+            self.assertEqual((after["a"], after["b"]), (1, 2))
+            self.assertNotIn("scratch.jsonl", cfg.read_text())
+
+    def test_claude_like_shape_detected(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "settings.json"
+            discover.init_config("z", str(cfg), shape="claude-like", log_dir=d)
+            before = cfg.read_bytes()
+            run_cli(["discover", "reload-check", *self._args(d)])
+            evs = json.loads(cfg.read_text())["hooks"]["events"]["PreToolUse"]
+            self.assertEqual(len(evs), 2)
+            run_cli(["discover", "reload-check", "--finish", *self._args(d)])
+            self.assertEqual(cfg.read_bytes(), before)
+
+    def test_second_start_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "settings.json").write_text("{}")
+            run_cli(["discover", "reload-check", *self._args(d)])
+            r = run_cli(["discover", "reload-check", *self._args(d)])
+            self.assertNotEqual(r.returncode, 0)
+            run_cli(["discover", "reload-check", "--finish", *self._args(d)])
+            self.assertEqual(Path(d, "settings.json").read_text(), "{}")
+
+
+if __name__ == "__main__":
+    unittest.main()
