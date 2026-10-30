@@ -291,6 +291,7 @@ def _first_str(raw: dict, names) -> str | None:
     return None
 
 
+LOG_SCHEMA = 1   # lines written before this marker existed have no "schema" key and still read
 _SESSION_KEYS = ("session_id", "sessionId")
 _RESPONSE_KEYS = ("tool_response", "toolResponse")
 _JSON_TYPES = ((bool, "boolean"), (int, "number"), (float, "number"), (str, "string"),
@@ -311,6 +312,29 @@ def _descriptor(v) -> dict:
     return {"type": typ, "length": len(data)}
 
 
+# Call and message ids, kept verbatim only when they look like ids, so before/after lines
+# can be paired. Anything else under these names is reduced like any other value.
+_CALL_ID_KEYS = ("tool_use_id", "id", "call_id", "callID", "toolCallID")
+_MESSAGE_ID_KEYS = ("messageID", "message_id")
+_ID_VALUE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+
+# Output-like objects keep their nested key paths (depth-limited), values become descriptors.
+_OUTPUT_KEYS = (*_RESPONSE_KEYS, "output", "result", "tool_result", "toolResult")
+_SHAPE_DEPTH = 3
+_SHAPE_MAX_KEYS = 64
+
+
+def _shape(v, depth: int = _SHAPE_DEPTH):
+    """Nested key paths of an object with every leaf a descriptor; odd key names are dropped."""
+    if not isinstance(v, dict) or depth <= 0:
+        return _descriptor(v)
+    out = {}
+    for k, vv in list(v.items())[:_SHAPE_MAX_KEYS]:
+        k = str(k)
+        out[k if _safe(k, _KEY_RE) else "<invalid key>"] = _shape(vv, depth - 1)
+    return out
+
+
 def _redact_payload(raw):
     """Keys kept; only _SAFE_VALUES survive verbatim, the rest become {type, length}."""
     if not isinstance(raw, dict):
@@ -319,7 +343,12 @@ def _redact_payload(raw):
     for k, v in raw.items():
         if k in _SAFE_VALUES and isinstance(v, (str, int, float, bool)) and not isinstance(v, dict):
             out[k] = v
-        elif k in (*_INPUT_KEYS, *_RESPONSE_KEYS) and isinstance(v, dict):
+        elif (k in (*_CALL_ID_KEYS, *_MESSAGE_ID_KEYS) and isinstance(v, str)
+              and _ID_VALUE.match(v)):
+            out[k] = v
+        elif k in _OUTPUT_KEYS and isinstance(v, dict):
+            out[k] = _shape(v)
+        elif k in _INPUT_KEYS and isinstance(v, dict):
             out[k] = {kk: _descriptor(vv) for kk, vv in v.items()}
         else:
             out[k] = _descriptor(v)
@@ -352,6 +381,7 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
         tool_name = _first_str(raw, _TOOL_NAME_KEYS)
         session_id = _first_str(raw, _SESSION_KEYS)
     return {
+        "schema": LOG_SCHEMA,
         "ts": time.time(),
         "event": event,
         "tool_name": tool_name,
@@ -452,10 +482,105 @@ _READ_FIELDS = (("read.file_path", ("file_path", "filePath")), ("read.path", ("p
                 ("read.pattern", ("pattern",)), ("read.glob", ("glob",)))
 
 
-def draft_mapping(log: str | Path, name: str) -> str:
+def _num(v) -> float:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
+
+
+def _select(recs: list[dict], include=(), events=()) -> tuple[list[tuple[int, dict]], dict[str, int]]:
+    """(file position, record) pairs in ts order, plus counts of the hidden event names.
+
+    Default: tool events (a tool name is present). `events` replaces that default with
+    exactly those event names; `include` adds names to whatever is selected. Each hook
+    event is logged by its own process, so file order is not time order: sort by ts
+    (file order breaks ties).
+    """
+    keep, hidden = [], {}
+    for i, rec in enumerate(recs):
+        ev, tn, _ = _top(rec)
+        if events:
+            wanted = ev in events
+        else:
+            wanted = tn is not None
+        if wanted or ev in include:
+            keep.append((i, rec))
+        else:
+            name = _safe(ev, _EVENT_RE) or ("<none>" if ev is None else "<invalid>")
+            hidden[name] = hidden.get(name, 0) + 1
+    keep.sort(key=lambda t: (_num(t[1].get("ts")), t[0]))
+    return keep, hidden
+
+
+def _ids(raw: dict) -> tuple[str | None, str | None]:
+    def pick(names):
+        for n in names:
+            v = raw.get(n)
+            if isinstance(v, str) and _ID_VALUE.match(v):
+                return v
+        return None
+    return pick(_CALL_ID_KEYS), pick(_MESSAGE_ID_KEYS)
+
+
+def _pairing(sel: list[tuple[int, dict]]) -> dict[str, int] | None:
+    """Pair pre_tool and post_tool lines by (call id, message id); None if there are none."""
+    seen: dict[tuple, dict[str, int]] = {}
+    no_id = 0
+    any_pp = False
+    for i, rec in sel:
+        ev = _top(rec)[0]
+        kind = _event_kind(ev)[0] if ev and _EVENT_RE.match(ev) else None
+        if kind not in ("pre_tool", "post_tool"):
+            continue
+        any_pp = True
+        call, msg = _ids(rec["raw"])
+        if call is None:
+            no_id += 1
+            continue
+        seen.setdefault((call, msg), {}).setdefault(kind, i)
+    if not any_pp:
+        return None
+    paired = [v for v in seen.values() if len(v) == 2]
+    return {
+        "paired": len(paired),
+        "out_of_order": sum(1 for v in paired if v["post_tool"] < v["pre_tool"]),
+        "before_only": sum(1 for v in seen.values() if set(v) == {"pre_tool"}),
+        "after_only": sum(1 for v in seen.values() if set(v) == {"post_tool"}),
+        "no_id": no_id,
+    }
+
+
+def _pairing_text(p: dict[str, int]) -> str:
+    return (f"{p['paired']} paired ({p['out_of_order']} arrived out of order), "
+            f"{p['before_only']} before without after, {p['after_only']} after without before, "
+            f"{p['no_id']} without an id")
+
+
+def _is_descriptor(v) -> bool:
+    return (isinstance(v, dict) and set(v) == {"type", "length"} and isinstance(v["type"], str)
+            and isinstance(v["length"], int))
+
+
+def _leaf_paths(v, prefix: str, depth: int = _SHAPE_DEPTH + 1):
+    """(dotted path, type) of every leaf of a redacted object; unsafe key names end the path."""
+    if _is_descriptor(v):
+        yield prefix, v["type"]
+    elif isinstance(v, dict) and depth > 0:
+        for k, vv in v.items():
+            if _safe(k, _KEY_RE):
+                yield from _leaf_paths(vv, f"{prefix}.{k}", depth - 1)
+    elif not isinstance(v, dict):
+        yield prefix, next(n for t, n in _JSON_TYPES if isinstance(v, t))
+
+
+def _is_bool(v) -> bool:
+    return isinstance(v, bool) or (_is_descriptor(v) and v["type"] == "boolean")
+
+
+def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
     if not re.match(r"^[a-z][a-z0-9_-]*$", name):
         raise ValueError(f"name {name!r} must match [a-z][a-z0-9_-]*")
-    recs, _ = _load_records(log)
+    all_recs, _ = _load_records(log)
+    sel, _ = _select(all_recs, include, events)
+    recs = [r for _, r in sel]
     total = len(recs)
     tools: dict[str, list[str]] = {}
     tool_calls: dict[str, int] = {}        # safe tool name -> payloads
@@ -470,6 +595,13 @@ def draft_mapping(log: str | Path, name: str) -> str:
     evidence: dict[str, dict[str, int]] = {}
     basic: dict[str, int] = {}
     claude_style = False
+    flags: dict[str, dict[str, int]] = {}  # tool -> boolean tool_input key -> payloads
+    out_paths: dict[str, dict[str, int]] = {}  # output-like path -> {type: payloads}
+    out_total = 0
+    for rec in all_recs:
+        ev0 = _top(rec)[0]
+        if ev0 is not None and len(ev0) <= 64 and _EVENT_RE.match(ev0):
+            seen_events[ev0] = seen_events.get(ev0, 0) + 1
 
     def setp(k: str, v: str):
         payload.setdefault(k, v)
@@ -502,6 +634,10 @@ def draft_mapping(log: str | Path, name: str) -> str:
         ik = _first_key(raw, _INPUT_KEYS)
         if cls and ik and isinstance(raw[ik], dict) and _KEY_RE.match(ik):
             inp = raw[ik]
+            for kk, vv in inp.items():
+                if _safe(str(kk), _KEY_RE) and _is_bool(vv):
+                    flags.setdefault(tool, {})
+                    flags[tool][kk] = flags[tool].get(kk, 0) + 1
             if cls == "shell":
                 ck = _first_key(inp, _COMMAND_KEYS)
                 if ck and _KEY_RE.match(ck):
@@ -518,6 +654,12 @@ def draft_mapping(log: str | Path, name: str) -> str:
                     if kk and _KEY_RE.match(kk):
                         setp(canon, f"{ik}.{kk}")
                         count(canon, tool)
+        ok = _first_key(raw, _OUTPUT_KEYS)
+        if ok and _KEY_RE.match(ok) and isinstance(raw[ok], dict):
+            out_total += 1
+            for path, typ in _leaf_paths(raw[ok], ok):
+                d = out_paths.setdefault(path, {})
+                d[typ] = d.get(typ, 0) + 1
         if "cwd" in raw:
             setp("cwd", "cwd")
             basic["cwd"] = basic.get("cwd", 0) + 1
@@ -526,7 +668,6 @@ def draft_mapping(log: str | Path, name: str) -> str:
                  _first_key(raw, _SESSION_KEYS) or "session_id")
             basic["session_id"] = basic.get("session_id", 0) + 1
         if ev is not None and len(ev) <= 64 and _EVENT_RE.match(ev):
-            seen_events[ev] = seen_events.get(ev, 0) + 1
             canon, guessed = _event_kind(ev)
             if canon and events.setdefault(canon, ev) == ev:
                 event_guessed[canon] = guessed
@@ -598,14 +739,27 @@ def draft_mapping(log: str | Path, name: str) -> str:
     for k, v in payload.items():
         e = ev_str(k)
         out.append(f"{q(k) if '.' in k else k} = {q(v)}" + (f"   # {e}" if e else ""))
-    out += ["", "[payload_out]", ""]
+    if flags:
+        out.append("# Observed tool_input flags (boolean keys; present/observed over the tool's payloads):")
+        for t in sorted(flags):
+            ks = ", ".join(f"{kk} {n}/{tool_calls.get(t, n)}" for kk, n in sorted(flags[t].items()))
+            out.append(f"#   {t}: {ks}")
+    out += ["", "[payload_out]"]
+    if out_paths:
+        out.append(f"# Output-like keys observed (values hidden by redaction; {out_total} payloads):")
+        for path in sorted(out_paths):
+            types = ", ".join(f"{t} {n}" for t, n in sorted(out_paths[path].items()))
+            out.append(f"#   {path}: {types}")
+    out.append("")
     return "\n".join(out)
 
 
 # ---- summary ----------------------------------------------------------------
 
-def summarize(log: str | Path) -> str:
-    recs, other = _load_records(log)
+def summarize(log: str | Path, include=(), events=()) -> str:
+    all_recs, other = _load_records(log)
+    sel, hidden = _select(all_recs, include, events)
+    recs = [r for _, r in sel]
     by_event: dict[str, dict] = {}
     by_tool: dict[str, dict] = {}
     sessions: set = set()
@@ -635,7 +789,20 @@ def summarize(log: str | Path) -> str:
             lines.append(f"  {k:<24} {b['n']:>5}  {ks}")
         return lines
 
-    out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}", ""]
+    marks: dict[str, int] = {}
+    for r in all_recs:
+        m = str(r["schema"]) if isinstance(r.get("schema"), int) else "unmarked"
+        marks[m] = marks.get(m, 0) + 1
+    out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}",
+           "log line schema: " + ", ".join(f"{m} ({n})" for m, n in sorted(marks.items()))]
+    if hidden:
+        out.append("hidden: " + ", ".join(f"{k} {n}" for k, n in
+                                          sorted(hidden.items(), key=lambda kv: (-kv[1], kv[0])))
+                   + "   (--include EVENT adds, --event EVENT selects)")
+    pairing = _pairing(sel)
+    if pairing:
+        out.append("pairing by call id and message id: " + _pairing_text(pairing))
+    out.append("")
     out += table("per event: top-level keys", by_event) + [""]
     out += table("per tool: tool_input keys", by_tool)
     return "\n".join(out) + "\n"

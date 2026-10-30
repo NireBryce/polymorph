@@ -37,6 +37,13 @@ First state of the project. Python 3.11+, standard library only.
   `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other
   observed names in a comment under `[events]`, and `summary` shows the real names. Mapping
   validation accepts the same characters in `[events]` values.
+- **`discover summary` and `draft` on noisy captures:** tool events only by default
+  (`--include EVENT` adds, `--event EVENT` selects); lines sorted by `ts`; `before` and
+  `after` paired by call id and message id with unpaired ones reported; output-like objects
+  keep nested key paths (depth-limited, values still `{type, length}`) and the draft lists
+  them under `[payload_out]`; boolean `tool_input` keys such as `background` are listed;
+  log lines carry `schema: 1` (older lines still read). Call and message ids that look like
+  ids are now logged verbatim so pairing works.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
 - **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
   limits.

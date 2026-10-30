@@ -63,10 +63,14 @@ def _parser() -> argparse.ArgumentParser:
     dr.add_argument("--shape", default=None, choices=["claude-settings", "claude-like"],
                     help="default: detected from the existing file")
     dm = ds.add_parser("summary", help="table of keys, tools and counts in a discovery log")
-    dm.add_argument("file")
     dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
-    dd.add_argument("file")
     dd.add_argument("--name", required=True)
+    for sp in (dm, dd):
+        sp.add_argument("file")
+        sp.add_argument("--include", action="append", default=[], metavar="EVENT",
+                        help="also use lines of this event (repeatable); default is tool events only")
+        sp.add_argument("--event", action="append", default=[], metavar="EVENT",
+                        help="use only lines of this event (repeatable), replacing the tool-event default")
     return p
 
 
@@ -82,7 +86,7 @@ def _cmd_discover(args) -> int:
         print(f"wrote {p}")
         return 0
     if args.dcmd == "summary":
-        print(discover.summarize(args.file), end="")
+        print(discover.summarize(args.file, args.include, args.event), end="")
         return 0
     if args.dcmd == "reload-check":
         if args.finish:
@@ -92,7 +96,7 @@ def _cmd_discover(args) -> int:
         print(discover.reload_check_start(args.config_path, args.scratch_log, args.event_name,
                                           args.matcher, shape=args.shape))
         return 0
-    print(discover.draft_mapping(args.file, args.name), end="")
+    print(discover.draft_mapping(args.file, args.name, args.include, args.event), end="")
     return 0
 
 

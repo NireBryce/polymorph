@@ -68,7 +68,12 @@ per tool: tool_input keys
   write_file                   1  content 1/1, file_path 1/1
 ```
 
-Names and counts only. If a count is `0 payloads`, the hook did not fire: check the file
+Names and counts only. By default only tool events are counted: a harness with a
+server-wide event bus can log thousands of session events per tool call, and the
+`hidden:` line says what was left out (`--include EVENT` adds it back, `--event EVENT`
+selects exactly one). Lines are sorted by `ts` first, and `before` / `after` lines are
+paired by call id and message id when the payloads have them (see
+[CLI reference](cli.md#discover-summary)). If a count is `0 payloads`, the hook did not fire: check the file
 location, the event name, and whether the harness reads hook config at all.
 
 If you suspect the harness needs a restart to see a changed hook file, test it:
@@ -125,6 +130,14 @@ How to read it:
   and a `hook_event_name`). Otherwise they are placeholders marked `unknown`.
 - Counts are `present/observed`. `1/1 write_file` means one of the one `write_file` payloads
   had that field.
+- Event names may contain `.`, `-` and `:` (OpenCode sends `execute.before`,
+  `execute.after`). A name ending in `before` or `after` is guessed as `pre_tool` or
+  `post_tool` and marked `guessed from name`; other observed names are listed in a comment
+  under `[events]`, not dropped.
+- Comments under `[payload_in]` list boolean `tool_input` flags (such as a shell
+  `background`), and comments under `[payload_out]` list the key paths seen in output-like
+  objects, with values hidden. Enum-valued keys cannot be told apart from other strings
+  once values are redacted, so they are not listed.
 - All capabilities are `false`, because payloads cannot tell you whether exit 2 blocks or
   `ask` is enforced. Find out by testing, then change them. See
   [Writing a mapping](writing-a-mapping.md).
