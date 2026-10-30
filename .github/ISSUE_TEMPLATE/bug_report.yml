@@ -1,0 +1,38 @@
+name: Bug report
+description: polymorph writes a wrong config, translates a hook payload wrongly, or a check gives a wrong finding.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        polymorph is experimental and unvetted. Redact home directories, usernames, repo names and tokens before posting; do not attach a `--full` discovery log.
+  - type: input
+    id: version
+    attributes:
+      label: polymorph version or commit
+      description: The commit hash (`git rev-parse HEAD`) or the release you installed.
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: Harness and version
+      description: Which mapping is involved (for example `zcode`), and the harness version.
+  - type: dropdown
+    id: rung
+    attributes:
+      label: How far did you see it?
+      options:
+        - unit test or fixture replay
+        - ran a polymorph command and read the output
+        - saw it in a live harness session
+        - docs are wrong (nothing was run)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs what you expected
+      description: The command, its output, and what should have happened.
+    validations:
+      required: true
