@@ -44,6 +44,8 @@ First state of the project. Python 3.11+, standard library only.
   them under `[payload_out]`; boolean `tool_input` keys such as `background` are listed;
   log lines carry `schema: 1` (older lines still read). Call and message ids that look like
   ids are now logged verbatim so pairing works.
+- **Docs:** `docs/observed-opencode.md` (what a live OpenCode v2.0.32 capture showed, with
+  documented, binary-only and untested claims kept apart) and an example discovery plugin.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
 - **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
   limits.

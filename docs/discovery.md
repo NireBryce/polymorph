@@ -211,3 +211,8 @@ they require the agent to show you the exact text and get a yes before filing.
 
 An example of what a completed capture looks like for a real harness is
 [observed-t3code.md](observed-t3code.md).
+
+For a harness that has plugins instead of command hooks, see
+[observed-opencode.md](observed-opencode.md): the logger is called from a plugin, shown in
+[examples/opencode-discovery-plugin.js](examples/opencode-discovery-plugin.js). The plugin
+logs every tool call on the server, including other sessions; read its header first.
