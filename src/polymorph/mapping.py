@@ -9,10 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .canon import CLASSES, EVENTS
-from .validate import DELIVERIES, direct_errors
+from .resources import MAPPINGS_DIR
+from .validate import DELIVERIES, validate_mapping
 
 SCHEMA = 1
-BUILTIN_DIR = Path(__file__).resolve().parents[2] / "mappings"
+BUILTIN_DIR = MAPPINGS_DIR
 REPO_DIR = ".agents/polymorph/mappings"
 
 TOP_KEYS = {
@@ -53,6 +54,11 @@ def _unknown(where: str, got, allowed) -> None:
 
 
 def parse_mapping(raw: dict, source: str = "") -> Mapping:
+    # One rule for generate, validate and check: whatever validate_mapping rejects
+    # (including the required tables) is not loadable.
+    errs = validate_mapping(raw)
+    if errs:
+        raise MappingError(f"{source or 'mapping'}: " + "; ".join(errs))
     _unknown(source or "mapping", raw, TOP_KEYS)
     if raw.get("schema") != SCHEMA:
         raise MappingError(f"{source}: schema must be {SCHEMA}, got {raw.get('schema')!r}")
@@ -75,10 +81,6 @@ def parse_mapping(raw: dict, source: str = "") -> Mapping:
     delivery = raw.get("delivery", "adapter")
     if delivery not in DELIVERIES:
         raise MappingError(f"{source}: delivery must be one of {', '.join(DELIVERIES)}, got {delivery!r}")
-    if delivery == "direct":
-        bad = direct_errors(raw)
-        if bad:
-            raise MappingError(f"{source}: " + "; ".join(bad))
     return Mapping(
         name=raw["name"], config_path=raw["config_path"], format=raw["format"],
         template=raw["template"], verified=raw.get("verified"),

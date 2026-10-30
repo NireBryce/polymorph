@@ -69,30 +69,64 @@ def _resolve(config_path: str, base: str | Path) -> Path:
 def _load_doc(p: Path) -> dict:
     doc: dict = {}
     if p.is_file():
-        doc = json.loads(p.read_text())
+        try:
+            doc = json.loads(p.read_text())
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{p}: existing config is not valid JSON ({e}); refusing to touch the file") from e
         if not isinstance(doc, dict):
             raise ValueError(f"{p}: existing config is not a JSON object")
     return doc
 
 
-def _merge_hook(doc: dict, shape: str, event_name: str, matcher: str, entry: dict,
-                append: bool = False) -> None:
-    """The one merge: add a catch-all hook entry under event_name.
+def _hooks_tables(doc: dict, shape: str, event_name: str) -> tuple[dict, dict, list]:
+    """The existing (hooks table, event table, group list) for event_name, validated.
 
-    append=False replaces that event's list (init: repeat calls add events);
-    append=True adds a matcher group beside whatever the event already has.
+    Raises ValueError, naming the offender, if a part that has to be kept cannot be
+    parsed: nothing is written then, so the user's hooks are never guessed at.
     """
+    hooks = doc.get("hooks")
+    if hooks is None:
+        hooks = {}
+    if not isinstance(hooks, dict):
+        raise ValueError("existing 'hooks' is not an object; refusing to touch the file")
+    table = hooks
+    if shape == "claude-like":
+        table = hooks.get("events")
+        if table is None:
+            table = {}
+        if not isinstance(table, dict):
+            raise ValueError("existing 'hooks.events' is not an object; refusing to touch the file")
+    groups = table.get(event_name)
+    if groups is None:
+        groups = []
+    if not isinstance(groups, list) or not all(
+            isinstance(g, dict) and isinstance(g.get("hooks", []), list) for g in groups):
+        raise ValueError(f"existing hooks for {event_name!r} are not a list of matcher groups; "
+                         "refusing to touch the file")
+    return hooks, table, groups
+
+
+def _merge_hook(doc: dict, shape: str, event_name: str, matcher: str, entry: dict,
+                marker: str | None = None) -> int:
+    """The one merge: add a catch-all hook entry as its own matcher group under event_name.
+
+    Every other group, event and key stays. With a marker, entries whose command
+    contains it are removed first (a repeat call replaces its own entry instead of
+    duplicating it); returns how many were removed.
+    """
+    hooks, table, groups = _hooks_tables(doc, shape, event_name)
+    removed = 0
+    if marker:
+        scratch = {"hooks": {event_name: groups}}
+        removed = _strip_marker(scratch, marker)
+        groups = scratch["hooks"][event_name]
     group = {"matcher": matcher, "hooks": [entry]}
     if shape == "claude-like":
         entry["enabled"] = True
-        hooks = doc.get("hooks") if isinstance(doc.get("hooks"), dict) else {}
-        evs = hooks.get("events") if isinstance(hooks.get("events"), dict) else {}
-        old = evs.get(event_name) if append and isinstance(evs.get(event_name), list) else []
-        doc["hooks"] = {**hooks, "enabled": True, "events": {**evs, event_name: [*old, group]}}
+        doc["hooks"] = {**hooks, "enabled": True, "events": {**table, event_name: [*groups, group]}}
     else:
-        hooks = doc.get("hooks") if isinstance(doc.get("hooks"), dict) else {}
-        old = hooks.get(event_name) if append and isinstance(hooks.get(event_name), list) else []
-        doc["hooks"] = {**hooks, event_name: [*old, group]}
+        doc["hooks"] = {**hooks, event_name: [*groups, group]}
+    return removed
 
 
 def _write_doc(p: Path, doc: dict) -> None:
@@ -110,12 +144,9 @@ def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
     p = _resolve(config_path, base)
     doc = _load_doc(p)
     entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env)}
-    if shape == "claude-like":
-        # replaces the whole hooks table, as it always has
-        doc["hooks"] = {"enabled": True,
-                        "events": {event_name: [{"matcher": matcher, "hooks": [{**entry, "enabled": True}]}]}}
-    else:
-        _merge_hook(doc, shape, event_name, matcher, entry)
+    # the logger's own entry is recognised by its --out file; the user's hooks stay
+    out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
+    _merge_hook(doc, shape, event_name, matcher, entry, marker=f"--out {shlex.quote(str(out))}")
     _write_doc(p, doc)
     return p
 
@@ -146,7 +177,7 @@ def reload_check_start(config_path: str, scratch_log: str, event_name: str = "Pr
     original = p.read_bytes() if p.is_file() else None
     doc = _load_doc(p)
     entry = {"type": "command", "command": log_command("reload-check", out=scratch)}
-    _merge_hook(doc, shape or _detect_shape(doc), event_name, matcher, entry, append=True)
+    _merge_hook(doc, shape or _detect_shape(doc), event_name, matcher, entry)
     # state first: if the config write fails midway, finish can still clean up
     scratch.parent.mkdir(parents=True, exist_ok=True)
     state = {"config": str(p), "existed": original is not None,

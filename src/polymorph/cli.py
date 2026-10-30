@@ -39,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
     ds = d.add_subparsers(dest="dcmd", required=True)
-    di = ds.add_parser("init", help="write a config whose only hook is a catch-all logger")
+    di = ds.add_parser("init", help="add a catch-all logger hook to a config, keeping the hooks already there")
     di.add_argument("--harness", required=True)
     di.add_argument("--config-path", required=True)
     di.add_argument("--event-name", default="PreToolUse")

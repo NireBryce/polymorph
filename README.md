@@ -35,14 +35,13 @@ one, and the copies drift. polymorph keeps one source of truth and regenerates t
 
 ```sh
 nix run github:NireBryce/polymorph -- --help     # not run (the github ref); `nix run .#default` in a clone was
-pip install -e .                                  # from a clone; see the note below
+pip install -e .                                  # from a clone (plain `pip install .` works too)
 python -m polymorph --help                        # after pip install -e ., or with PYTHONPATH=src
 ```
 
-Use an editable install (`-e`) or Nix. A plain `pip install .` copies only the Python
-package, and polymorph looks for its `mappings/` and `fixtures/` directories next to the
-source tree, so a non-editable install fails with "no mapping named ...". The Nix package
-copies them into place.
+Either install works: the built-in mappings and fixtures ship inside the Python package
+(`src/polymorph/mappings/`, `src/polymorph/fixtures/`), so a plain `pip install .` can run
+`conformance` and `check` from any directory. The editable install is for working on polymorph.
 
 ## Five-minute quickstart
 

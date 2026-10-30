@@ -7,8 +7,7 @@ this exact content unless marked "not run".
 ## What you need
 
 - Python 3.11 or newer. No third-party packages.
-- A clone of polymorph, installed editable (`pip install -e .`), or Nix. A non-editable
-  `pip install .` does not work: see [Limits](limits.md#packaging).
+- A clone of polymorph, installed (`pip install .`, or `-e` to work on it), or Nix.
 - A repo with `.agents/settings.json` and hook scripts under `.agents/hooks/`.
 
 In the examples `python -m polymorph` is shorthand for however you run it. From a clone

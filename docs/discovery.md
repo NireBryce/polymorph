@@ -11,8 +11,8 @@ Examples use a made-up harness `mytool` whose config is `.mytool/config.json`.
 
 ## 1. Install the logger
 
-Work in a scratch directory or a throwaway copy of the config. `init` overwrites the hook
-list for the event you name (see [CLI reference](cli.md#discover-init)).
+`init` adds the logger beside your existing hooks and does not back the file up (see
+[CLI reference](cli.md#discover-init)); a scratch copy of the config is still the safe place.
 
 ```sh
 python -m polymorph discover init --harness mytool --config-path .mytool/config.json

@@ -6,6 +6,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from .canonical import CANON_PATHS
+
 EXTRACTORS = ["apply_patch_paths"]  # shipped registry; names only, code lives elsewhere
 CLASSES = ("shell", "edit", "read", "mcp", "other")
 EVENTS = ("session_start", "pre_tool", "post_tool")
@@ -19,17 +21,7 @@ OPTIONAL = ("verified", "context_file", "skills_dir", "delivery")
 DELIVERIES = ("adapter", "direct")
 # payload_in of a harness that speaks the Claude hook protocol unchanged; the only
 # translation `delivery = "direct"` may skip.
-IDENTITY_PAYLOAD_IN = {
-    "tool_name": "tool_name",
-    "cwd": "cwd",
-    "session_id": "session_id",
-    "shell.command": "tool_input.command",
-    "edit.file_path": "tool_input.file_path",
-    "read.file_path": "tool_input.file_path",
-    "read.path": "tool_input.path",
-    "read.pattern": "tool_input.pattern",
-    "read.glob": "tool_input.glob",
-}
+IDENTITY_PAYLOAD_IN = CANON_PATHS
 
 _PATH = re.compile(r"^[A-Za-z_][\w-]*(\.[\w-]+)*$")
 _TOOL = re.compile(r"^[A-Za-z_][\w.*-]*$")

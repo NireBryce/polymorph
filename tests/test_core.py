@@ -106,7 +106,10 @@ class MappingTests(Base):
 
     def test_builtin_fallback_no_warning(self):
         (self.nobuiltin / "other.toml").write_text(
-            'schema = 1\nname = "other"\nconfig_path = "a.json"\nformat = "json"\ntemplate = "claude-like"\n')
+            'schema = 1\nname = "other"\nconfig_path = "a.json"\nformat = "json"\ntemplate = "claude-like"\n'
+            '[tools]\n[events]\n[payload_in]\n[payload_out]\n'
+            '[capabilities]\nask = false\npost_event = false\nexit_2_blocks = false\n'
+            'rewrites_input = false\njson_answers = false\n')
         msgs = []
         self.assertEqual(load_mapping("other", self.repo, warn=msgs.append).name, "other")
         self.assertEqual(msgs, [])
@@ -220,7 +223,7 @@ class SettingsShapeTest(unittest.TestCase):
 class DirectDeliveryTests(Base):
     def _write(self, **extra):
         import tomllib
-        raw = tomllib.loads((Path(__file__).resolve().parents[1] / "mappings" / "zcode.toml").read_text())
+        raw = tomllib.loads((Path(__file__).resolve().parents[1] / "src" / "polymorph" / "mappings" / "zcode.toml").read_text())
         raw.update(extra)
         return raw
 
@@ -237,7 +240,7 @@ class DirectDeliveryTests(Base):
         self.assertIn('"command": "\\"$CLAUDE_PROJECT_DIR/.agents/hooks/session-start.sh\\""', out)
 
     def test_builtin_zcode_and_claude_are_direct(self):
-        mapping.BUILTIN_DIR = Path(mapping.__file__).resolve().parents[2] / "mappings"
+        mapping.BUILTIN_DIR = Path(mapping.__file__).resolve().parent / "mappings"
         for n in ("zcode", "claude"):
             self.assertEqual(load_mapping(n, self.repo.parent).delivery, "direct")
 

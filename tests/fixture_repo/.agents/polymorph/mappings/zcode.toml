@@ -14,3 +14,19 @@ read  = ["Read", "Grep", "Glob"]
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+
+[capabilities]
+ask = false
+post_event = true
+exit_2_blocks = true
+rewrites_input = false
+json_answers = true
+
+[payload_in]
+tool_name = "tool_name"
+"shell.command" = "tool_input.command"
+"edit.file_path" = "tool_input.file_path"
+cwd = "cwd"
+session_id = "session_id"
+
+[payload_out]

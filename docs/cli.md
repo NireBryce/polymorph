@@ -103,7 +103,7 @@ compare `name` to the filename or check that `generate` can use the `format`/`te
 polymorph conformance [--harness NAME]
 ```
 
-Replays `fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's
+Replays `src/polymorph/fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's
 translations. Prints `FAIL: ...` lines on stderr and `N passed, M failed`; exit 1 if any
 failed. See [fixtures](writing-a-mapping.md#fixtures).
 
@@ -119,8 +119,8 @@ polymorph discover init --harness NAME --config-path P [--event-name E] [--match
                         [--full] [--env-be-very-careful]
 ```
 
-Writes the harness's config file `P` so that its one hook is a catch-all logger. Prints
-`wrote P`.
+Adds a catch-all logger hook to the harness's config file `P`, as its own matcher group beside
+any hooks already there. Prints `wrote P`.
 
 | Flag | Meaning |
 |---|---|
@@ -133,10 +133,12 @@ Writes the harness's config file `P` so that its one hook is a catch-all logger.
 | `--full` | Log raw payloads. See below. |
 | `--env-be-very-careful` | Log environment variable names. See below. |
 
-If `P` exists it must be a JSON object; other keys are kept. **The event you name has its
-hook list replaced** (`claude-settings`) or **the whole `hooks` table is replaced**
-(`claude-like`). Run `init` on a scratch copy or a file you can restore, not on a config
-with hooks you want to keep. The hook command embeds the absolute path of the Python
+If `P` exists it must be a JSON object; every other key, event and matcher group is kept
+(for `claude-like`, other keys under `hooks` too, though `hooks.enabled` is set true so the
+logger runs). Running `init` again with the same harness and log directory replaces its own
+logger entry (recognised by its `--out` log path) instead of adding a second. If `hooks`, or
+the part of it `init` has to extend, cannot be parsed, `init` exits 2 with a "refusing to
+touch the file" message and writes nothing. The file is not backed up. The hook command embeds the absolute path of the Python
 that ran `init` and the absolute log path, so it works from any directory.
 
 ### `discover log`

@@ -61,7 +61,7 @@ Where mappings are looked up, in order:
    `mappings/`, or listed with `--trust-dir`. Otherwise it is refused.
 2. The repo's `.agents/polymorph/mappings/NAME.toml`. If a built-in of the same name
    exists, the repo one wins and a warning is printed.
-3. The built-in `mappings/NAME.toml` shipped with polymorph.
+3. The built-in `src/polymorph/mappings/NAME.toml` shipped with polymorph.
 
 A mapping's `name` must equal its filename (without `.toml`).
 

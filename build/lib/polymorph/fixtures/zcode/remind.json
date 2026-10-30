@@ -1,0 +1,29 @@
+{
+  "native_in": {
+    "session_id": "s1",
+    "cwd": "/repo",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git reset --hard"
+    },
+    "hookEventName": "PreToolUse",
+    "transcriptPath": "/tmp/t.jsonl"
+  },
+  "canonical_in": {
+    "session_id": "s1",
+    "cwd": "/repo",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git reset --hard"
+    }
+  },
+  "hook_answer": {
+    "systemMessage": "remember to run just preflight"
+  },
+  "native_out": {
+    "stdout": {
+      "systemMessage": "remember to run just preflight"
+    },
+    "exit": 0
+  }
+}

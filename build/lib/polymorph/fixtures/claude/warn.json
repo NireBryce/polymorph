@@ -1,0 +1,33 @@
+{
+  "native_in": {
+    "session_id": "s1",
+    "cwd": "/repo",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git reset --hard"
+    }
+  },
+  "canonical_in": {
+    "session_id": "s1",
+    "cwd": "/repo",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git reset --hard"
+    }
+  },
+  "hook_answer": {
+    "hookSpecificOutput": {
+      "hookEventName": "PreToolUse",
+      "additionalContext": "heads up: working tree is dirty"
+    }
+  },
+  "native_out": {
+    "stdout": {
+      "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "additionalContext": "heads up: working tree is dirty"
+      }
+    },
+    "exit": 0
+  }
+}

@@ -72,6 +72,18 @@ class ExtractorTests(unittest.TestCase):
 
 
 class PureTests(unittest.TestCase):
+    def test_every_canonical_key_lands_at_its_table_path(self):
+        from polymorph.canonical import CANON_PATHS
+        for ckey, path in CANON_PATHS.items():
+            with self.subTest(key=ckey):
+                m = {"payload_in": {ckey: "native"}, "tools": {}}
+                got = adapter.translate_in(m, {"native": "V"})
+                node = got
+                for part in path.split("."):
+                    node = node[part]
+                self.assertEqual(node, "V")
+                self.assertNotIn("read", got)
+
     def test_capability_env(self):
         env = adapter.capability_env(MAPPING)
         self.assertEqual(env, {"GUARD_ASK_ENFORCED": "0", "GUARD_POST_EVENT": "1",

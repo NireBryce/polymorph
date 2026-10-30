@@ -11,7 +11,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 |---|---|---|
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
-| conformance | `src/polymorph/conformance.py`, `validate.py`, `fixtures/**`, `mappings/**` | `validate_mapping`, `run_fixtures` |
+| conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
 | report | `.agents/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
@@ -87,6 +87,12 @@ canonical protocol. It is only valid for an identity translation: `payload_out` 
 a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
 reports `mapping-invalid`).
 
+Required: `schema`, `name`, `config_path`, `format`, `template` and the tables `[tools]`,
+`[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
+is valid. `generate`, `validate` and `check` apply the same rule (loading a mapping runs
+`validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
+`context_file`, `skills_dir`, `delivery`.
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.
@@ -116,27 +122,31 @@ the adapter.
 ```
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
-Discovery logs stay in `.polymorph-discovery/` outside this tree, gitignored, so a raw log
-is never one `git add` away from being committed.
+Discovery logs go to `.polymorph-discovery/` (by default under the current directory, or
+`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph-discovery/` yourself so a
+raw log is not one `git add` away from being committed.
 
 ## Trust
 
 Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
-mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `mappings/`.
+mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `src/polymorph/mappings/`.
 
 ## CLI
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check]   # --check: exit 1 on drift
-polymorph adapter --harness NAME -- SCRIPT
+polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
 polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
-polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
-polymorph discover log [--full] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
+                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
+                        # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
+polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl      # per-event/per-tool key tables, counts, sessions
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
+                        [--event-name E] [--matcher M] [--shape claude-settings|claude-like]
 polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
 ```
 
@@ -153,9 +163,13 @@ Generate output lists, per target, unmapped settings and hooks with no equivalen
 
 ## Fixtures
 
-`fixtures/<harness>/<case>.json`:
+`src/polymorph/fixtures/<harness>/<case>.json`:
 `{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}`
 covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
+
+The `gemini` mapping is an unverified draft written from a sketch, not from a captured session,
+so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies
+real ones. Invented fixtures would only restate the guess.
 
 ## polymorph check
 
@@ -175,7 +189,7 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `hook-no-equivalent` | warning | per target, the gaps `generate` reports (event or tool class) |
 | `setting-unmapped` | note | `canon.unmapped` entries |
 | `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
-| `fixtures-missing` | warning | built-in mapping has no `fixtures/<name>/*.json` |
+| `fixtures-missing` | warning | built-in mapping has no `src/polymorph/fixtures/<name>/*.json` |
 | `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
 | `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |
 

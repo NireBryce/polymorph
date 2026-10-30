@@ -87,12 +87,6 @@ covered.
 - `context_file` and `skills_dir` are recorded and validated but nothing uses them yet.
 - Hooks must be a single bare script path; commands with arguments are refused.
 
-**Packaging**
-
-- <a id="packaging"></a>Mappings and fixtures are found relative to the source tree. Use `pip install -e .` or
-  the Nix package. A plain `pip install .` produces an install in which `conformance` and
-  any built-in mapping fail with a missing-directory error.
-
 **Not built**
 
 - `.agents/polymorph/decisions/` and `generated/`, code-generating targets, plugin

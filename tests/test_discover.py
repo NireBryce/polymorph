@@ -13,8 +13,10 @@ from polymorph.validate import validate_mapping
 SRC = str(Path(__file__).resolve().parent.parent / "src")
 
 
-def run_cli(args, stdin="", env=None):
-    e = dict(os.environ, PYTHONPATH=SRC)
+def run_cli(args, stdin="", env=None, clean=False):
+    """clean: start from PATH only, so a test about environment names cannot see the runner's."""
+    e = {"PATH": os.environ.get("PATH", "")} if clean else dict(os.environ)
+    e["PYTHONPATH"] = SRC
     e.update(env or {})
     return subprocess.run([sys.executable, "-m", "polymorph", *args], input=stdin,
                           capture_output=True, text=True, env=e)
@@ -67,7 +69,7 @@ class DiscoverTests(unittest.TestCase):
     def test_env_flag_logs_only_project_like_names(self):
         out = self.d / "e.jsonl"
         run_cli(["discover", "log", "--env-be-very-careful", "--out", str(out)], "{}",
-                env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE", "FOO_PROJECT_DIR": "/home/x/p", "HOME": "/home/x"})
+                env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE", "FOO_PROJECT_DIR": "/home/x/p", "HOME": "/home/x"}, clean=True)
         text = out.read_text()
         self.assertEqual(json.loads(text)["env_keys"], ["FOO_PROJECT_DIR"])
         self.assertNotIn("/home/x", text)
@@ -376,3 +378,70 @@ class ReloadCheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+USER_HOOK = {"matcher": "Bash", "hooks": [{"type": "command", "command": "/home/USER/my-hook.sh"}]}
+
+
+class InitKeepsUserHooksTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.d = Path(self._tmp.name)
+        self.cfg = self.d / "s.json"
+
+    def _init(self, **kw):
+        discover.init_config("h", str(self.cfg), log_dir=self.d / "logs", **kw)
+        return json.loads(self.cfg.read_text())
+
+    def test_claude_settings_keeps_existing_groups(self):
+        self.cfg.write_text(json.dumps({"hooks": {"PreToolUse": [USER_HOOK], "Stop": [USER_HOOK]}}))
+        doc = self._init()
+        self.assertEqual(doc["hooks"]["PreToolUse"][0], USER_HOOK)
+        self.assertEqual(len(doc["hooks"]["PreToolUse"]), 2)
+        self.assertEqual(doc["hooks"]["Stop"], [USER_HOOK])
+        self.assertIn("discover log", doc["hooks"]["PreToolUse"][1]["hooks"][0]["command"])
+
+    def test_claude_like_keeps_groups_and_other_hooks_keys(self):
+        self.cfg.write_text(json.dumps({"hooks": {"enabled": False, "timeout": 5,
+                            "events": {"PreToolUse": [USER_HOOK], "Stop": [USER_HOOK]}}}))
+        doc = self._init(shape="claude-like")
+        self.assertEqual(doc["hooks"]["timeout"], 5)
+        self.assertEqual(doc["hooks"]["events"]["Stop"], [USER_HOOK])
+        self.assertEqual(doc["hooks"]["events"]["PreToolUse"][0], USER_HOOK)
+        self.assertEqual(len(doc["hooks"]["events"]["PreToolUse"]), 2)
+        self.assertTrue(doc["hooks"]["enabled"])  # the logger needs hooks on
+
+    def test_repeat_init_does_not_duplicate_the_logger(self):
+        for shape in ("claude-settings", "claude-like"):
+            with self.subTest(shape=shape):
+                self.cfg.write_text(json.dumps({"hooks": {"PreToolUse": [USER_HOOK]}}
+                                    if shape == "claude-settings" else
+                                    {"hooks": {"events": {"PreToolUse": [USER_HOOK]}}}))
+                self._init(shape=shape)
+                doc = self._init(shape=shape)
+                groups = (doc["hooks"]["PreToolUse"] if shape == "claude-settings"
+                          else doc["hooks"]["events"]["PreToolUse"])
+                self.assertEqual(len(groups), 2)
+                self.assertEqual(groups[0], USER_HOOK)
+
+    def test_unparsable_hooks_refused_and_file_untouched(self):
+        cases = [('{"hooks": []}', "claude-settings"), ('{"hooks": []}', "claude-like"),
+                 ('{"hooks": {"PreToolUse": "x"}}', "claude-settings"),
+                 ('{"hooks": {"PreToolUse": [1]}}', "claude-settings"),
+                 ('{"hooks": {"events": 3}}', "claude-like"),
+                 ('{"hooks": {"events": {"PreToolUse": {}}}}', "claude-like"),
+                 ('not json', "claude-settings"), ('[]', "claude-like")]
+        for text, shape in cases:
+            with self.subTest(text=text, shape=shape):
+                self.cfg.write_text(text)
+                with self.assertRaises(ValueError):
+                    self._init(shape=shape)
+                self.assertEqual(self.cfg.read_text(), text)
+
+    def test_cli_refuses_with_message(self):
+        self.cfg.write_text('{"hooks": []}')
+        r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(self.cfg)])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("refusing", r.stderr)
+        self.assertEqual(self.cfg.read_text(), '{"hooks": []}')
