@@ -167,7 +167,7 @@ polymorph discover draft FILE.jsonl --name NAME
 
 Prints a schema 1 mapping to stdout (redirect it to a file). It has no `verified` field,
 all capabilities `false`, and comments with evidence counts. See
-[Discovery](discovery.md#from-log-to-mapping).
+[Discovery](discovery.md#4-draft-a-mapping).
 
 ### `discover reload-check`
 
