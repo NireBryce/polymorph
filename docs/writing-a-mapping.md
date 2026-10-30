@@ -65,8 +65,9 @@ harness's native tool names, as a string or a list. This is what `generate` turn
 `matcher`: a hook scoped to the `edit` class becomes the matcher `Edit|Write|MultiEdit`.
 It also lets the adapter turn a native name back into a Claude one (a native `run_shell_command`
 becomes `Bash` when the script reads `tool_name`). A class you leave out has no equivalent:
-a hook that needs it is reported as `hook-no-equivalent` and, if none of its classes exist,
-left out of the generated file. Leave a class out rather than guess a name. Names are
+a hook that needs it is an undecided `no-tool-class` item: `generate` exits 3 until a
+[decision](SPEC.md#decisions) says `skip`, and then leaves it out (or registers it for the
+classes that remain). Leave a class out rather than guess a name. Names are
 plain identifiers (letters, digits, `_`, `.`, `*`, `-`).
 
 ```toml
@@ -77,7 +78,9 @@ post_tool = "PostToolUse"
 ```
 
 `[events]` maps the three canonical events to native event names. Leave out one the
-harness lacks; hooks on it are reported as gaps rather than written.
+harness lacks; a hook on it is an undecided `no-event` item (`skip` or `substitute:<native
+event>`), never written on a guess. The same goes for a class whose payload fields
+`[payload_in]` does not map (`missing-field`).
 
 ```toml
 [capabilities]

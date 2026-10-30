@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .conformance import fixture_files, run_fixtures
+from .decisions import DECISIONS_DIR, load_decisions
 from .generate import enabled_targets, generate_target
 from .mapping import BUILTIN_DIR, Mapping, MappingError, load_mapping
 from .reader_claude import SETTINGS, ReaderError, read_claude, resolve_script
@@ -29,7 +30,10 @@ CODES = {
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
     "hook-not-executable": ("error", "A hook script is not executable."),
-    "hook-no-equivalent": ("warning", "A hook's event or tool class has no native equivalent in the target."),
+    "decision-undecided": ("error", "A hook needs an event, tool class or field the target lacks and no decision answers it."),
+    "decision-weakens-guard": ("warning", "A decision runs a hook with less than it needs (run-empty, or a different event class)."),
+    "decision-stale": ("warning", "A decision's id matches no mismatch now."),
+    "decision-invalid": ("error", "A decision file or entry fails validation."),
     "setting-unmapped": ("note", "A setting has no cross-harness meaning."),
     "generated-drift": ("error", "A target's generated file differs from what generate would write."),
     "fixtures-missing": ("warning", "A built-in mapping has no conformance fixtures."),
@@ -138,12 +142,20 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
         findings += check_fixtures(repo, name, m)
         if canon is None:
             continue
+        dfile = f"{DECISIONS_DIR}/{name}.toml"
+        decisions, derrs = load_decisions(repo, name, set(m.events.values()))
+        findings += [_f("decision-invalid", name, e, dfile) for e in derrs]
         try:
-            r = generate_target(repo, canon, m)
+            r = generate_target(repo, canon, m, decisions)
         except (ValueError, OSError) as e:
             findings.append(_f("generated-drift", name, f"cannot compute generated file: {e}", m.config_path))
             continue
-        findings += [_f("hook-no-equivalent", name, g) for g in r.gaps]
+        for mm in r.undecided:
+            findings.append(_f("decision-undecided", name, f"{mm.id}: {mm.detail}; options: {' | '.join(mm.options)}",
+                               dfile))
+        findings += [_f("decision-weakens-guard", name, f"{a.id} = {a.choice}: {a.text}", dfile)
+                     for a in r.applied if a.weakening]
+        findings += [_f("decision-stale", name, f"{sid} matches no mismatch now", dfile) for sid in r.stale]
         findings += [_f("setting-unmapped", name, u) for u in r.unmapped]
         if r.drift:
             state = "missing" if not (repo / r.path).is_file() else "differs from generate output"

@@ -2,7 +2,8 @@
 
 Run as `python -m polymorph ...` or, after an install, `polymorph ...`. Exit codes: `0`
 success; `1` the command ran and found a problem (drift, findings, failed fixtures, an
-invalid mapping); `2` usage or internal error (`polymorph: error: ...` on stderr). The
+invalid mapping); `2` usage or internal error (`polymorph: error: ...` on stderr);
+`3` (`generate` only) a hook needs something the target lacks and no decision answers it. The
 adapter and `discover log` have their own rules, below.
 
 ## `generate`
@@ -25,8 +26,18 @@ Output, per target: `[NAME] wrote|would write|unchanged PATH (DRIFT|ok)`, then i
 lines:
 
 - `warning:` the mapping has no `verified` field.
-- `gap:` a hook the target cannot run: no equivalent event, or no tool for a class.
+- `question:` an undecided mismatch (see below); the target is then `NOT WRITTEN`.
+- `decided:` / `weakened:` a recorded decision that was applied; `weakened` for `run-empty` and for a `substitute` that moves the hook to a different event.
+- `warning: stale decision` a decision whose id matches nothing now.
+- `note:` harness payload fields no hook reads. Never a question.
 - `unmapped setting:` a setting with no cross-harness meaning.
+
+**Decisions.** When a target lacks an event (`no-event`), a tool class (`no-tool-class`) or a
+payload field (`missing-field`) that a hook needs, `generate` writes nothing for that target,
+prints one `question:` block per item (id, hook, problem, options, default `skip`) and exits
+`3` after handling the other targets. Answer in `.agents/polymorph/decisions/NAME.toml` and
+run again; it never prompts. `--check` also exits 3 for undecided items. Format and choices:
+[SPEC, Decisions](SPEC.md#decisions).
 
 Other top-level keys already in the target file are kept; the whole `hooks` key is
 rewritten. Hooks you added to that file by hand are lost. Invalid JSON in the existing
@@ -61,14 +72,17 @@ grouped by target, then a summary line.
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
-| `hook-no-equivalent` | warning | The target lacks an event or tool class a hook needs (same as `generate`'s `gap:`). |
+| `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
+| `decision-weakens-guard` | warning | An applied decision is `run-empty`, or a `substitute` onto a different event. |
+| `decision-stale` | warning | A decision's id matches nothing now. |
+| `decision-invalid` | error | The decision file or one entry fails validation. |
 | `setting-unmapped` | note | A setting was not translated. |
 | `generated-drift` | error | A generated file differs from `generate`'s output, or is missing. |
 | `fixtures-missing` | warning | A built-in mapping has no fixtures. |
 | `fixtures-skipped` | note | A repo-local mapping: fixtures are not checked. |
 | `fixture-failed` | error | A fixture did not replay. |
 
-If a hook command is rejected, checks derived from the config (gaps, unmapped, drift) are
+If a hook command is rejected, checks derived from the config (decisions, unmapped, drift) are
 skipped for that run. `mapping-untested-live` is a note, so even `--strict` never makes it
 fail: it is a standing reminder, not a result.
 

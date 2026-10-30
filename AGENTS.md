@@ -74,9 +74,10 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `src/polymorph/cli.py`, `__main__.py` | argparse front end; one function per subcommand |
 | `canon.py`, `reader_claude.py` | the canonical config (`Hook`, `Canon`) and the Claude Code settings reader |
 | `mapping.py`, `validate.py` | load a TOML mapping; validate it against schema 1 (unknown keys are errors) |
-| `generate.py` | canonical config + mapping -> the harness's config file (`generate`, `--check`) |
+| `generate.py` | canonical config + mapping + decisions -> the harness's config file (`generate`, `--check`); finds mismatches |
 | `adapter.py`, `exprs.py`, `extractors.py` | run a hook script behind a mapping: translate payload in, answer out |
 | `conformance.py` | replay `src/polymorph/fixtures/<harness>/*.json` through a mapping |
+| `decisions.py` | `.agents/polymorph/decisions/NAME.toml`: validate, `Mismatch`/`Decision`, the question format |
 | `check.py` | static analysis of a repo's agent config (`polymorph check`); runs nothing |
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |

@@ -73,8 +73,11 @@ class DocsChecks(unittest.TestCase):
         write(self.root, 'docs/cli.md', 'polymorph generate\npolymorph discover\npolymorph discover init\n')
         self.assertEqual(docs.check_cli(self.root), [])
 
-    def test_cli_skipped_without_cli_md(self):
-        self.assertEqual(docs.check_cli(self.root), [])
+    def test_missing_cli_md_is_a_problem(self):
+        problems = docs.check_cli(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn('docs/cli.md', problems[0])
+        self.assertIn('missing', problems[0])
 
     def test_banner_missing(self):
         write(self.root, 'README.md', '# polymorph\n')

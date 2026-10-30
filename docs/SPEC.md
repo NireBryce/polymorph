@@ -117,7 +117,7 @@ the adapter.
 .agents/polymorph/
   config.toml          # enabled = ["zcode", ...]  (targets to generate)
   mappings/NAME.toml   # repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  # answers to generation-time questions (planned)
+  decisions/NAME.toml  # answers to generation-time mismatches; see "Decisions"
   generated/NAME/      # generated shims and plugin files (planned)
 ```
 
@@ -159,7 +159,71 @@ The log is untrusted data: draft copies back only values matching strict name pa
 never command text or paths, and omits what it did not observe. Comments carry evidence
 counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.
 
-Generate output lists, per target, unmapped settings and hooks with no equivalent.
+Generate output lists, per target: unmapped settings, the questions for undecided mismatches,
+applied decisions (`weakened:` for the weakening ones), stale decisions and notes. Exit codes of
+`generate`: 0 ok, 1 `--check` found drift, 2 usage or internal error (including an invalid
+decision file), 3 undecided mismatches.
+
+## Decisions
+
+When a target harness has more or fewer fields or events than a hook needs, `generate` does
+not guess and does not drop the hook silently. Each mismatch is *undecided* until
+`.agents/polymorph/decisions/NAME.toml` answers it. The file is data: validated, never executed.
+
+```toml
+schema = 1
+
+[decisions.".agents/hooks/edit-check.sh:no-event"]   # id = <hook-script>:<kind>
+choice = "substitute:BeforeTool"
+date = "2026-10-30"
+note = "optional free text"
+```
+
+Top-level keys are `schema` (must be 1) and `decisions`; unknown keys are errors. An entry has
+`choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
+to the repo root, a colon and the kind. One decision covers every hook of that script that has
+that mismatch in that target.
+
+| Kind | Fires when | Choices |
+|---|---|---|
+| `no-event` | the hook's canonical event has no entry in the mapping's `[events]` | `skip` (hook not generated); `substitute:<native event>` (register it on that event; the name must be a value of the mapping's `[events]`) |
+| `no-tool-class` | a class the hook is scoped to has no entry in `[tools]` | `skip` (hook is registered for the remaining classes; not at all if none remain) |
+| `missing-field` | the hook is scoped to a class whose payload field the mapping's `[payload_in]` does not map | `skip` (hook not generated); `run-empty` (generated; the hook sees the field empty) |
+
+Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads
+`shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of
+`read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other` and a hook with no
+class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose
+hooks get the Claude payload unchanged.
+
+Undecided means: `generate` writes nothing for that target, prints each item as a block
+
+```
+  question: <id>
+    hook:    <script> (<event>, classes <c,...>)
+    problem: <what the target lacks>
+    options: <choice> | <choice>
+    default: skip
+    answer:  in .agents/polymorph/decisions/NAME.toml add [decisions."<id>"] with choice = ..., date = ...
+```
+
+and exits 3. Other targets are still written. polymorph never prompts; an agent relays the
+questions to its user and writes the answers. With `--check`, undecided items also exit 3.
+
+Once decided, `generate` applies the choice and prints `decided:` or, for a weakening one,
+`weakened:` per id. Weakening means `run-empty`, or a `substitute` whose native event belongs to
+a different canonical event than the hook's own (always so, since the hook's event is the one
+that is missing). `check` reports it as `decision-weakens-guard`. A decision whose id matches
+nothing now is `decision-stale`. An invalid entry is `decision-invalid` and makes `generate` exit
+2 before writing.
+
+The decision is recorded in the decision file and in the `generate` output only. It is not
+written into the generated harness config: that format is JSON, which has no comments, and a
+`_polymorph` key in a harness's settings file is not known to be tolerated by any shipped
+target (none is verified for unknown top-level keys), so none is added.
+
+Extra payload fields a mapping maps that no hook reads are printed once per target as
+`note:`, never as a question.
 
 ## Fixtures
 
@@ -186,7 +250,10 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
-| `hook-no-equivalent` | warning | per target, the gaps `generate` reports (event or tool class) |
+| `decision-undecided` | error | a hook needs an event, tool class or field the target lacks and no decision answers it |
+| `decision-weakens-guard` | warning | an applied decision is `run-empty`, or a `substitute` whose event is not the hook's own |
+| `decision-stale` | warning | a decision id matches no mismatch now |
+| `decision-invalid` | error | the decision file or an entry fails validation |
 | `setting-unmapped` | note | `canon.unmapped` entries |
 | `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
 | `fixtures-missing` | warning | built-in mapping has no `src/polymorph/fixtures/<name>/*.json` |
@@ -198,7 +265,7 @@ error. `text`: grouped by target, `severity code target: message`, then a summar
 `json`: `{findings, summary: {error, warning, note}}`. `sarif`: SARIF 2.1.0, driver `polymorph`,
 rules from the codes seen, `artifactLocation.uri` when `file` is known. Hook-script and
 drift checks need a readable settings file; if a hook command is rejected, canon-derived
-checks (gaps, unmapped, drift) are skipped for that run.
+checks (decisions, unmapped, drift) are skipped for that run.
 
 ## Phase scope
 
