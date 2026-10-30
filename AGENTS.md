@@ -33,7 +33,7 @@ declarative per-harness TOML mappings. Python 3.11+, standard library only.
   named built-ins shipped in `src/`.
 - **Trust model** (`docs/SPEC.md`, "Trust"): hook scripts must resolve under
   `.agents/hooks/`; mappings load only from the repo's
-  `.agents/polymorph/mappings/`, the built-in `mappings/`, or a directory
+  `.agents/polymorph/mappings/`, the built-in `src/polymorph/mappings/`, or a directory
   given with `--trust-dir`. Do not widen any of these.
 - **A mapping without `verified` stays without it** until its block
   semantics were seen in a live session (skill `new-mapping`).
@@ -76,11 +76,11 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `mapping.py`, `validate.py` | load a TOML mapping; validate it against schema 1 (unknown keys are errors) |
 | `generate.py` | canonical config + mapping -> the harness's config file (`generate`, `--check`) |
 | `adapter.py`, `exprs.py`, `extractors.py` | run a hook script behind a mapping: translate payload in, answer out |
-| `conformance.py` | replay `fixtures/<harness>/*.json` through a mapping |
+| `conformance.py` | replay `src/polymorph/fixtures/<harness>/*.json` through a mapping |
 | `check.py` | static analysis of a repo's agent config (`polymorph check`); runs nothing |
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
-| `mappings/NAME.toml` | built-in per-harness mappings |
-| `fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
+| `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
+| `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
 | `wiki/agents-lessons-learned.md` | what past sessions got wrong, one line each, with its Home |

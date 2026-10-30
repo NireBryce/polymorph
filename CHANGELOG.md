@@ -30,5 +30,5 @@ First state of the project. Python 3.11+, standard library only.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
 - **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
   limits.
-- Packaging: a Nix flake and `pyproject.toml`. Mappings and fixtures are found beside the
-  source tree, so install editable (`pip install -e .`) or use the Nix package.
+- Packaging: a Nix flake and `pyproject.toml`. Built-in mappings and fixtures are package
+  data under `src/polymorph/`, so a plain `pip install .` works.

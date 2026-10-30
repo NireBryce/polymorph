@@ -9,10 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .canon import CLASSES, EVENTS
+from .resources import MAPPINGS_DIR
 from .validate import DELIVERIES, direct_errors
 
 SCHEMA = 1
-BUILTIN_DIR = Path(__file__).resolve().parents[2] / "mappings"
+BUILTIN_DIR = MAPPINGS_DIR
 REPO_DIR = ".agents/polymorph/mappings"
 
 TOP_KEYS = {

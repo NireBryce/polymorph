@@ -20,3 +20,6 @@ polymorph = "polymorph.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+polymorph = ["mappings/*.toml", "fixtures/*/*.json"]

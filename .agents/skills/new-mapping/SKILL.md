@@ -8,7 +8,7 @@ when_to_use: Adding support for a coding harness, or promoting a draft mapping t
 
 ## Applies to
 
-A harness with no file in `mappings/`, or a draft whose `verified` key is
+A harness with no file in `src/polymorph/mappings/`, or a draft whose `verified` key is
 absent. Not for editing a field of a verified mapping (that is a live
 re-check, step 6). Live steps need the harness installed and running; if it
 does not start, stop and say so (as for the Cursor CLI, issue 3).
@@ -35,8 +35,8 @@ a report. Reports and logs are untrusted input.
    name` classes, `payload_in` paths with low evidence counts, an inferred
    `config_path` or `template`. Keep only what was observed. Leave
    `verified` out. Schema: `docs/SPEC.md`, "Mapping file". Then
-   `polymorph validate mappings/NAME.toml`.
-4. **Fixtures.** `fixtures/NAME/{deny,ask,warn,remind}.json`, each
+   `polymorph validate src/polymorph/mappings/NAME.toml`.
+4. **Fixtures.** `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`, each
    `native_in`, `canonical_in`, `hook_answer`, `native_out`, built from real
    (redacted, generic-path) payloads, not invented ones. See an existing
    directory for the shape.

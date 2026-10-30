@@ -103,7 +103,7 @@ compare `name` to the filename or check that `generate` can use the `format`/`te
 polymorph conformance [--harness NAME]
 ```
 
-Replays `fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's
+Replays `src/polymorph/fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's
 translations. Prints `FAIL: ...` lines on stderr and `N passed, M failed`; exit 1 if any
 failed. See [fixtures](writing-a-mapping.md#fixtures).
 

@@ -10,13 +10,12 @@ installed ("not run"). The commands inside them were run locally.
 
 ## Installing it in CI
 
-polymorph finds its `mappings/` and `fixtures/` folders next to its source tree, so install
-from a clone, editable. A plain `pip install .` or `pip install git+...` leaves them
-behind and `check` then fails with "no mapping named ..." for built-in mappings.
+The built-in mappings and fixtures ship inside the Python package, so a plain
+`pip install .` from a clone works as well as an editable install.
 
 ```sh
 git clone https://github.com/NireBryce/polymorph /tmp/polymorph     # not run
-pip install -e /tmp/polymorph                                       # not run (a local editable install was run)
+pip install /tmp/polymorph                                          # not run (a local editable install was run; a plain install into a fresh venv was run)
 ```
 
 Pin a commit (`git -C /tmp/polymorph checkout <sha>`) so a change in polymorph cannot

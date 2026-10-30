@@ -18,12 +18,6 @@
           build-system = [ pkgs.python3Packages.setuptools ];
           # stdlib only; the suite runs as checks.default instead
           doCheck = false;
-          # mapping.py and conformance.py find mappings/ and fixtures/ at
-          # <site-packages>/../ (parents[2] of the module), the source-tree layout.
-          postInstall = ''
-            dest=$out/${pkgs.python3.sitePackages}/..
-            cp -r mappings fixtures "$dest"/
-          '';
           meta = {
             description = "Generate coding-harness hook configs from one canonical agent config";
             license = pkgs.lib.licenses.asl20;

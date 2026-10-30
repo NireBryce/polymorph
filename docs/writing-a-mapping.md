@@ -1,7 +1,7 @@
 # Writing a mapping
 
 A mapping describes one harness. Put it at `.agents/polymorph/mappings/NAME.toml` in your
-repo to use it there, or in `mappings/NAME.toml` of a polymorph checkout to ship it (see
+repo to use it there, or in `src/polymorph/mappings/NAME.toml` of a polymorph checkout to ship it (see
 [CONTRIBUTING](../CONTRIBUTING.md)). The filename, without `.toml`, must equal the `name`
 field, and `name` must match `[a-z][a-z0-9_-]*`.
 
@@ -21,7 +21,7 @@ python -m polymorph validate .agents/polymorph/mappings/mytool.toml
 
 ## Worked example: `zcode`
 
-This is `mappings/zcode.toml`, annotated. ZCode accepts the same hook protocol as Claude
+This is `src/polymorph/mappings/zcode.toml`, annotated. ZCode accepts the same hook protocol as Claude
 Code, so almost every field is identity.
 
 ```toml
@@ -165,7 +165,7 @@ harness is genuinely identity.
 ## Fixtures
 
 A fixture is one recorded exchange, replayed offline through the adapter to catch
-regressions in the mapping. They live in `fixtures/NAME/CASE.json` in a polymorph checkout:
+regressions in the mapping. They live in `src/polymorph/fixtures/NAME/CASE.json` in a polymorph checkout:
 
 ```json
 {
@@ -197,5 +197,5 @@ Two limits. Fixtures run against the mapping's `translate_in` and `translate_out
 hook script or a live harness. And they check the mapping you shipped against the output
 you wrote down; if you wrote down the wrong output, they pass. A fixture built from a real
 capture is worth more than one written by hand, so note in `verified` which kind it is.
-`conformance` only knows the built-in `fixtures/` tree; `check` reports repo-local mappings
+`conformance` only knows the built-in `src/polymorph/fixtures/` tree; `check` reports repo-local mappings
 as `fixtures-skipped`.

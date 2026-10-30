@@ -10,11 +10,12 @@ import json
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from .resources import DATA_ROOT
+
 FIXTURE_KEYS = {"native_in", "canonical_in", "hook_answer", "native_out"}
 
 
-def fixture_files(harness: str | None = None, root: Path = ROOT) -> list[Path]:
+def fixture_files(harness: str | None = None, root: Path = DATA_ROOT) -> list[Path]:
     base = root / "fixtures"
     dirs = [base / harness] if harness else sorted(p for p in base.iterdir() if p.is_dir())
     return [f for d in dirs if d.is_dir() for f in sorted(d.glob("*.json"))]
@@ -50,7 +51,7 @@ def _same_stdout(want, got) -> bool:
         return False
 
 
-def run_fixtures(harness: str | None = None, root: Path = ROOT):
+def run_fixtures(harness: str | None = None, root: Path = DATA_ROOT):
     """Return (passed, failures); failures is a list of strings."""
     try:
         from polymorph import adapter  # lazy: owned by another worker

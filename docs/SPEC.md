@@ -11,7 +11,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 |---|---|---|
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
-| conformance | `src/polymorph/conformance.py`, `validate.py`, `fixtures/**`, `mappings/**` | `validate_mapping`, `run_fixtures` |
+| conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
 | report | `.agents/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
@@ -123,7 +123,7 @@ is never one `git add` away from being committed.
 
 Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
-mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `mappings/`.
+mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `src/polymorph/mappings/`.
 
 ## CLI
 
@@ -153,7 +153,7 @@ Generate output lists, per target, unmapped settings and hooks with no equivalen
 
 ## Fixtures
 
-`fixtures/<harness>/<case>.json`:
+`src/polymorph/fixtures/<harness>/<case>.json`:
 `{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}`
 covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
 
@@ -175,7 +175,7 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `hook-no-equivalent` | warning | per target, the gaps `generate` reports (event or tool class) |
 | `setting-unmapped` | note | `canon.unmapped` entries |
 | `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
-| `fixtures-missing` | warning | built-in mapping has no `fixtures/<name>/*.json` |
+| `fixtures-missing` | warning | built-in mapping has no `src/polymorph/fixtures/<name>/*.json` |
 | `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
 | `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |
 

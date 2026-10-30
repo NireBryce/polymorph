@@ -31,12 +31,12 @@ names (`mytool`, `acme`) rather than your real repo or host names.
 Prerequisite: you know how the harness behaves, from a capture or a live session. If not,
 [draft one](docs/discovery.md#4-draft-a-mapping) and report it instead of merging a guess.
 
-1. Write `mappings/NAME.toml`. Field-by-field guide: [Writing a mapping](docs/writing-a-mapping.md).
+1. Write `src/polymorph/mappings/NAME.toml`. Field-by-field guide: [Writing a mapping](docs/writing-a-mapping.md).
    `name` equals the filename. Leave `verified` out unless a live session backs it, and
    if you add it, say exactly what was checked, how and when. Put the basis, and what is
-   not covered, in a header comment as `mappings/zcode.toml` does.
-2. `python -m polymorph validate mappings/NAME.toml` until it prints `ok`.
-3. Add fixtures `fixtures/NAME/{deny,ask,warn,remind}.json`
+   not covered, in a header comment as `src/polymorph/mappings/zcode.toml` does.
+2. `python -m polymorph validate src/polymorph/mappings/NAME.toml` until it prints `ok`.
+3. Add fixtures `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`
    ([format](docs/writing-a-mapping.md#fixtures)). Prefer ones built from a real capture.
 4. `python -m polymorph conformance --harness NAME` passes.
 5. If the harness's config file is not shaped like `claude-settings` or `claude-like`,
