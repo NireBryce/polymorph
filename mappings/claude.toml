@@ -3,7 +3,7 @@
 # Claude Code with these exact field names; it is not a fresh live capture.
 schema = 1
 name = "claude"
-verified = "2026-10-30, nixos-configs .agents/hooks read snake_case payloads under Claude Code"
+verified = "2026-10-30, nixos-configs hooks plus a live capture of SessionStart/PreToolUse/PostToolUse payloads via t3code (Claude Agent SDK); block semantics not live-tested"
 config_path = ".claude/settings.json"
 format = "json"
 template = "claude-settings"
