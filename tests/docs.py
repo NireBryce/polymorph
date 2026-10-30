@@ -11,7 +11,7 @@ tests/test_docs.py runs every check on a bad tree to show it can fail.
            key) and a row in AGENTS.md's skill table; every row has a skill.
 - links:   every relative Markdown link points at a file that exists.
 - cli:     every subcommand in src/polymorph/cli.py appears in docs/cli.md
-           (skipped, with a note, while that file does not exist).
+           (a missing docs/cli.md is a problem).
 - banner:  README.md carries the "Experimental and unvetted" notice.
 - paths:   no text file holds a real home directory path.
 """
@@ -122,8 +122,7 @@ def cli_subcommands(root):
 def check_cli(root):
     cli_md = root / 'docs' / 'cli.md'
     if not cli_md.exists():
-        print('note: docs/cli.md does not exist yet; cli check skipped')
-        return []
+        return ['docs/cli.md: missing']
     doc = cli_md.read_text()
     return [f'docs/cli.md: subcommand `polymorph {cmd}` is not documented'
             for cmd in cli_subcommands(root) if f'polymorph {cmd}' not in doc and f'`{cmd}`' not in doc]
