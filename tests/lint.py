@@ -30,8 +30,13 @@ def tracked_build_output(root):
         out = subprocess.run(['git', 'ls-files'], cwd=root, capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return []  # no git (the flake check's source copy): nothing to inspect
-    bad = ('.egg-info/', '__pycache__/', '.venv/')
-    return [f'{line}: build output or cache is tracked' for line in out.splitlines() if any(b in line for b in bad)]
+    dirs = {'build', 'dist', '__pycache__', '.venv'}
+
+    def is_output(path):
+        parts = path.split('/')[:-1]   # directory components only, so docs/build-notes.md is fine
+        return any(part in dirs or part.endswith('.egg-info') for part in parts)
+
+    return [f'{line}: build output or cache is tracked' for line in out.splitlines() if is_output(line)]
 
 
 def main():
