@@ -1,0 +1,52 @@
+# ZCode: accepts the Claude-shaped config (nixos-configs .zcode/config.json uses
+# hooks.events.<Event>[].hooks[] with the same command entries).
+#
+# Payload: per git-guard-pretooluse.sh, ZCode builds the hook input as
+# {its own event, snake_case copies}. So tool_name/tool_input/cwd are still
+# snake_case and the table below is the Claude one; the camelCase fields that
+# differ (hookEventName, transcriptPath) only exist as the ZCode detection
+# signal, which this schema has no key for -- hooks detect it themselves.
+#
+# ask=false: ZCode treats permissionDecision "ask" as allow (nixos-configs
+# #448/#458); hooks read GUARD_ASK_ENFORCED and harden to deny.
+#
+# `verified` covers only what those hook files state (payload shape, ask-as-allow,
+# config layout). NOT verified by them, so not claimed: rewrites_input,
+# exit_2_blocks, post_event behaviour, skills_dir, context_file. Values for those
+# are the best guess and need a live check (see the report-harness skill).
+schema = 1
+name = "zcode"
+verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
+config_path = ".zcode/config.json"
+format = "json"
+template = "claude-like"
+context_file = "AGENTS.md"
+skills_dir = ".agents/skills"
+
+[tools]
+shell = "Bash"
+edit = ["Edit", "Write", "MultiEdit"]
+read = ["Read", "Grep", "Glob"]
+
+[events]
+session_start = "SessionStart"
+pre_tool = "PreToolUse"
+post_tool = "PostToolUse"
+
+[capabilities]
+ask = false
+post_event = true
+exit_2_blocks = true
+rewrites_input = false
+json_answers = true
+
+[payload_in]
+tool_name = "tool_name"
+"shell.command" = "tool_input.command"
+"edit.file_path" = "tool_input.file_path"
+cwd = "cwd"
+session_id = "session_id"
+
+[payload_out]
+# No entries: the adapter passes the canonical answer through unchanged
+# (this harness speaks the Claude hook protocol).

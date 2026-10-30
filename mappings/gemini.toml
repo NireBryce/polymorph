@@ -1,0 +1,38 @@
+# DRAFT, unverified: written from the harness-support issue sketch, not from a
+# live Gemini CLI session. No `verified` field on purpose; the generator warns.
+# Every name below is a guess to be corrected by a harness report.
+schema = 1
+name = "gemini"
+config_path = ".gemini/settings.json"
+format = "json"
+template = "claude-like"
+context_file = "GEMINI.md"
+
+[tools]
+shell = "run_shell_command"
+edit = ["replace", "write_file"]
+read = ["read_file", "read_many_files", "glob", "search_file_content"]
+
+[events]
+session_start = "SessionStart"
+pre_tool = "BeforeTool"
+post_tool = "AfterTool"
+
+[capabilities]
+ask = false
+post_event = true
+exit_2_blocks = true
+rewrites_input = false
+json_answers = true
+
+[payload_in]
+tool_name = "tool_name"
+"shell.command" = "tool_input.command"
+"edit.file_path" = "tool_input.file_path"
+cwd = "cwd"
+session_id = "session_id"
+
+[payload_out]
+deny = { exit = 2, stderr = "{reason}" }
+ask = { exit = 2, stderr = "{reason}" }
+# warn/remind: unmapped, adapter passes the canonical JSON through.
