@@ -35,7 +35,7 @@
 
       checks = forAll (pkgs: {
         default = pkgs.runCommand "polymorph-tests"
-          { nativeBuildInputs = [ pkgs.python3 ]; } ''
+          { nativeBuildInputs = [ pkgs.python3 pkgs.git ]; } ''
           cp -r ${./.} src-copy
           chmod -R u+w src-copy
           cd src-copy
