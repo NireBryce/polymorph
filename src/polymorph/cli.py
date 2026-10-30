@@ -19,6 +19,12 @@ def _parser() -> argparse.ArgumentParser:
     g.add_argument("--mappings", default=None)
     g.add_argument("--trust-dir", action="append", default=[])
 
+    k = sub.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
+    k.add_argument("--repo", default=".")
+    k.add_argument("--harness", action="append", default=None)
+    k.add_argument("--format", choices=["text", "json", "sarif"], default="text")
+    k.add_argument("--strict", action="store_true", help="warnings also fail the run")
+
     a = sub.add_parser("adapter", help="run a hook script through a harness adapter")
     a.add_argument("--harness", required=True)
     a.add_argument("--mappings", default=None)
@@ -112,6 +118,14 @@ def _cmd_generate(args) -> int:
     return 1 if (args.check and drift) else 0
 
 
+def _cmd_check(args) -> int:
+    from . import check
+
+    findings = check.run_check(args.repo, args.harness)
+    sys.stdout.write(check.FORMATS[args.format](findings))
+    return check.exit_code(findings, args.strict)
+
+
 def _cmd_adapter(args) -> int:
     from .adapter import run_adapter
 
@@ -156,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         raise
     handler = {
-        "generate": _cmd_generate, "adapter": _cmd_adapter,
+        "generate": _cmd_generate, "check": _cmd_check, "adapter": _cmd_adapter,
         "validate": _cmd_validate, "discover": _cmd_discover, "conformance": _cmd_conformance,
     }[args.cmd]
     try:
