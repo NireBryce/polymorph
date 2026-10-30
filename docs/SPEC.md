@@ -106,7 +106,14 @@ polymorph generate [--repo .] [--harness NAME ...] [--check]   # --check: exit 1
 polymorph adapter --harness NAME -- SCRIPT
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
+polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
+polymorph discover log --out FILE          # stdin -> one JSON line; silent, exit 0 always
+polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
 ```
+
+Discovery log line: `{ts, env_keys (names only), raw (parsed JSON or text), keys, tool_input_keys}`.
+The log is untrusted data: draft copies back only values matching strict name patterns,
+never command text or paths, and omits what it did not observe. Owner: `discover.py`.
 
 Generate output lists, per target, unmapped settings and hooks with no equivalent.
 

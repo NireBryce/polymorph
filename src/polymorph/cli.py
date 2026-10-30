@@ -30,7 +30,34 @@ def _parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("conformance", help="run fixtures against mappings")
     c.add_argument("--harness", default=None)
+
+    d = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
+    ds = d.add_subparsers(dest="dcmd", required=True)
+    di = ds.add_parser("init", help="write a config whose only hook is a catch-all logger")
+    di.add_argument("--harness", required=True)
+    di.add_argument("--config-path", required=True)
+    di.add_argument("--event-name", default="PreToolUse")
+    di.add_argument("--matcher", default="*")
+    dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
+    dl.add_argument("--out", required=True)
+    dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
+    dd.add_argument("file")
+    dd.add_argument("--name", required=True)
     return p
+
+
+def _cmd_discover(args) -> int:
+    from . import discover
+
+    if args.dcmd == "log":
+        discover.log_stdin(args.out)
+        return 0
+    if args.dcmd == "init":
+        p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher)
+        print(f"wrote {p}")
+        return 0
+    print(discover.draft_mapping(args.file, args.name), end="")
+    return 0
 
 
 def _cmd_generate(args) -> int:
@@ -91,10 +118,16 @@ def _cmd_conformance(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    args = _parser().parse_args(argv)
+    try:
+        args = _parser().parse_args(argv)
+    except SystemExit as e:
+        # `discover log` must never block the harness, even on a bad command line
+        if argv[:2] == ["discover", "log"]:
+            return 0
+        raise
     handler = {
         "generate": _cmd_generate, "adapter": _cmd_adapter,
-        "validate": _cmd_validate, "conformance": _cmd_conformance,
+        "validate": _cmd_validate, "discover": _cmd_discover, "conformance": _cmd_conformance,
     }[args.cmd]
     try:
         return handler(args)

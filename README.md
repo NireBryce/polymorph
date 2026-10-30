@@ -9,6 +9,9 @@ python -m polymorph generate [--repo .] [--harness NAME ...] [--check]
 python -m polymorph adapter --harness NAME -- SCRIPT
 python -m polymorph validate FILE.toml
 python -m polymorph conformance [--harness NAME]
+python -m polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
+python -m polymorph discover log --out FILE        # the logger hook; silent, always exit 0
+python -m polymorph discover draft FILE.jsonl --name NAME
 ```
 
 Targets default to `enabled = ["zcode", ...]` in `.agents/harnesses.toml`.
@@ -21,5 +24,12 @@ built-in `mappings/NAME.toml`, with a warning), then the built-in ones. A mappin
 directory elsewhere needs `--trust-dir`. Hook scripts must resolve under
 `.agents/hooks/`. Other keys in an existing target config file are preserved; only
 `hooks` is rewritten.
+
+Discovery mode, for a harness with no mapping: `discover init` writes (merging into any
+existing JSON) a config whose only hook logs every payload to
+`.polymorph-discovery/NAME.jsonl` (gitignored; env var names only, never values). Run a
+session, then `discover draft` prints an unverified schema-1 mapping from what was seen:
+tool classes by name heuristics (listed in `discover.py`), only observed payload paths,
+no command text or paths from the log, nothing unknown guessed. Not run in a live harness.
 
 Tests: `python -m unittest discover -s tests`
