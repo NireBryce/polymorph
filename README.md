@@ -109,3 +109,7 @@ jobs:
 ```
 
 Tests: `python -m unittest discover -s tests`
+
+## License
+
+Apache-2.0; see [LICENSE](LICENSE).
