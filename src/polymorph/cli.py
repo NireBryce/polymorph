@@ -58,8 +58,13 @@ def _cmd_generate(args) -> int:
 def _cmd_adapter(args) -> int:
     from .adapter import run_adapter
 
-    rc = run_adapter(args.harness, args.script, mappings_dir=args.mappings)
-    return int(rc or 0)
+    argv = ["--harness", args.harness]
+    if args.mappings:
+        argv += ["--mappings", args.mappings]
+    for d in args.trust_dir:
+        argv += ["--trust-dir", d]
+    argv += ["--", *args.script]
+    return int(run_adapter(argv) or 0)
 
 
 def _cmd_validate(args) -> int:
@@ -77,8 +82,11 @@ def _cmd_validate(args) -> int:
 def _cmd_conformance(args) -> int:
     from .conformance import run_fixtures
 
-    rc = run_fixtures(args.harness)
-    return int(rc or 0)
+    passed, failures = run_fixtures(args.harness)
+    for f in failures:
+        print(f"FAIL: {f}", file=sys.stderr)
+    print(f"{passed} passed, {len(failures)} failed")
+    return 1 if failures else 0
 
 
 def main(argv: list[str] | None = None) -> int:
