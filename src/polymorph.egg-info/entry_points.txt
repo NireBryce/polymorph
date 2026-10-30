@@ -1,2 +1,0 @@
-[console_scripts]
-polymorph = polymorph.__main__:main
