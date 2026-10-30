@@ -138,3 +138,13 @@ class InitShapeTest(unittest.TestCase):
             cfg = Path(d) / "s.json"
             discover.init_config("z", str(cfg), shape="claude-like")
             self.assertTrue(json.loads(cfg.read_text())["hooks"]["enabled"])
+
+
+class InitAddsEventsTest(unittest.TestCase):
+    def test_second_call_adds_an_event(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "s.json"
+            discover.init_config("t", str(cfg), "PreToolUse")
+            discover.init_config("t", str(cfg), "PostToolUse")
+            self.assertEqual(sorted(json.loads(cfg.read_text())["hooks"]), ["PostToolUse", "PreToolUse"])

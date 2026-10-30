@@ -73,7 +73,8 @@ def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
         entry["enabled"] = True
         doc["hooks"] = {"enabled": True, "events": events}
     else:
-        doc["hooks"] = events
+        existing = doc.get("hooks") if isinstance(doc.get("hooks"), dict) else {}
+        doc["hooks"] = {**existing, **events}   # repeat calls add events
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(doc, indent=2) + "\n")
     return p
