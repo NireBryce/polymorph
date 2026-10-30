@@ -106,7 +106,10 @@ class MappingTests(Base):
 
     def test_builtin_fallback_no_warning(self):
         (self.nobuiltin / "other.toml").write_text(
-            'schema = 1\nname = "other"\nconfig_path = "a.json"\nformat = "json"\ntemplate = "claude-like"\n')
+            'schema = 1\nname = "other"\nconfig_path = "a.json"\nformat = "json"\ntemplate = "claude-like"\n'
+            '[tools]\n[events]\n[payload_in]\n[payload_out]\n'
+            '[capabilities]\nask = false\npost_event = false\nexit_2_blocks = false\n'
+            'rewrites_input = false\njson_answers = false\n')
         msgs = []
         self.assertEqual(load_mapping("other", self.repo, warn=msgs.append).name, "other")
         self.assertEqual(msgs, [])

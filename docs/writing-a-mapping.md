@@ -48,7 +48,10 @@ skills_dir = ".agents/skills"
 | `context_file` | no | The file the harness reads for project instructions (`AGENTS.md`, `GEMINI.md`). Validated as a path, recorded, not used yet. |
 | `skills_dir` | no | Where the harness reads skills. Same: recorded, not used yet. |
 
-Unknown top-level keys are an error.
+Unknown top-level keys are an error. The tables `[tools]`, `[events]`, `[capabilities]` (all five
+keys), `[payload_in]` and `[payload_out]` are all required, though an empty one is fine
+(`[payload_out]` is empty for a harness that speaks the Claude protocol). A mapping missing one
+is refused by `generate`, `validate` and `check` alike.
 
 ```toml
 [tools]

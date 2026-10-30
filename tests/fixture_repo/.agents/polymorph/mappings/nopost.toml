@@ -10,3 +10,15 @@ shell = "run"
 [events]
 session_start = "start"
 pre_tool = "before"
+
+[capabilities]
+ask = false
+post_event = false
+exit_2_blocks = true
+rewrites_input = false
+json_answers = true
+
+[payload_in]
+tool_name = "tool_name"
+
+[payload_out]

@@ -59,14 +59,39 @@ class CheckTest(unittest.TestCase):
         self.assertIn("no-targets", out)
         self.assertEqual(self.codes(harnesses=["zcode"]) & {"no-targets"}, set())
 
-    def test_mapping_invalid(self):
+    REQUIRED_TABLES = ("tools", "events", "capabilities", "payload_in", "payload_out")
+
+    def _local_zcode_without(self, table):
+        """A repo-local zcode mapping (the built-in text) with one table removed."""
+        keep, skip = [], False
+        for line in (Path(check.BUILTIN_DIR) / "zcode.toml").read_text().splitlines():
+            if line.startswith("["):
+                skip = line.strip() == f"[{table}]"
+            if not skip:
+                keep.append(line)
         d = self.repo / ".agents/polymorph/mappings"
-        d.mkdir()
-        shutil.copy(FIXTURE / ".agents/polymorph/mappings/zcode.toml", d)  # lacks required tables
+        d.mkdir(exist_ok=True)
+        (d / "zcode.toml").write_text("\n".join(keep) + "\n")
+        return d / "zcode.toml"
+
+    def test_mapping_invalid(self):
+        self._local_zcode_without("capabilities")
         fs = [f for f in check.run_check(self.repo) if f.code == "mapping-invalid"]
         self.assertTrue(fs)
         self.assertTrue(all(f.severity == "error" and f.target == "zcode" for f in fs))
         self.assertEqual(run("--repo", str(self.repo))[0], 1)
+
+    def test_missing_table_rejected_alike_by_generate_validate_check(self):
+        from polymorph.mapping import MappingError
+        from polymorph.validate import validate_mapping
+        for table in self.REQUIRED_TABLES:
+            with self.subTest(table=table):
+                f = self._local_zcode_without(table)
+                self.assertTrue(validate_mapping(f), "validate accepted it")
+                with self.assertRaises(MappingError):
+                    generate(self.repo, ["zcode"])
+                fs = [x for x in check.run_check(self.repo) if x.code == "mapping-invalid"]
+                self.assertTrue(fs, "check accepted it")
 
     def test_mapping_unloadable(self):
         d = self.repo / ".agents/polymorph/mappings"

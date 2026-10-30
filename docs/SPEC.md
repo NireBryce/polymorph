@@ -87,6 +87,12 @@ canonical protocol. It is only valid for an identity translation: `payload_out` 
 a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
 reports `mapping-invalid`).
 
+Required: `schema`, `name`, `config_path`, `format`, `template` and the tables `[tools]`,
+`[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
+is valid. `generate`, `validate` and `check` apply the same rule (loading a mapping runs
+`validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
+`context_file`, `skills_dir`, `delivery`.
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.
