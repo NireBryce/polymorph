@@ -8,116 +8,103 @@
 > consistent", not "the guards work". Interfaces and the mapping schema may change without
 > notice. Reports of problems are welcome.
 
+polymorph reads a repo's Claude Code agent config (`.agents/settings.json` and the hook
+scripts in `.agents/hooks/`) and writes the equivalent hook config for other coding
+harnesses, such as ZCode or Gemini CLI. What differs between harnesses (config file
+location, tool names, event names, what an exit code means) lives in small declarative TOML
+files called mappings, not in code. Python 3.11+, standard library only.
 
-Reads a repo's Claude Code agent config (`.agents/settings.json`, `.agents/hooks/`)
-and writes hook configs for other coding harnesses from declarative TOML mappings.
-Python 3.11+, stdlib only. Contract: `docs/SPEC.md`.
+The reason to want this: if you keep guard hooks (a script that refuses `git reset --hard`,
+say) for one harness, you would otherwise hand-copy and hand-translate them for every other
+one, and the copies drift. polymorph keeps one source of truth and regenerates the rest.
 
-```
-python -m polymorph generate [--repo .] [--harness NAME ...] [--check]
-python -m polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
-python -m polymorph adapter --harness NAME -- SCRIPT
-python -m polymorph validate FILE.toml
-python -m polymorph conformance [--harness NAME]
-python -m polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
-python -m polymorph discover log [--full] --out FILE   # the logger hook; silent, always exit 0
-python -m polymorph discover summary FILE.jsonl
-python -m polymorph discover draft FILE.jsonl --name NAME
-python -m polymorph discover reload-check --config-path P --scratch-log F [--finish]
-```
+## What it is not
 
-Targets default to `enabled = ["zcode", ...]` in `.agents/polymorph/config.toml`.
-`generate` prints, per target, settings with no cross-harness meaning (unmapped), hooks
-the target cannot run (missing event or tool class), and a warning when the mapping has
-no `verified` field. `--check` writes nothing and exits 1 when a generated file differs.
+- **Not a security boundary.** The hooks it wires up are usually string matchers over a
+  command line. They catch honest mistakes, not a determined or confused agent.
+- **Not proof that your guards work.** `polymorph check` is static. It never runs a hook,
+  a harness or the network. A clean `check` means the generated files match what the
+  mappings say and the scripts exist. It does not mean the harness calls the hook, honours
+  a deny, or reads the file you wrote. See [Limits](docs/limits.md).
+- **Not verified against live harnesses.** Every shipped mapping says in its `verified`
+  field what it actually rests on.
+- **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
+  Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 
-Mappings are looked up in the repo's `.agents/polymorph/mappings/NAME.toml` (overrides the
-built-in `mappings/NAME.toml`, with a warning), then the built-in ones. A mappings
-directory elsewhere needs `--trust-dir`. Hook scripts must resolve under
-`.agents/hooks/`. Other keys in an existing target config file are preserved; only
-`hooks` is rewritten.
+## Install
 
-Discovery mode, for a harness with no mapping: `discover init` writes (merging into any
-existing JSON) a config whose only hook logs every payload to
-`.polymorph-discovery/NAME.jsonl` (gitignored; redacted by default). Run a
-session, then `discover draft` prints an unverified schema-1 mapping from what was seen:
-tool classes by name heuristics (listed in `discover.py`), only observed payload paths,
-no command text or paths from the log, nothing unknown guessed. Draft comments carry
-per-field evidence counts (`# 9/9 Bash`), mark name-heuristic classes `# guessed from name`,
-list tools left unclassified with the reason, and infer `config_path`/`template` only from
-log evidence (a `cwd` plus Claude-style `hook_event_name` implies `.claude/settings.json`
-and `claude-settings`), saying so in a comment.
-
-**Privacy: logs are redacted by default.** Keys are kept; only structural values (event, tool
-name, ids, permission mode) survive verbatim, and everything else (tool_input, tool_response,
-`cwd`, `transcript_path`, prompts) becomes `{type, length}`, with no hash. `--full` (on `init` or
-`log`) logs raw payloads including commands, paths and file contents; such a log must not be
-shared, attached to an issue or committed. Environment variables are not read unless `--env-be-very-careful` is passed; then only the names (never values) of variables containing PROJECT, WORKSPACE or HARNESS are logged.
-
-Each log line has top-level `event`, `tool_name` and `session_id` (null when absent) next to
-`ts` and `keys`. `discover summary` tabulates per-event top-level keys, per-tool tool_input
-keys, counts and session count; it prints names and counts only. Logger failures (non-JSON
-or non-object stdin, unwritable log) are written to `<name>.errors.jsonl` beside the log when
-that directory is writable; the logger still exits 0 with no stdout.
-
-`discover reload-check` tests whether a running harness re-reads hook edits: it adds a
-temporary extra hook (own scratch log) through the same merge, prints what to do, and
-`--finish` reports whether the scratch log got a line and removes the hook, restoring the
-file byte-for-byte (or stripping by marker if the file changed meanwhile). State lives in
-`<scratch>.reload-state.json`; a second start is refused until `--finish` runs.
-
-Not done: capability/timing notes beyond what payloads show (feedback 8), and feedback items
-10 and 12. Not run against a live harness by this repo's tests.
-
-## `polymorph check`
-
-Static analysis of a repo's agent config, for CI and pre-commit. It never runs a hook
-script, a harness or the network, and never writes a file. Findings are
-`{severity, code, target, message, file}`; severities are error, warning, note. Exit 0 when
-there are no errors (with `--strict`, no warnings either), 1 when findings fail, 2 on usage
-or internal errors. `--format sarif` emits SARIF 2.1.0 for code-scanning upload.
-
-Codes: `no-targets`, `settings-invalid`, `mapping-invalid`, `mapping-unverified`,
-`mapping-untested-live`, `hook-outside-hooks-dir`, `hook-missing`, `hook-not-executable`,
-`hook-no-equivalent`, `setting-unmapped`, `generated-drift`, `fixtures-missing`,
-`fixtures-skipped`, `fixture-failed`. Contract: `docs/SPEC.md`.
-
-pre-commit (`.pre-commit-config.yaml`):
-
-```yaml
-repos:
-  - repo: local
-    hooks:
-      - id: polymorph-check
-        name: polymorph check
-        entry: python -m polymorph check --strict
-        language: system
-        pass_filenames: false
-        files: ^\.(agents|zcode|claude)/
+```sh
+nix run github:NireBryce/polymorph -- --help     # not run (the github ref); `nix run .#default` in a clone was
+pip install -e .                                  # from a clone; see the note below
+python -m polymorph --help                        # after pip install -e ., or with PYTHONPATH=src
 ```
 
-GitHub Actions:
+Use an editable install (`-e`) or Nix. A plain `pip install .` copies only the Python
+package, and polymorph looks for its `mappings/` and `fixtures/` directories next to the
+source tree, so a non-editable install fails with "no mapping named ...". The Nix package
+copies them into place.
 
-```yaml
-name: polymorph
-on: [push, pull_request]
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    permissions: {contents: read, security-events: write}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: pip install .   # or however polymorph is installed in your repo
-      - run: python -m polymorph check --format sarif > polymorph.sarif
-        continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@v3
-        with: {sarif_file: polymorph.sarif}
-      - run: python -m polymorph check --strict
+## Five-minute quickstart
+
+You have a repo with `.agents/settings.json` and hook scripts under `.agents/hooks/`, and
+you want ZCode to run the same hooks.
+
+```sh
+# 1. Say which harnesses to generate for.
+mkdir -p .agents/polymorph
+printf 'enabled = ["zcode"]\n' > .agents/polymorph/config.toml
+
+# 2. See what would be written, and what has no equivalent. Writes nothing.
+python -m polymorph generate --check
+
+# 3. Write .zcode/config.json.
+python -m polymorph generate
+
+# 4. Check the repo is consistent. Exit 0 means no errors.
+python -m polymorph check
 ```
 
-Tests: `python -m unittest discover -s tests`
+Step 2 on a repo with a `permissions` block prints something like:
+
+```
+[zcode] would write .zcode/config.json (DRIFT)
+  unmapped setting: permissions.allow (1 entries)
+```
+
+`unmapped setting` means polymorph found a setting with no cross-harness meaning and did
+not translate it. It is reported, never silently dropped. `check` before step 3 fails with
+`generated-drift` because the file does not exist yet; after step 3 it passes.
+
+Commit `.zcode/config.json` and run `polymorph check --strict` in CI so the two never
+disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `generate` | Write each enabled harness's config from `.agents/settings.json`. `--check` writes nothing and exits 1 on drift. |
+| `check` | Static analysis for CI: scripts exist and are executable, mappings valid, generated files current, fixtures replay. Text, JSON or SARIF. |
+| `adapter` | The runtime shim a generated config calls: translates a native hook payload, runs your script, translates the answer back. |
+| `validate` | Check one mapping file against schema 1. |
+| `conformance` | Replay the shipped fixtures through the adapter. |
+| `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
+
+Every flag is in [CLI reference](docs/cli.md).
+
+## Documentation
+
+- [docs/index.md](docs/index.md): where everything is.
+- [Getting started](docs/getting-started.md) and [Concepts](docs/concepts.md)
+- [Writing a mapping](docs/writing-a-mapping.md) and [Discovery](docs/discovery.md)
+- [CLI reference](docs/cli.md), [CI](docs/ci.md), [Limits](docs/limits.md)
+- [SPEC](docs/SPEC.md): the contract the code is written against.
+- [CONTRIBUTING](CONTRIBUTING.md) and [CHANGELOG](CHANGELOG.md)
+
+## Tests
+
+```sh
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
 
 ## License
 
