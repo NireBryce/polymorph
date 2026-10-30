@@ -122,8 +122,9 @@ the adapter.
 ```
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
-Discovery logs stay in `.polymorph-discovery/` outside this tree, gitignored, so a raw log
-is never one `git add` away from being committed.
+Discovery logs go to `.polymorph-discovery/` (by default under the current directory, or
+`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph-discovery/` yourself so a
+raw log is not one `git add` away from being committed.
 
 ## Trust
 
@@ -134,15 +135,18 @@ mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `
 ## CLI
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check]   # --check: exit 1 on drift
-polymorph adapter --harness NAME -- SCRIPT
+polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
 polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
-polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
-polymorph discover log [--full] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
+                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
+                        # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
+polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl      # per-event/per-tool key tables, counts, sessions
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
+                        [--event-name E] [--matcher M] [--shape claude-settings|claude-like]
 polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
 ```
 
@@ -162,6 +166,10 @@ Generate output lists, per target, unmapped settings and hooks with no equivalen
 `src/polymorph/fixtures/<harness>/<case>.json`:
 `{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}`
 covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
+
+The `gemini` mapping is an unverified draft written from a sketch, not from a captured session,
+so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies
+real ones. Invented fixtures would only restate the guess.
 
 ## polymorph check
 

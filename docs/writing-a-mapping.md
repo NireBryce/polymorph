@@ -185,9 +185,9 @@ regressions in the mapping. They live in `src/polymorph/fixtures/NAME/CASE.json`
 - `native_out`: what the adapter must emit. `stdout` is a JSON value (compared parsed), a
   string (compared verbatim), or empty/`null` for no output; `exit` is an integer.
 
-Unknown or missing keys fail with a shape error. The shipped mappings have four fixtures
-each: `deny`, `ask`, `warn`, `remind` (`gemini` has none, and `check` warns
-`fixtures-missing`). Replay them:
+Unknown or missing keys fail with a shape error. The verified shipped mappings have at least the four
+fixtures `deny`, `ask`, `warn`, `remind` (the draft `gemini` mapping has none, and `check`
+warns `fixtures-missing`). Replay them:
 
 ```sh
 python -m polymorph conformance --harness zcode
