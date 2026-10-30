@@ -6,7 +6,7 @@ name = "claude"
 verified = "2026-10-30, nixos-configs .agents/hooks read snake_case payloads under Claude Code"
 config_path = ".claude/settings.json"
 format = "json"
-template = "claude-like"
+template = "claude-settings"
 context_file = "CLAUDE.md"
 skills_dir = ".claude/skills"
 

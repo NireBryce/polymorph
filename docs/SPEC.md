@@ -43,7 +43,7 @@ name = "zcode"
 verified = "2026-10-30, live session"      # absent => generator warns
 config_path = ".zcode/config.json"
 format = "json"
-template = "claude-like"                   # name of a shipped writer template
+template = "claude-like"                   # shipped writer: claude-like (hooks.enabled + hooks.events) or claude-settings (hooks.<Event>)
 context_file = "AGENTS.md"
 skills_dir = ".agents/skills"
 

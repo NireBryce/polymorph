@@ -200,3 +200,18 @@ class CliTests(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SettingsShapeTest(unittest.TestCase):
+    def test_claude_settings_template_has_no_wrapper(self):
+        from polymorph.generate import _claude_settings, _claude_like
+        from polymorph.canon import Canon, Hook
+        canon = Canon(hooks=(Hook("pre_tool", ("shell",), ".agents/hooks/x.sh", None),), unmapped=())
+        m = load_mapping("claude", Path("/nonexistent-repo"))
+        flat = json.loads(_claude_settings(canon, m, {})[0])
+        self.assertNotIn("enabled", flat["hooks"])
+        group = flat["hooks"]["PreToolUse"][0]
+        self.assertEqual(group["matcher"], "Bash")
+        self.assertNotIn("enabled", group["hooks"][0])
+        wrapped = json.loads(_claude_like(canon, m, {})[0])
+        self.assertTrue(wrapped["hooks"]["enabled"])

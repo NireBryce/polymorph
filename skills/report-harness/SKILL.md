@@ -36,7 +36,10 @@ documentation. Write "unknown" instead of guessing.
 
 ## 2. Draft the mapping
 
-Fill in the schema 1 TOML from `docs/SPEC.md` ("Mapping file"). Leave
+Fill in the schema 1 TOML from "Mapping file" in
+https://github.com/NireBryce/polymorph/blob/main/docs/SPEC.md (the repo is
+private while it is young; if you cannot read it, use the sketch in the
+issue form). Leave
 `verified` out entirely: its absence is what marks the draft unverified.
 Omit events or keys you do not know rather than guessing. Dotted paths and
 `{placeholder}` only; no code, no shell.

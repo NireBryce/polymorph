@@ -57,7 +57,8 @@ def _matcher(h: Hook, m: Mapping) -> tuple[str | None, list[str]]:
     return "|".join(names), missing
 
 
-def _claude_like(canon: Canon, m: Mapping, existing: dict) -> tuple[str, list[str]]:
+def _claude_shape(canon: Canon, m: Mapping, existing: dict, wrapped: bool) -> tuple[str, list[str]]:
+    """wrapped: ZCode shape (hooks.enabled + hooks.events, per-hook enabled); else Claude Code settings shape."""
     gaps: list[str] = []
     events: dict[str, list[dict]] = {}
     for h in canon.hooks:
@@ -70,7 +71,9 @@ def _claude_like(canon: Canon, m: Mapping, existing: dict) -> tuple[str, list[st
             gaps.append(f"{h.script}: no {m.name} tool for class(es) {', '.join(missing)}")
             if matcher is not None and not matcher:
                 continue
-        entry: dict = {"type": "command", "command": adapter_command(m.name, h.script), "enabled": True}
+        entry: dict = {"type": "command", "command": adapter_command(m.name, h.script)}
+        if wrapped:
+            entry["enabled"] = True
         if h.timeout is not None:
             entry["timeout"] = h.timeout
         groups = events.setdefault(native, [])
@@ -82,11 +85,19 @@ def _claude_like(canon: Canon, m: Mapping, existing: dict) -> tuple[str, list[st
             g = {"matcher": matcher, "hooks": [entry]} if matcher else {"hooks": [entry]}
             groups.append(g)
     doc = dict(existing)
-    doc["hooks"] = {"enabled": True, "events": events}
+    doc["hooks"] = {"enabled": True, "events": events} if wrapped else events
     return json.dumps(doc, indent=2) + "\n", gaps
 
 
-TEMPLATES = {"claude-like": _claude_like}
+def _claude_like(canon, m, existing):
+    return _claude_shape(canon, m, existing, wrapped=True)
+
+
+def _claude_settings(canon, m, existing):
+    return _claude_shape(canon, m, existing, wrapped=False)
+
+
+TEMPLATES = {"claude-like": _claude_like, "claude-settings": _claude_settings}
 
 
 def generate_target(repo: Path, canon: Canon, m: Mapping) -> TargetResult:
