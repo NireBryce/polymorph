@@ -16,12 +16,12 @@ python -m polymorph discover draft FILE.jsonl --name NAME
 python -m polymorph discover reload-check --config-path P --scratch-log F [--finish]
 ```
 
-Targets default to `enabled = ["zcode", ...]` in `.agents/harnesses.toml`.
+Targets default to `enabled = ["zcode", ...]` in `.agents/polymorph/config.toml`.
 `generate` prints, per target, settings with no cross-harness meaning (unmapped), hooks
 the target cannot run (missing event or tool class), and a warning when the mapping has
 no `verified` field. `--check` writes nothing and exits 1 when a generated file differs.
 
-Mappings are looked up in the repo's `.agents/harnesses/NAME.toml` (overrides the
+Mappings are looked up in the repo's `.agents/polymorph/mappings/NAME.toml` (overrides the
 built-in `mappings/NAME.toml`, with a warning), then the built-in ones. A mappings
 directory elsewhere needs `--trust-dir`. Hook scripts must resolve under
 `.agents/hooks/`. Other keys in an existing target config file are preserved; only

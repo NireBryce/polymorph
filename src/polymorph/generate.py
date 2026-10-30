@@ -11,7 +11,7 @@ from .canon import Canon, Hook
 from .mapping import Mapping, load_mapping
 from .reader_claude import read_claude
 
-ENABLED_FILE = ".agents/harnesses.toml"
+ENABLED_FILE = ".agents/polymorph/config.toml"
 
 
 @dataclass

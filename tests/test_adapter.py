@@ -104,8 +104,8 @@ class RunAdapterTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self.tmp.name).resolve()
         (self.repo / ".agents" / "hooks").mkdir(parents=True)
-        (self.repo / ".agents" / "harnesses").mkdir()
-        (self.repo / ".agents" / "harnesses" / "fake.toml").write_text(TOML)
+        (self.repo / ".agents" / "polymorph" / "mappings").mkdir(parents=True)
+        (self.repo / ".agents" / "polymorph" / "mappings" / "fake.toml").write_text(TOML)
         self.addCleanup(self.tmp.cleanup)
 
     def hook(self, name, body):

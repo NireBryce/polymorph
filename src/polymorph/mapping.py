@@ -12,7 +12,7 @@ from .canon import CLASSES, EVENTS
 
 SCHEMA = 1
 BUILTIN_DIR = Path(__file__).resolve().parents[2] / "mappings"
-REPO_DIR = ".agents/harnesses"
+REPO_DIR = ".agents/polymorph/mappings"
 
 TOP_KEYS = {
     "schema", "name", "verified", "config_path", "format", "template",
@@ -99,7 +99,7 @@ def load_mapping(
     warn=None,
 ) -> Mapping:
     """Find NAME.toml. Order: explicit mappings_dir (must be trusted), else
-    repo .agents/harnesses (overrides built-in, with a warning), else built-in."""
+    repo .agents/polymorph/mappings (overrides built-in, with a warning), else built-in."""
     warn = warn or (lambda msg: print(f"warning: {msg}", file=sys.stderr))
     if not _NAME.match(name):
         raise MappingError(f"invalid harness name {name!r}")

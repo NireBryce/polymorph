@@ -99,7 +99,7 @@ class MappingTests(Base):
             mapping.parse_mapping({"schema": 2, "name": "x"}, "x")
 
     def test_override_warns(self):
-        (self.nobuiltin / "zcode.toml").write_text((self.repo / ".agents/harnesses/zcode.toml").read_text())
+        (self.nobuiltin / "zcode.toml").write_text((self.repo / ".agents/polymorph/mappings/zcode.toml").read_text())
         msgs = []
         load_mapping("zcode", self.repo, warn=msgs.append)
         self.assertTrue(any("overrides" in m for m in msgs))
@@ -114,7 +114,7 @@ class MappingTests(Base):
     def test_trust_dir_rule(self):
         outside = self.tmp / "outside"
         outside.mkdir()
-        shutil.copy(self.repo / ".agents/harnesses/zcode.toml", outside)
+        shutil.copy(self.repo / ".agents/polymorph/mappings/zcode.toml", outside)
         with self.assertRaises(MappingError):
             load_mapping("zcode", self.repo, mappings_dir=outside)
         self.assertEqual(load_mapping("zcode", self.repo, outside, (outside,)).name, "zcode")

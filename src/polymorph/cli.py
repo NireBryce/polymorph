@@ -95,7 +95,7 @@ def _cmd_generate(args) -> int:
 
     results = generate(args.repo, args.harness, args.check, args.mappings, args.trust_dir)
     if not results:
-        print("no targets: pass --harness or list them in .agents/harnesses.toml", file=sys.stderr)
+        print("no targets: pass --harness or list them in .agents/polymorph/config.toml", file=sys.stderr)
         return 2
     drift = False
     for r in results:

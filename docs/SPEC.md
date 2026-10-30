@@ -93,11 +93,25 @@ harness shows to the model) and NEVER a deny; never fail open silently. `ask` on
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
 the adapter.
 
+## Repo layout (everything polymorph stores in a repo)
+
+```
+.agents/polymorph/
+  config.toml          # enabled = ["zcode", ...]  (targets to generate)
+  mappings/NAME.toml   # repo-local mapping; overrides a built-in of the same name, with a warning
+  decisions/NAME.toml  # answers to generation-time questions (planned)
+  generated/NAME/      # generated shims and plugin files (planned)
+```
+
+Generated harness configs stay where the harness reads them (the mapping's `config_path`).
+Discovery logs stay in `.polymorph-discovery/` outside this tree, gitignored, so a raw log
+is never one `git add` away from being committed.
+
 ## Trust
 
 Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
-mappings from outside the repo's `.agents/harnesses/` or the built-in `mappings/`.
+mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `mappings/`.
 
 ## CLI
 

@@ -161,7 +161,7 @@ _NAME = re.compile(r"[A-Za-z0-9_-]+")
 def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: list[Path] = ()) -> dict:
     if not _NAME.fullmatch(name):
         raise AdapterError(f"bad harness name {name!r}")
-    dirs = [repo / ".agents" / "harnesses", Path(__file__).resolve().parent.parent.parent / "mappings"]
+    dirs = [repo / ".agents" / "polymorph" / "mappings", Path(__file__).resolve().parent.parent.parent / "mappings"]
     if extra_dir is not None:
         e = extra_dir.resolve()
         if e not in dirs and e not in [t.resolve() for t in trust]:
