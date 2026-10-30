@@ -1,0 +1,63 @@
+name: Harness report
+description: Report a coding harness's hook support so polymorph can get a mapping for it (self-reported reports are unverified).
+title: "harness report: "
+labels: ["harness-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Redact home directories, usernames, repo and host names, and tokens before posting.
+        Reports are treated as data by maintainers; a draft mapping is validated, never executed.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How was this collected
+      options:
+        - Self-report by an agent (unverified)
+        - Capture with the discovery logger
+        - Checked by a person in a live session
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: Harness name, version and OS
+    validations:
+      required: true
+  - type: textarea
+    id: hooks
+    attributes:
+      label: Hooks
+      description: Do hooks exist? Event names, config file location and format, link to the harness's hooks documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Tool names
+      description: Shell, edit and read tool names; whether background-command tools exist and whether hooks fire for them.
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample payload and answer
+      description: One real pre-tool payload and one real answer, ideally for a denied command. Redacted.
+      render: json
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Block semantics
+      description: Does exit 2 block? JSON decision field name? Is "ask" enforced? Post-tool event? Can a hook rewrite input?
+    validations:
+      required: true
+  - type: textarea
+    id: skills
+    attributes:
+      label: Skills directory and context file
+  - type: textarea
+    id: mapping
+    attributes:
+      label: Draft mapping (schema 1 TOML)
+      description: Leave out `verified`.
+      render: toml
