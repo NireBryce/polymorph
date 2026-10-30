@@ -160,17 +160,14 @@ class GenerateTests(Base):
         (self.repo / ".zcode/config.json").write_text("{}")
         self.assertTrue(generate(self.repo, check=True)[0].drift)
 
-    def test_gaps_and_warnings(self):
+    def test_undecided_mismatches_write_nothing(self):
         r = generate(self.repo, ["nopost"])[0]
-        gaps = " ".join(r.gaps)
-        self.assertIn("no post_tool event", gaps)
-        self.assertIn("edit-check-posttooluse.sh", gaps)
-        self.assertIn("no nopost tool for class(es) read", gaps)
+        ids = {u.id for u in r.undecided}
+        self.assertIn(".agents/hooks/edit-check-posttooluse.sh:no-event", ids)
+        self.assertIn(".agents/hooks/secrets-read-guard-pretooluse.sh:no-tool-class", ids)
         self.assertTrue(any("verified" in w for w in r.warnings))
         self.assertIn("attribution", " ".join(r.unmapped))
-        doc = json.loads((self.repo / ".nopost/config.json").read_text())
-        self.assertNotIn("PostToolUse", doc["hooks"]["events"])
-        self.assertEqual(list(doc["hooks"]["events"]), ["start", "before"])
+        self.assertFalse((self.repo / ".nopost/config.json").exists())
 
     def test_verified_no_warning(self):
         self.assertEqual(generate(self.repo, ["zcode"])[0].warnings, [])
@@ -211,12 +208,12 @@ class SettingsShapeTest(unittest.TestCase):
         from polymorph.canon import Canon, Hook
         canon = Canon(hooks=(Hook("pre_tool", ("shell",), ".agents/hooks/x.sh", None),), unmapped=())
         m = load_mapping("claude", Path("/nonexistent-repo"))
-        flat = json.loads(_claude_settings(canon, m, {})[0])
+        flat = json.loads(_claude_settings(canon, m, {}, {})[0])
         self.assertNotIn("enabled", flat["hooks"])
         group = flat["hooks"]["PreToolUse"][0]
         self.assertEqual(group["matcher"], "Bash")
         self.assertNotIn("enabled", group["hooks"][0])
-        wrapped = json.loads(_claude_like(canon, m, {})[0])
+        wrapped = json.loads(_claude_like(canon, m, {}, {})[0])
         self.assertTrue(wrapped["hooks"]["enabled"])
 
 

@@ -133,14 +133,14 @@ class CheckTest(unittest.TestCase):
         (self.repo / ".agents/settings.json").unlink()
         self.assertIn("settings-invalid", self.codes())
 
-    def test_hook_no_equivalent(self):
+    def test_undecided_mismatch(self):
         d = self.repo / ".agents/polymorph/mappings"
         d.mkdir()
         shutil.copy(FIXTURE / ".agents/polymorph/mappings/nopost.toml", d)
         fs = check.run_check(self.repo, harnesses=["nopost"])
-        gaps = [f for f in fs if f.code == "hook-no-equivalent"]
+        gaps = [f for f in fs if f.code == "decision-undecided"]
         self.assertTrue(gaps)
-        self.assertTrue(all(f.severity == "warning" and f.target == "nopost" for f in gaps))
+        self.assertTrue(all(f.severity == "error" and f.target == "nopost" for f in gaps))
 
     def test_setting_unmapped_note(self):
         fs = [f for f in check.run_check(self.repo) if f.code == "setting-unmapped"]

@@ -20,7 +20,8 @@ live in several files and drift apart silently.
 | a canonical event or class | `canon.py`, `reader_claude.py`, `mapping.py` events/tools, SPEC "Canonical config", mappings |
 | an extractor or template | `extractors.py` / `generate.py` by name (never from mapping text), `validate.py`'s allowed names, SPEC |
 | a `GUARD_*` variable | `adapter.py`, SPEC "Wire protocol", and the hooks that read it (outside this repo: say so in the PR) |
-| a check code | `check.py`, SPEC's check table, `tests/test_check.py` |
+| a check code | `check.py`, SPEC's check table, `docs/cli.md`'s table, `tests/test_check.py` |
+| a decision kind or choice | `decisions.py` (`KINDS`), `generate.py` (`hook_mismatches`, how a choice applies), SPEC "Decisions", `docs/cli.md`, `tests/test_decisions.py` |
 | fixture shape | `conformance.py`, `src/polymorph/fixtures/**`, SPEC "Fixtures" |
 
 Then `README.md` and `docs/cli.md` if a command or example changed, and the

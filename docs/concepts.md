@@ -153,13 +153,23 @@ Capabilities in a mapping are claims. Only a live test establishes them; see
 This limits what a mapping file can make polymorph do. It is not a claim that the hook
 scripts themselves are safe, or that a guard cannot be bypassed.
 
+## Decisions
+
+Harnesses differ: one may have no post-tool event, no tool for a class, or no payload field
+a hook reads. polymorph does not guess a substitute and does not drop the hook quietly.
+`generate` stops for that target (exit 3), writes nothing for it, and prints each item as a
+question with its options. The answer goes in `.agents/polymorph/decisions/NAME.toml`, keyed
+by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a choice you
+record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
+event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
+
 ## What polymorph stores in a repo
 
 ```
 .agents/polymorph/
   config.toml          enabled = ["zcode", ...]
   mappings/NAME.toml   repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  planned, not built
+  decisions/NAME.toml  answers to generation-time mismatches (see below)
   generated/NAME/      planned, not built
 ```
 

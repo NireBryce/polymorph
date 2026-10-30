@@ -103,18 +103,35 @@ def _cmd_generate(args) -> int:
     if not results:
         print("no targets: pass --harness or list them in .agents/polymorph/config.toml", file=sys.stderr)
         return 2
+    from .decisions import format_question
+
     drift = False
+    pending = 0
     for r in results:
-        state = "DRIFT" if r.drift else "ok"
-        verb = "would write" if (args.check and r.drift) else ("wrote" if r.drift else "unchanged")
-        print(f"[{r.harness}] {verb} {r.path} ({state})")
+        if r.undecided:
+            pending += len(r.undecided)
+            print(f"[{r.harness}] NOT WRITTEN {r.path}: {len(r.undecided)} undecided")
+        else:
+            state = "DRIFT" if r.drift else "ok"
+            verb = "would write" if (args.check and r.drift) else ("wrote" if r.drift else "unchanged")
+            print(f"[{r.harness}] {verb} {r.path} ({state})")
         for w in r.warnings:
             print(f"  warning: {w}")
-        for gap in r.gaps:
-            print(f"  gap: {gap}")
+        for mm in r.undecided:
+            for line in format_question(r.harness, mm, r.native_events):
+                print(line)
+        for a in r.applied:
+            print(f"  {'weakened' if a.weakening else 'decided'}: {a.id} = {a.choice}: {a.text}")
+        for sid in r.stale:
+            print(f"  warning: stale decision {sid} (matches nothing now)")
+        for n in r.notes:
+            print(f"  note: {n}")
         for u in r.unmapped:
             print(f"  unmapped setting: {u}")
         drift = drift or r.drift
+    if pending:
+        print(f"{pending} undecided item(s): nothing written for the targets above; answer them and run again")
+        return 3
     return 1 if (args.check and drift) else 0
 
 

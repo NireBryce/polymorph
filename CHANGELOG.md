@@ -19,6 +19,11 @@ First state of the project. Python 3.11+, standard library only.
   `.agents/polymorph/mappings/` overrides the built-in ones with a warning.
 - **`check`:** static analysis with stable finding codes; text, JSON and SARIF 2.1.0 output;
   `--strict`.
+- **Decisions:** a hook that needs an event, tool class or payload field the target lacks is
+  an undecided item until `.agents/polymorph/decisions/NAME.toml` answers it. `generate`
+  writes nothing for that target and exits 3 (it used to skip and report, exit 0); `check`
+  gains `decision-undecided`, `decision-weakens-guard`, `decision-stale`, `decision-invalid`
+  and drops `hook-no-equivalent`.
 - **`adapter`:** runtime shim translating native payloads to the canonical protocol and
   answers back, exporting `GUARD_*` capability variables; faults produce a visible
   "NOT checked" message and never a deny.
