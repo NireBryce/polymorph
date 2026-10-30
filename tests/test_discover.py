@@ -445,3 +445,226 @@ class InitKeepsUserHooksTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("refusing", r.stderr)
         self.assertEqual(self.cfg.read_text(), '{"hooks": []}')
+
+
+OPENCODE_PAYLOADS = [
+    {"hook_event_name": "execute.before", "tool_name": "shell", "session_id": "ses_1",
+     "agent": "build", "input": {"command": "echo SECRETCMD", "background": False}},
+    {"hook_event_name": "execute.after", "tool_name": "shell", "session_id": "ses_1",
+     "agent": "build", "input": {"command": "echo SECRETCMD", "background": False},
+     "output": {"output": "OUTBODY", "content": []}},
+    {"hook_event_name": "session.created", "session_id": "ses_2"},
+]
+
+
+class DottedEventNamesTest(unittest.TestCase):
+    """OpenCode names its events execute.before, execute.after and session.created."""
+
+    def _log(self, d):
+        return _mk(d, OPENCODE_PAYLOADS)
+
+    def test_summary_shows_the_real_event_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = discover.summarize(self._log(d))
+        self.assertNotIn("<invalid>", out)
+        for name in ("execute.before", "execute.after", "session.created"):
+            self.assertIn(name, out)
+
+    def test_draft_guesses_pre_and_post_from_the_suffix(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = discover.draft_mapping(self._log(d), "oc")
+            m = Path(d) / "m.toml"
+            m.write_text(text)
+            self.assertEqual(validate_mapping(m), [])
+        self.assertIn('pre_tool = "execute.before"   # guessed from name', text)
+        self.assertIn('post_tool = "execute.after"   # guessed from name', text)
+        self.assertIn("session.created", text.split("[events]")[1].split("[capabilities]")[0])
+        self.assertNotIn("SECRETCMD", text)
+
+    def test_event_name_charset_stays_strict(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "bad name;`x`", "tool_name": "shell"},
+                        {"hook_event_name": "a/b", "tool_name": "shell"},
+                        {"hook_event_name": "ns:ev-1.after", "tool_name": "shell"}])
+            out = discover.summarize(f)
+            text = discover.draft_mapping(f, "oc")
+        self.assertIn("<invalid>", out)
+        self.assertIn("ns:ev-1.after", out)
+        self.assertNotIn("bad name", out + text)
+        self.assertNotIn("a/b", out + text)
+
+    def test_a_mapping_may_name_a_dotted_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            m = Path(d) / "m.toml"
+            m.write_text(discover.draft_mapping(self._log(d), "oc"))
+            self.assertEqual(validate_mapping(m), [])
+            m.write_text(m.read_text().replace('"execute.before"', '"execute before;"'))
+            self.assertNotEqual(validate_mapping(m), [])
+
+
+def _oc(event, ts_off, call=None, msg=None, tool="shell", **extra):
+    """An OpenCode-shaped payload; ts is set by the caller through _mk_ts."""
+    p = {"hook_event_name": event, "session_id": "ses_1", "agent": "build"}
+    if tool:
+        p["tool_name"] = tool
+    if call:
+        p["id"], p["messageID"] = call, msg
+    p.update(extra)
+    return ts_off, p
+
+
+def _mk_ts(d, items):
+    """Write items [(ts, payload)] in the given order with chosen timestamps."""
+    f = Path(d) / "noisy.jsonl"
+    lines = []
+    for ts, p in items:
+        discover.log_stdin(str(f), io.StringIO(json.dumps(p)))
+        lines.append(json.loads(f.read_text().splitlines()[-1]))
+        lines[-1]["ts"] = 1000.0 + ts
+    f.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+    return f
+
+
+SHELL_IN = {"command": "echo SECRETCMD", "workdir": "/srv/SECRETDIR", "background": True, "timeout": 5}
+RESULT = {"output": "OUTBODY", "metadata": {"exit": 0, "truncated": False, "file": "/srv/SECRETDIR/x"},
+          "content": ["OUTBODY"]}
+
+
+def noisy_items():
+    items = [
+        # the after of call c1 lands before its before (observed with OpenCode)
+        _oc("execute.after", 2, "call_1", "msg_1", input=SHELL_IN, output=RESULT),
+        _oc("execute.before", 3, "call_1", "msg_1", input=SHELL_IN),
+        _oc("execute.before", 4, "call_2", "msg_1", tool="read", input={"path": "/srv/SECRETDIR/f"}),
+        _oc("execute.after", 5, "call_2", "msg_1", tool="read", input={"path": "/srv/SECRETDIR/f"},
+            output={"output": "x"}),
+        _oc("execute.before", 6, "call_3", "msg_2", input={"command": "ls"}),
+        _oc("execute.before", 7, tool="shell", input={"command": "ls"}),
+    ]
+    items += [_oc("session.created", 10 + i, tool=None) for i in range(40)]
+    return items
+
+
+class NoisyLogTest(unittest.TestCase):
+    def setUp(self):
+        self._d = tempfile.TemporaryDirectory()
+        self.addCleanup(self._d.cleanup)
+        self.f = _mk_ts(self._d.name, noisy_items())
+
+    def test_summary_defaults_to_tool_events(self):
+        out = discover.summarize(self.f)
+        self.assertIn("payloads: 6", out)
+        self.assertNotIn("session.created  ", out.split("hidden")[0])
+        self.assertIn("hidden: session.created 40", out)
+
+    def test_include_and_event_select_others(self):
+        out = discover.summarize(self.f, include=["session.created"])
+        self.assertIn("payloads: 46", out)
+        out = discover.summarize(self.f, events=["session.created"])
+        self.assertIn("payloads: 40", out)
+
+    def test_draft_ignores_session_events_by_default(self):
+        text = discover.draft_mapping(self.f, "oc")
+        self.assertIn("drafted from 6 observed payloads", text)
+        self.assertIn("session.created (40 payloads)", text)      # still named, never mapped
+        self.assertIn('pre_tool = "execute.before"', text)
+
+    def test_pairs_by_call_and_message_id_even_out_of_order(self):
+        out = discover.summarize(self.f)
+        self.assertIn("2 paired (1 arrived out of order)", out)
+        self.assertIn("1 before without after", out)
+        self.assertIn("1 without an id", out)
+
+    def test_sorted_by_ts_before_aggregating(self):
+        lines = [json.loads(l) for l in self.f.read_text().splitlines()]
+        self.f.write_text("\n".join(json.dumps(r) for r in reversed(lines)) + "\n")
+        self.assertIn("2 paired (1 arrived out of order)", discover.summarize(self.f))
+
+    def test_cli_flags(self):
+        r = run_cli(["discover", "summary", str(self.f), "--include", "session.created"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("payloads: 46", r.stdout)
+        r = run_cli(["discover", "draft", str(self.f), "--name", "oc", "--event", "execute.before"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("drafted from 4 observed payloads", r.stdout)
+
+
+class OutputKeyPathsTest(unittest.TestCase):
+    def test_nested_output_keys_kept_values_hidden(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk_ts(d, noisy_items())
+            first = json.loads(f.read_text().splitlines()[0])
+            out = first["raw"]["output"]
+            self.assertEqual(out["metadata"]["exit"], {"type": "number", "length": 1})
+            self.assertEqual(out["output"], {"type": "string", "length": 7})
+            self.assertEqual(out["content"]["type"], "array")
+            text = discover.draft_mapping(f, "oc")
+            self.assertIn("output.metadata.exit", text)
+            self.assertIn("output.output", text)
+            m = Path(d) / "m.toml"
+            m.write_text(text)
+            self.assertEqual(validate_mapping(m), [])
+
+    def test_depth_is_limited_and_odd_keys_dropped(self):
+        deep = {"a": {"b": {"c": {"d": {"e": "x"}}}}, "/etc/passwd": 1, "ok_key": 2}
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": deep}])
+            text = f.read_text()
+        self.assertNotIn("/etc/passwd", text)
+        self.assertIn("<invalid key>", text)
+        self.assertNotIn('"e"', text)
+
+
+class ToolFlagsTest(unittest.TestCase):
+    def test_boolean_input_keys_listed(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = discover.draft_mapping(_mk_ts(d, noisy_items()), "oc")
+        self.assertIn("boolean", text)
+        self.assertRegex(text, r"shell: .*background")
+        self.assertNotIn("timeout", text.split("tool_input flags")[1].split("[payload_out]")[0])
+
+    def test_full_log_booleans_too(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "x.before", "tool_name": "shell",
+                         "input": {"background": True, "command": "ls"}}], redact=False)
+            self.assertRegex(discover.draft_mapping(f, "oc"), r"shell: .*background")
+
+
+class SchemaMarkerTest(unittest.TestCase):
+    def test_lines_carry_schema_1(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS[:1])
+            self.assertEqual(json.loads(f.read_text())["schema"], 1)
+
+    def test_old_lines_without_it_still_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, CLAUDE_PAYLOADS)
+            lines = [json.loads(l) for l in f.read_text().splitlines()]
+            for r in lines:
+                del r["schema"]
+            f.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+            out = discover.summarize(f)
+            self.assertIn("payloads: 5", out)
+            self.assertIn("unmarked", out)
+            self.assertIn("Bash", discover.draft_mapping(f, "h"))
+
+
+class NewFeatureRedactionTest(unittest.TestCase):
+    LEAKS = ("SECRETCMD", "SECRETDIR", "OUTBODY", "/srv", "/etc/passwd")
+
+    def test_no_input_text_in_log_or_draft(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk_ts(d, noisy_items())
+            texts = [f.read_text(), discover.draft_mapping(f, "oc"), discover.summarize(f),
+                     discover.summarize(f, include=["session.created"])]
+        for t in texts:
+            for leak in self.LEAKS:
+                self.assertNotIn(leak, t)
+
+    def test_ids_kept_only_when_id_shaped(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "x.before", "tool_name": "shell",
+                         "id": "echo SECRETCMD /srv/x", "messageID": "msg_9"}])
+            r = json.loads(f.read_text())
+        self.assertEqual(r["raw"]["messageID"], "msg_9")
+        self.assertEqual(r["raw"]["id"]["type"], "string")

@@ -144,15 +144,17 @@ polymorph discover init --harness NAME --config-path P [--event-name E] [--match
                         [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
 polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
-polymorph discover summary FILE.jsonl      # per-event/per-tool key tables, counts, sessions
+polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
+                        # per-event/per-tool key tables, counts, sessions; tool events by default, sorted by ts, paired by id
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
                         [--event-name E] [--matcher M] [--shape claude-settings|claude-like]
-polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
+polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event EVENT ...]
+                        # prints draft mapping, no `verified`
 ```
 
-Discovery log line: `{ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
+Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
-By default every value in `raw` except structural ones (event, tool name, ids, permission mode) becomes `{type, length}`; `--full` logs raw payloads.
+By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
 The default log holds full commands and file contents and must not be shared.
 The log is untrusted data: draft copies back only values matching strict name patterns,

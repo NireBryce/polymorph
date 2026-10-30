@@ -169,20 +169,34 @@ beside the log when that folder is writable.
 ### `discover summary`
 
 ```
-polymorph discover summary FILE.jsonl
+polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
 ```
 
-Prints payload count, non-object lines and session count, then per-event top-level keys and
-per-tool `tool_input` keys, each with counts. Names and counts only.
+Prints payload count, non-object lines and session count, the log-line schema marks, then
+per-event top-level keys and per-tool `tool_input` keys, each with counts. Names and counts only.
+
+By default only **tool events** (lines with a tool name) are used, so a flood of session
+events from a server-wide bus does not drown them; the hidden event names and counts are
+printed on a `hidden:` line. `--include EVENT` (repeatable) adds an event to the default;
+`--event EVENT` (repeatable) replaces the default with exactly those events. Lines are
+sorted by `ts` before counting, because each hook event is logged by its own process and
+lines can land out of order. When lines carry a call id and a message id (`tool_use_id` or
+`id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines are paired by
+them and the `pairing` line reports paired, out-of-order, unpaired and id-less counts.
 
 ### `discover draft`
 
 ```
-polymorph discover draft FILE.jsonl --name NAME
+polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event EVENT ...]
 ```
 
 Prints a schema 1 mapping to stdout (redirect it to a file). It has no `verified` field,
-all capabilities `false`, and comments with evidence counts. See
+all capabilities `false`, and comments with evidence counts. `--include` and `--event`
+select lines as for `summary` (tool events by default). Event names may contain `.`, `-` and
+`:`; a name ending in `before` or `after` is guessed as `pre_tool` or `post_tool` and marked
+`guessed from name`, and every other observed event name is listed in a comment under
+`[events]`. Boolean `tool_input` keys (for example a shell `background` flag) and the key
+paths of output-like objects are listed in comments. See
 [Discovery](discovery.md#4-draft-a-mapping).
 
 ### `discover reload-check`
@@ -210,6 +224,14 @@ Discovery logs are **redacted by default**. Keys are kept. Only structural value
 survive verbatim: event name, tool name, session and tool-use ids, permission mode, effort,
 `source`, `duration_ms`. Every other value (`tool_input`, `tool_response`, `cwd`,
 `transcript_path`, prompts) becomes `{"type": ..., "length": N}` with no hash.
+
+Two kinds of value are kept for structure. Call and message ids (`id`, `tool_use_id`,
+`call_id`, `messageID` and similar) stay verbatim, but only when they look like ids
+(letters, digits, `_ . : -`, at most 128 characters); anything else under those names is
+reduced like any other value. Output-like objects (`tool_response`, `output`, `result`)
+keep their nested key names to three levels and the key count is capped, with each leaf
+reduced to `{type, length}`; a key name that is not a plain identifier is replaced by
+`<invalid key>`. Each log line also carries `schema: 1`; older lines without it still read.
 
 `--full` (on `init`, which bakes it into the hook command, or on `log`) records raw
 payloads, including commands, file paths and file contents. A `--full` log must not be

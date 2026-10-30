@@ -24,7 +24,7 @@ KINDS = {
     "missing-field": ("skip", "run-empty"),
 }
 _ID = re.compile(r"^(?P<script>[^:\s]+):(?P<kind>[a-z-]+)$")
-_NATIVE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_NATIVE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")
 ENTRY_KEYS = {"choice", "date", "note"}
 TOP_KEYS = {"schema", "decisions"}
 

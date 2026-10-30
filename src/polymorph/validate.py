@@ -116,7 +116,7 @@ def validate_mapping(src: Any) -> list[str]:
         else:
             _unknown(errs, "events", e, EVENTS)
             for k, v in e.items():
-                if not isinstance(v, str) or not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", v):
+                if not isinstance(v, str) or not re.match(r"^[A-Za-z][A-Za-z0-9_.:-]*$", v):
                     errs.append(f"events.{k}: bad native event name {v!r}")
 
     c = m.get("capabilities")

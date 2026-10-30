@@ -32,6 +32,20 @@ First state of the project. Python 3.11+, standard library only.
 - **`discover`:** `init`, `log`, `summary`, `draft`, `reload-check`. Logs are redacted by
   default; `--full` and `--env-be-very-careful` are opt-ins. Drafts are unverified and
   built only from observed names.
+- **`discover` event names:** names may contain `.`, `-` and `:` (OpenCode sends
+  `execute.before`, `execute.after`, `session.created`); the draft guesses `pre_tool` and
+  `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other
+  observed names in a comment under `[events]`, and `summary` shows the real names. Mapping
+  validation accepts the same characters in `[events]` values.
+- **`discover summary` and `draft` on noisy captures:** tool events only by default
+  (`--include EVENT` adds, `--event EVENT` selects); lines sorted by `ts`; `before` and
+  `after` paired by call id and message id with unpaired ones reported; output-like objects
+  keep nested key paths (depth-limited, values still `{type, length}`) and the draft lists
+  them under `[payload_out]`; boolean `tool_input` keys such as `background` are listed;
+  log lines carry `schema: 1` (older lines still read). Call and message ids that look like
+  ids are now logged verbatim so pairing works.
+- **Docs:** `docs/observed-opencode.md` (what a live OpenCode v2.0.32 capture showed, with
+  documented, binary-only and untested claims kept apart) and an example discovery plugin.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
 - **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
   limits.
