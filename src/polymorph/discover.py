@@ -48,11 +48,11 @@ _EVENT_CANON = (
 # ---- init -------------------------------------------------------------------
 
 def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = True,
-                out: str | Path | None = None) -> str:
+                out: str | Path | None = None, env: bool = False) -> str:
     """Hook command: absolute interpreter and log path, so it works from any cwd."""
     if out is None:
         out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
-    flag = "" if redact else " --full"
+    flag = ("" if redact else " --full") + (" --env" if env else "")
     return f"{shlex.quote(sys.executable)} -m polymorph discover log{flag} --out {shlex.quote(str(Path(out).resolve()))}"
 
 
@@ -102,14 +102,14 @@ def _write_doc(p: Path, doc: dict) -> None:
 
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
                 matcher: str = "*", base: str | Path = ".", shape: str = "claude-settings",
-                log_dir: str | Path | None = None, redact: bool = True) -> Path:
+                log_dir: str | Path | None = None, redact: bool = True, env: bool = False) -> Path:
     """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode)."""
     if shape not in ("claude-settings", "claude-like"):
         raise ValueError(f"unknown shape {shape!r}")
     _check_harness(harness)
     p = _resolve(config_path, base)
     doc = _load_doc(p)
-    entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact)}
+    entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env)}
     if shape == "claude-like":
         # replaces the whole hooks table, as it always has
         doc["hooks"] = {"enabled": True,
@@ -281,7 +281,15 @@ def _redact_payload(raw):
     return out
 
 
-def _record(text: str, redact: bool = True) -> dict:
+# With --env only: names (never values) of variables that say where the project is.
+_ENV_NAME = re.compile(r"PROJECT|WORKSPACE|HARNESS", re.I)
+
+
+def _env_keys() -> list[str]:
+    return sorted(k for k in os.environ if _ENV_NAME.search(k))
+
+
+def _record(text: str, redact: bool = True, env: bool = False) -> dict:
     try:
         raw = json.loads(text)
     except (ValueError, RecursionError):
@@ -303,7 +311,7 @@ def _record(text: str, redact: bool = True) -> dict:
         "event": event,
         "tool_name": tool_name,
         "session_id": session_id,
-        "env_keys": sorted(os.environ),   # names only, never values
+        "env_keys": _env_keys() if env else [],   # opt-in; names only, never values
         "redacted": redact,
         "raw": _redact_payload(raw) if redact else raw,
         "keys": keys,
@@ -323,12 +331,12 @@ def _log_error(out: str, what: str) -> None:
         pass
 
 
-def log_stdin(out: str, stream=None, redact: bool = True) -> None:
+def log_stdin(out: str, stream=None, redact: bool = True, env: bool = False) -> None:
     """Append one record. Never raises, never writes stdout: must not affect the harness."""
     try:
         stream = stream or sys.stdin
         text = stream.read()
-        rec = _record(text, redact)
+        rec = _record(text, redact, env)
         try:
             is_obj = isinstance(json.loads(text), dict)
             why = "stdin JSON is not an object"
