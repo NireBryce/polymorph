@@ -12,7 +12,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
 | conformance | `src/polymorph/conformance.py`, `validate.py`, `fixtures/**`, `mappings/**` | `validate_mapping`, `run_fixtures` |
-| report | `skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
+| report | `.agents/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
 
