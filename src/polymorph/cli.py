@@ -41,11 +41,11 @@ def _parser() -> argparse.ArgumentParser:
     di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
                     help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
     di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph-discovery)")
-    di.add_argument("--env", action="store_true", help="also log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
+    di.add_argument("--i-understand-this-reads-env-var-names", dest="env", action="store_true", help="WARNING: makes the logger read the process environment and record the NAMES (never values) of PROJECT/WORKSPACE/HARNESS-like variables, visibly baked into the hook command")
     di.add_argument("--full", action="store_true", help="log raw payloads (commands, paths, contents); default is redacted")
     dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
     dl.add_argument("--out", required=True)
-    dl.add_argument("--env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
+    dl.add_argument("--i-understand-this-reads-env-var-names", dest="env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
     dl.add_argument("--full", action="store_true",
                     help="log raw payloads; default replaces values with {type, length}")
     dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
