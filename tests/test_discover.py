@@ -13,8 +13,10 @@ from polymorph.validate import validate_mapping
 SRC = str(Path(__file__).resolve().parent.parent / "src")
 
 
-def run_cli(args, stdin="", env=None):
-    e = dict(os.environ, PYTHONPATH=SRC)
+def run_cli(args, stdin="", env=None, clean=False):
+    """clean: start from PATH only, so a test about environment names cannot see the runner's."""
+    e = {"PATH": os.environ.get("PATH", "")} if clean else dict(os.environ)
+    e["PYTHONPATH"] = SRC
     e.update(env or {})
     return subprocess.run([sys.executable, "-m", "polymorph", *args], input=stdin,
                           capture_output=True, text=True, env=e)
@@ -67,7 +69,7 @@ class DiscoverTests(unittest.TestCase):
     def test_env_flag_logs_only_project_like_names(self):
         out = self.d / "e.jsonl"
         run_cli(["discover", "log", "--env-be-very-careful", "--out", str(out)], "{}",
-                env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE", "FOO_PROJECT_DIR": "/home/x/p", "HOME": "/home/x"})
+                env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE", "FOO_PROJECT_DIR": "/home/x/p", "HOME": "/home/x"}, clean=True)
         text = out.read_text()
         self.assertEqual(json.loads(text)["env_keys"], ["FOO_PROJECT_DIR"])
         self.assertNotIn("/home/x", text)
