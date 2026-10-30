@@ -1,0 +1,16 @@
+schema = 1
+name = "zcode"
+verified = "2026-10-30, live session"
+config_path = ".zcode/config.json"
+format = "json"
+template = "claude-like"
+
+[tools]
+shell = "Bash"
+edit  = ["Edit", "Write", "MultiEdit"]
+read  = ["Read", "Grep", "Glob"]
+
+[events]
+session_start = "SessionStart"
+pre_tool = "PreToolUse"
+post_tool = "PostToolUse"

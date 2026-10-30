@@ -1,0 +1,12 @@
+schema = 1
+name = "nopost"
+config_path = ".nopost/config.json"
+format = "json"
+template = "claude-like"
+
+[tools]
+shell = "run"
+
+[events]
+session_start = "start"
+pre_tool = "before"
