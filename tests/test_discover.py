@@ -59,9 +59,9 @@ class DiscoverTests(unittest.TestCase):
     def test_log_no_secret_env_values(self):
         out = self.d / "l.jsonl"
         run_cli(["discover", "log", "--out", str(out)], "{}",
-                env={"MY_API_TOKEN": "s3cr3t-value-123"})
+                env={"MY_API_TOKEN": "PLACEHOLDER_NOT_A_REAL_VALUE"})
         text = out.read_text()
-        self.assertNotIn("s3cr3t-value-123", text)
+        self.assertNotIn("PLACEHOLDER_NOT_A_REAL_VALUE", text)
         self.assertIn("MY_API_TOKEN", json.loads(text)["env_keys"])
 
     def test_log_record_fields(self):
