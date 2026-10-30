@@ -6,6 +6,7 @@ name = "claude"
 verified = "2026-10-30, nixos-configs hooks plus a live capture of SessionStart/PreToolUse/PostToolUse payloads via t3code (Claude Agent SDK); block semantics not live-tested"
 config_path = ".claude/settings.json"
 format = "json"
+delivery = "direct"   # speaks the canonical protocol: hooks run bare, no adapter
 template = "claude-settings"
 context_file = "CLAUDE.md"
 skills_dir = ".claude/skills"

@@ -215,3 +215,59 @@ class SettingsShapeTest(unittest.TestCase):
         self.assertNotIn("enabled", group["hooks"][0])
         wrapped = json.loads(_claude_like(canon, m, {})[0])
         self.assertTrue(wrapped["hooks"]["enabled"])
+
+
+class DirectDeliveryTests(Base):
+    def _write(self, **extra):
+        import tomllib
+        raw = tomllib.loads((Path(__file__).resolve().parents[1] / "mappings" / "zcode.toml").read_text())
+        raw.update(extra)
+        return raw
+
+    def test_default_is_adapter(self):
+        out = generate(self.repo, ["zcode"], check=True)[0].content
+        self.assertIn("python -m polymorph adapter", out)
+
+    def test_direct_emits_bare_quoted_script(self):
+        d = self.repo / ".agents/polymorph/mappings"
+        text = (d / "zcode.toml").read_text().replace('template =', 'delivery = "direct"\ntemplate =', 1)
+        (d / "zcode.toml").write_text(text)
+        out = generate(self.repo, ["zcode"], check=True)[0].content
+        self.assertNotIn("polymorph adapter", out)
+        self.assertIn('"command": "\\"$CLAUDE_PROJECT_DIR/.agents/hooks/session-start.sh\\""', out)
+
+    def test_builtin_zcode_and_claude_are_direct(self):
+        mapping.BUILTIN_DIR = Path(mapping.__file__).resolve().parents[2] / "mappings"
+        for n in ("zcode", "claude"):
+            self.assertEqual(load_mapping(n, self.repo.parent).delivery, "direct")
+
+    def test_validate_rejects_non_identity(self):
+        from polymorph.validate import validate_mapping
+        base = self._write()
+        self.assertEqual(validate_mapping(base), [])
+        bad_in = self._write()
+        bad_in["payload_in"] = dict(bad_in["payload_in"], cwd="workingDir")
+        self.assertTrue(any("payload_in.cwd" in e for e in validate_mapping(bad_in)))
+        bad_out = self._write(payload_out={"deny": {"exit": 2}})
+        self.assertTrue(any("payload_out" in e for e in validate_mapping(bad_out)))
+        ext = self._write()
+        ext["payload_in"] = dict(ext["payload_in"], extractor="apply_patch_paths")
+        self.assertTrue(any("extractor" in e for e in validate_mapping(ext)))
+        self.assertTrue(validate_mapping(self._write(delivery="sideways")))
+        # the same non-identity mapping is fine under the adapter
+        adapter = self._write(delivery="adapter", payload_out={"deny": {"exit": 2}})
+        self.assertEqual(validate_mapping(adapter), [])
+
+    def test_parse_rejects_direct_non_identity(self):
+        raw = self._write(payload_out={"deny": {"exit": 2}})
+        with self.assertRaises(MappingError):
+            mapping.parse_mapping(raw, "x")
+
+    def test_check_reports_error(self):
+        from polymorph import check
+        d = self.repo / ".agents/polymorph/mappings"
+        (d / "zcode.toml").write_text(
+            (d / "zcode.toml").read_text().replace('template =', 'delivery = "direct"\ntemplate =', 1)
+            + '\n[payload_out.deny]\nexit = 2\n')
+        findings = check.run_check(self.repo, ["zcode"])
+        self.assertTrue(any(f.severity == "error" and f.code == "mapping-invalid" for f in findings))

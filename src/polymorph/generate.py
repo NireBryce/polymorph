@@ -43,6 +43,17 @@ def adapter_command(harness: str, script: str) -> str:
     )
 
 
+def direct_command(script: str) -> str:
+    """The hook runs bare: the harness already speaks the canonical protocol."""
+    return f'"$CLAUDE_PROJECT_DIR/{script}"'
+
+
+def hook_command(m: Mapping, script: str) -> str:
+    if m.delivery == "direct":
+        return direct_command(script)
+    return adapter_command(m.name, script)
+
+
 def _matcher(h: Hook, m: Mapping) -> tuple[str | None, list[str]]:
     """Native matcher for a hook; second value lists classes with no native tool."""
     if not h.classes:
@@ -71,7 +82,7 @@ def _claude_shape(canon: Canon, m: Mapping, existing: dict, wrapped: bool) -> tu
             gaps.append(f"{h.script}: no {m.name} tool for class(es) {', '.join(missing)}")
             if matcher is not None and not matcher:
                 continue
-        entry: dict = {"type": "command", "command": adapter_command(m.name, h.script)}
+        entry: dict = {"type": "command", "command": hook_command(m, h.script)}
         if wrapped:
             entry["enabled"] = True
         if h.timeout is not None:

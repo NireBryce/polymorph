@@ -44,6 +44,7 @@ verified = "2026-10-30, live session"      # absent => generator warns
 config_path = ".zcode/config.json"
 format = "json"
 template = "claude-like"                   # shipped writer: claude-like (hooks.enabled + hooks.events) or claude-settings (hooks.<Event>)
+delivery = "direct"                        # optional: "adapter" (default) or "direct"; see below
 context_file = "AGENTS.md"
 skills_dir = ".agents/skills"
 
@@ -74,6 +75,17 @@ cwd = "cwd"
 [payload_out]
 deny = { exit = 2, stderr = "{reason}" }
 ```
+
+`delivery` (optional, default `"adapter"`): how `generate` writes the hook command.
+`"adapter"` emits `python -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
+`"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the
+canonical protocol. It is only valid for an identity translation: `payload_out` empty and every
+`payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`,
+`shell.command` and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
+`read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
+`tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
+a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
+reports `mapping-invalid`).
 
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is

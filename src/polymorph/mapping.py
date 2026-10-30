@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .canon import CLASSES, EVENTS
+from .validate import DELIVERIES, direct_errors
 
 SCHEMA = 1
 BUILTIN_DIR = Path(__file__).resolve().parents[2] / "mappings"
@@ -17,7 +18,7 @@ REPO_DIR = ".agents/polymorph/mappings"
 TOP_KEYS = {
     "schema", "name", "verified", "config_path", "format", "template",
     "context_file", "skills_dir", "tools", "events", "capabilities",
-    "payload_in", "payload_out",
+    "payload_in", "payload_out", "delivery",
 }
 CAP_KEYS = {"ask", "post_event", "exit_2_blocks", "rewrites_input", "json_answers"}
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -41,6 +42,7 @@ class Mapping:
     capabilities: dict[str, bool] = field(default_factory=dict)
     payload_in: dict = field(default_factory=dict)
     payload_out: dict = field(default_factory=dict)
+    delivery: str = "adapter"
     source: str = ""
 
 
@@ -70,13 +72,20 @@ def parse_mapping(raw: dict, source: str = "") -> Mapping:
     for k, v in events.items():
         if not isinstance(v, str):
             raise MappingError(f"{source} [events].{k}: must be a string")
+    delivery = raw.get("delivery", "adapter")
+    if delivery not in DELIVERIES:
+        raise MappingError(f"{source}: delivery must be one of {', '.join(DELIVERIES)}, got {delivery!r}")
+    if delivery == "direct":
+        bad = direct_errors(raw)
+        if bad:
+            raise MappingError(f"{source}: " + "; ".join(bad))
     return Mapping(
         name=raw["name"], config_path=raw["config_path"], format=raw["format"],
         template=raw["template"], verified=raw.get("verified"),
         context_file=raw.get("context_file"), skills_dir=raw.get("skills_dir"),
         tools=tools, events=dict(events), capabilities=dict(caps),
         payload_in=dict(raw.get("payload_in", {})),
-        payload_out=dict(raw.get("payload_out", {})), source=source,
+        payload_out=dict(raw.get("payload_out", {})), delivery=delivery, source=source,
     )
 
 

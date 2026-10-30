@@ -61,6 +61,7 @@ class ValidateTests(unittest.TestCase):
 
     def test_known_extractor_ok(self):
         m = load("zcode")
+        m["delivery"] = "adapter"  # an extractor is a translation, so not direct
         m["payload_in"]["extractor"] = "apply_patch_paths"
         self.assertEqual(validate_mapping(m), [])
 

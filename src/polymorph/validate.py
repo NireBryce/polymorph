@@ -15,7 +15,21 @@ OUT_FIELDS = {"exit": int, "stdout": str, "stderr": str}
 
 REQUIRED = ("schema", "name", "config_path", "format", "template",
             "tools", "events", "capabilities", "payload_in", "payload_out")
-OPTIONAL = ("verified", "context_file", "skills_dir")
+OPTIONAL = ("verified", "context_file", "skills_dir", "delivery")
+DELIVERIES = ("adapter", "direct")
+# payload_in of a harness that speaks the Claude hook protocol unchanged; the only
+# translation `delivery = "direct"` may skip.
+IDENTITY_PAYLOAD_IN = {
+    "tool_name": "tool_name",
+    "cwd": "cwd",
+    "session_id": "session_id",
+    "shell.command": "tool_input.command",
+    "edit.file_path": "tool_input.file_path",
+    "read.file_path": "tool_input.file_path",
+    "read.path": "tool_input.path",
+    "read.pattern": "tool_input.pattern",
+    "read.glob": "tool_input.glob",
+}
 
 _PATH = re.compile(r"^[A-Za-z_][\w-]*(\.[\w-]+)*$")
 _TOOL = re.compile(r"^[A-Za-z_][\w.*-]*$")
@@ -32,6 +46,22 @@ def _unknown(errs: list[str], where: str, d: dict, allowed) -> None:
     for k in d:
         if k not in allowed:
             errs.append(f"{where}: unknown key {k!r}")
+
+
+def direct_errors(m: dict) -> list[str]:
+    """Why delivery = "direct" is not allowed for this mapping (empty = allowed)."""
+    errs: list[str] = []
+    if m.get("payload_out"):
+        errs.append('delivery "direct" requires an empty payload_out (answers cannot be translated)')
+    pi = m.get("payload_in")
+    if isinstance(pi, dict):
+        for k, v in pi.items():
+            if k not in IDENTITY_PAYLOAD_IN:
+                errs.append(f'delivery "direct" requires an identity payload_in; {k!r} is not canonical')
+            elif v != IDENTITY_PAYLOAD_IN[k]:
+                errs.append(f'delivery "direct" requires payload_in.{k} = '
+                            f'{IDENTITY_PAYLOAD_IN[k]!r}, got {v!r}')
+    return errs
 
 
 def validate_mapping(src: Any) -> list[str]:
@@ -62,6 +92,11 @@ def validate_mapping(src: Any) -> list[str]:
         v = m.get(k)
         if isinstance(v, str) and (v.startswith("/") or ".." in v.split("/") or _codey(v)):
             errs.append(f"{k} must be a plain relative path, got {v!r}")
+    if "delivery" in m:
+        if m["delivery"] not in DELIVERIES:
+            errs.append(f"delivery must be one of {', '.join(DELIVERIES)}, got {m['delivery']!r}")
+        elif m["delivery"] == "direct":
+            errs += direct_errors(m)
     if isinstance(m.get("template"), str) and not _NAME.match(m["template"]):
         errs.append(f"template {m['template']!r} must be a plain name")
     if isinstance(m.get("format"), str) and m["format"] not in ("json", "toml", "yaml"):

@@ -19,6 +19,7 @@ name = "zcode"
 verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
 config_path = ".zcode/config.json"
 format = "json"
+delivery = "direct"   # speaks the canonical protocol: hooks run bare, no adapter
 template = "claude-like"
 context_file = "AGENTS.md"
 skills_dir = ".agents/skills"
