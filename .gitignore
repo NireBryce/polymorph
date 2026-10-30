@@ -4,3 +4,4 @@ __pycache__/
 .polymorph-discovery/
 *.egg-info/
 .venv/
+result
