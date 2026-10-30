@@ -26,7 +26,7 @@ from pathlib import Path
 
 _TOOL_RE = re.compile(r"^[A-Za-z_][\w.*-]*$")
 _KEY_RE = re.compile(r"^[A-Za-z_][\w-]*$")
-_EVENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_EVENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")   # names are only ever printed
 
 _HEURISTICS = (
     ("shell", ("bash", "shell", "terminal", "command", "exec", "sh")),
@@ -43,6 +43,20 @@ _EVENT_CANON = (
     ("pre_tool", ("pretooluse", "pre_tool_use", "beforetool", "pre_tool")),
     ("post_tool", ("posttooluse", "post_tool_use", "aftertool", "post_tool")),
 )
+# Unknown names ending in these are a guess (OpenCode: execute.before, execute.after).
+_EVENT_SUFFIX = (("pre_tool", "before"), ("post_tool", "after"))
+
+
+def _event_kind(ev: str) -> tuple[str | None, bool]:
+    """(canonical event, guessed) for a name already known to match _EVENT_RE."""
+    low = ev.lower()
+    for canon, words in _EVENT_CANON:
+        if low in words:
+            return canon, False
+    for canon, suffix in _EVENT_SUFFIX:
+        if low.endswith(suffix):
+            return canon, True
+    return None, False
 
 
 # ---- init -------------------------------------------------------------------
@@ -449,6 +463,8 @@ def draft_mapping(log: str | Path, name: str) -> str:
     unnamed_bad = 0
     events: dict[str, str] = {}
     event_counts: dict[str, int] = {}
+    event_guessed: dict[str, bool] = {}
+    seen_events: dict[str, int] = {}       # every safe event name -> payloads
     payload: dict[str, str] = {}
     # canonical key -> {tool or "*": [present, seen]}
     evidence: dict[str, dict[str, int]] = {}
@@ -509,12 +525,12 @@ def draft_mapping(log: str | Path, name: str) -> str:
             setp("session_id", "session_id" if "session_id" in raw else
                  _first_key(raw, _SESSION_KEYS) or "session_id")
             basic["session_id"] = basic.get("session_id", 0) + 1
-        if ev is not None and _EVENT_RE.match(ev):
-            low = ev.lower()
-            for canon, words in _EVENT_CANON:
-                if low in words:
-                    events.setdefault(canon, ev)
-                    event_counts[canon] = event_counts.get(canon, 0) + 1
+        if ev is not None and len(ev) <= 64 and _EVENT_RE.match(ev):
+            seen_events[ev] = seen_events.get(ev, 0) + 1
+            canon, guessed = _event_kind(ev)
+            if canon and events.setdefault(canon, ev) == ev:
+                event_guessed[canon] = guessed
+                event_counts[canon] = event_counts.get(canon, 0) + 1
         if "hook_event_name" in raw and "cwd" in raw:
             claude_style = True
 
@@ -562,7 +578,14 @@ def draft_mapping(log: str | Path, name: str) -> str:
     out += ["", "[events]"]
     for canon, _ in _EVENT_CANON:
         if canon in events:
-            out.append(f"{canon} = {q(events[canon])}   # {event_counts[canon]}/{total} payloads")
+            n = f"{event_counts[canon]}/{total} payloads"
+            out.append(f"{canon} = {q(events[canon])}   # " +
+                       (f"guessed from name ({n})" if event_guessed[canon] else n))
+    rest = {e: n for e, n in seen_events.items() if e not in events.values()}
+    if rest:
+        out.append("# Other event names observed (not mapped):")
+        for e, n in sorted(rest.items(), key=lambda kv: (-kv[1], kv[0])):
+            out.append(f"#   {e} ({n} payloads)")
     out += [
         "",
         "[capabilities]",

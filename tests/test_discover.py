@@ -445,3 +445,58 @@ class InitKeepsUserHooksTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("refusing", r.stderr)
         self.assertEqual(self.cfg.read_text(), '{"hooks": []}')
+
+
+OPENCODE_PAYLOADS = [
+    {"hook_event_name": "execute.before", "tool_name": "shell", "session_id": "ses_1",
+     "agent": "build", "input": {"command": "echo SECRETCMD", "background": False}},
+    {"hook_event_name": "execute.after", "tool_name": "shell", "session_id": "ses_1",
+     "agent": "build", "input": {"command": "echo SECRETCMD", "background": False},
+     "output": {"output": "OUTBODY", "content": []}},
+    {"hook_event_name": "session.created", "session_id": "ses_2"},
+]
+
+
+class DottedEventNamesTest(unittest.TestCase):
+    """OpenCode names its events execute.before, execute.after and session.created."""
+
+    def _log(self, d):
+        return _mk(d, OPENCODE_PAYLOADS)
+
+    def test_summary_shows_the_real_event_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = discover.summarize(self._log(d))
+        self.assertNotIn("<invalid>", out)
+        for name in ("execute.before", "execute.after", "session.created"):
+            self.assertIn(name, out)
+
+    def test_draft_guesses_pre_and_post_from_the_suffix(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = discover.draft_mapping(self._log(d), "oc")
+            m = Path(d) / "m.toml"
+            m.write_text(text)
+            self.assertEqual(validate_mapping(m), [])
+        self.assertIn('pre_tool = "execute.before"   # guessed from name', text)
+        self.assertIn('post_tool = "execute.after"   # guessed from name', text)
+        self.assertIn("session.created", text.split("[events]")[1].split("[capabilities]")[0])
+        self.assertNotIn("SECRETCMD", text)
+
+    def test_event_name_charset_stays_strict(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "bad name;`x`", "tool_name": "shell"},
+                        {"hook_event_name": "a/b", "tool_name": "shell"},
+                        {"hook_event_name": "ns:ev-1.after", "tool_name": "shell"}])
+            out = discover.summarize(f)
+            text = discover.draft_mapping(f, "oc")
+        self.assertIn("<invalid>", out)
+        self.assertIn("ns:ev-1.after", out)
+        self.assertNotIn("bad name", out + text)
+        self.assertNotIn("a/b", out + text)
+
+    def test_a_mapping_may_name_a_dotted_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            m = Path(d) / "m.toml"
+            m.write_text(discover.draft_mapping(self._log(d), "oc"))
+            self.assertEqual(validate_mapping(m), [])
+            m.write_text(m.read_text().replace('"execute.before"', '"execute before;"'))
+            self.assertNotEqual(validate_mapping(m), [])

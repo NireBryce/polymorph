@@ -32,6 +32,11 @@ First state of the project. Python 3.11+, standard library only.
 - **`discover`:** `init`, `log`, `summary`, `draft`, `reload-check`. Logs are redacted by
   default; `--full` and `--env-be-very-careful` are opt-ins. Drafts are unverified and
   built only from observed names.
+- **`discover` event names:** names may contain `.`, `-` and `:` (OpenCode sends
+  `execute.before`, `execute.after`, `session.created`); the draft guesses `pre_tool` and
+  `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other
+  observed names in a comment under `[events]`, and `summary` shows the real names. Mapping
+  validation accepts the same characters in `[events]` values.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
 - **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
   limits.
