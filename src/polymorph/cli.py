@@ -38,6 +38,9 @@ def _parser() -> argparse.ArgumentParser:
     di.add_argument("--config-path", required=True)
     di.add_argument("--event-name", default="PreToolUse")
     di.add_argument("--matcher", default="*")
+    di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
+                    help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
+    di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph-discovery)")
     dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
     dl.add_argument("--out", required=True)
     dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
@@ -53,7 +56,8 @@ def _cmd_discover(args) -> int:
         discover.log_stdin(args.out)
         return 0
     if args.dcmd == "init":
-        p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher)
+        p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
+                                shape=args.shape, log_dir=args.log_dir)
         print(f"wrote {p}")
         return 0
     print(discover.draft_mapping(args.file, args.name), end="")

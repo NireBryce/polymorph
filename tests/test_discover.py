@@ -31,16 +31,16 @@ class DiscoverTests(unittest.TestCase):
         discover.init_config("h", str(cfg), "BeforeTool", "*")
         doc = json.loads(cfg.read_text())
         self.assertEqual(doc["model"], "x")
-        ev = doc["hooks"]["events"]
+        ev = doc["hooks"]
         self.assertEqual(list(ev), ["BeforeTool"])
-        self.assertIn("discover log --out .polymorph-discovery/h.jsonl",
+        self.assertIn("/.polymorph-discovery/h.jsonl",
                       ev["BeforeTool"][0]["hooks"][0]["command"])
 
     def test_init_cli_defaults(self):
         cfg = self.d / "c.json"
         r = run_cli(["discover", "init", "--harness", "foo", "--config-path", str(cfg)])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("PreToolUse", json.loads(cfg.read_text())["hooks"]["events"])
+        self.assertIn("PreToolUse", json.loads(cfg.read_text())["hooks"])
 
     def test_log_silent_exit0_on_bad_stdin(self):
         out = self.d / "sub" / "l.jsonl"
@@ -118,3 +118,23 @@ class DiscoverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InitShapeTest(unittest.TestCase):
+    def test_default_is_claude_settings_with_absolute_log(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "s.json"
+            discover.init_config("t3code", str(cfg), log_dir=Path(d) / "logs")
+            hooks = json.loads(cfg.read_text())["hooks"]
+            self.assertNotIn("enabled", hooks)
+            cmd = hooks["PreToolUse"][0]["hooks"][0]["command"]
+            self.assertIn(str(Path(d).resolve() / "logs" / "t3code.jsonl"), cmd)
+            self.assertNotIn("enabled", hooks["PreToolUse"][0]["hooks"][0])
+
+    def test_claude_like_shape_still_available(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "s.json"
+            discover.init_config("z", str(cfg), shape="claude-like")
+            self.assertTrue(json.loads(cfg.read_text())["hooks"]["enabled"])

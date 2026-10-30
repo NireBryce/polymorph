@@ -14,6 +14,7 @@ Anything else (including mcp tools) is left out of [tools], not guessed.
 from __future__ import annotations
 
 import json
+import shlex
 import os
 import re
 import sys
@@ -21,7 +22,6 @@ import time
 from pathlib import Path
 
 
-LOG_COMMAND = "python -m polymorph discover log --out .polymorph-discovery/{name}.jsonl"
 _TOOL_RE = re.compile(r"^[A-Za-z_][\w.*-]*$")
 _KEY_RE = re.compile(r"^[A-Za-z_][\w-]*$")
 _EVENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -45,8 +45,18 @@ _EVENT_CANON = (
 
 # ---- init -------------------------------------------------------------------
 
+def log_command(harness: str, log_dir: str | Path | None = None) -> str:
+    """Hook command: absolute interpreter and log path, so it works from any cwd."""
+    out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
+    return f"{shlex.quote(sys.executable)} -m polymorph discover log --out {shlex.quote(str(out))}"
+
+
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
-                matcher: str = "*", base: str | Path = ".") -> Path:
+                matcher: str = "*", base: str | Path = ".", shape: str = "claude-settings",
+                log_dir: str | Path | None = None) -> Path:
+    """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode)."""
+    if shape not in ("claude-settings", "claude-like"):
+        raise ValueError(f"unknown shape {shape!r}")
     if not re.match(r"^[a-z][a-z0-9_-]*$", harness):
         raise ValueError(f"harness name {harness!r} must match [a-z][a-z0-9_-]*")
     p = Path(config_path)
@@ -57,8 +67,13 @@ def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
         doc = json.loads(p.read_text())
         if not isinstance(doc, dict):
             raise ValueError(f"{p}: existing config is not a JSON object")
-    entry = {"type": "command", "command": LOG_COMMAND.format(name=harness), "enabled": True}
-    doc["hooks"] = {"enabled": True, "events": {event_name: [{"matcher": matcher, "hooks": [entry]}]}}
+    entry: dict = {"type": "command", "command": log_command(harness, log_dir)}
+    events = {event_name: [{"matcher": matcher, "hooks": [entry]}]}
+    if shape == "claude-like":
+        entry["enabled"] = True
+        doc["hooks"] = {"enabled": True, "events": events}
+    else:
+        doc["hooks"] = events
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(doc, indent=2) + "\n")
     return p
