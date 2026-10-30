@@ -32,6 +32,10 @@ json_answers = true
 tool_name = "tool_name"
 "shell.command" = "tool_input.command"
 "edit.file_path" = "tool_input.file_path"
+"read.file_path" = "tool_input.file_path"
+"read.path" = "tool_input.path"
+"read.pattern" = "tool_input.pattern"
+"read.glob" = "tool_input.glob"
 cwd = "cwd"
 session_id = "session_id"
 

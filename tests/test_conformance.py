@@ -70,7 +70,10 @@ class FixtureShapeTests(unittest.TestCase):
     def test_fixtures_present_and_well_formed(self):
         for h in ("claude", "zcode"):
             names = {f.stem for f in conformance.fixture_files(h)}
-            self.assertEqual(names, {"deny", "ask", "warn", "remind"}, h)
+            want = {"deny", "ask", "warn", "remind"}
+            if h == "claude":
+                want |= {"read-path", "read-pattern", "read-glob"}
+            self.assertEqual(names, want, h)
         for f in conformance.fixture_files():
             with self.subTest(f=str(f.relative_to(ROOT))):
                 self.assertEqual(conformance.check_shape(json.loads(f.read_text())), [])

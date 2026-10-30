@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import extractors
+from .canonical import CANON_PATHS
 from .exprs import ExprError, assign, lookup, render
 
 CAPS = {
@@ -26,12 +27,6 @@ CAPS = {
     "json_answers": "GUARD_JSON_ANSWERS",
 }
 
-# Mapping's class-scoped canonical keys -> position in the canonical (Claude) payload.
-CANON_KEYS = {
-    "shell.command": "tool_input.command",
-    "edit.file_path": "tool_input.file_path",
-    "read.file_path": "tool_input.file_path",
-}
 # Canonical Claude tool name per class, used when the native name is not a Claude one.
 CLASS_TOOL = {"shell": "Bash", "edit": "Edit", "read": "Read"}
 CLAUDE_TOOLS = {"Bash", "Edit", "Write", "MultiEdit", "Read", "Grep", "Glob"}
@@ -68,7 +63,7 @@ def translate_in(mapping: dict, native: Any) -> dict:
             value = lookup(native, npath, None)
             if value is None:
                 continue
-            assign(canonical, CANON_KEYS.get(ckey, ckey), value)
+            assign(canonical, CANON_PATHS.get(ckey, ckey), value)
         for key in PASSTHROUGH:
             if key not in canonical and key in native:
                 canonical[key] = native[key]
