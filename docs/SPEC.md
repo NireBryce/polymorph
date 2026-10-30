@@ -120,6 +120,7 @@ polymorph generate [--repo .] [--harness NAME ...] [--check]   # --check: exit 1
 polymorph adapter --harness NAME -- SCRIPT
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
+polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
 polymorph discover log [--full] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl      # per-event/per-tool key tables, counts, sessions
@@ -143,6 +144,35 @@ Generate output lists, per target, unmapped settings and hooks with no equivalen
 `fixtures/<harness>/<case>.json`:
 `{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}`
 covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
+
+## polymorph check
+
+`polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
+(`check.py`). Static: never executes a hook script, a harness or the network; writes nothing.
+Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
+
+| Code | Severity | Fires when |
+|---|---|---|
+| `no-targets` | error | nothing enabled and no `--harness` |
+| `settings-invalid` | error | `.agents/settings.json` missing or not a JSON object |
+| `mapping-invalid` | error | mapping fails `validate_mapping`, or cannot be loaded |
+| `mapping-unverified` | warning | mapping has no `verified` |
+| `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
+| `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
+| `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
+| `hook-no-equivalent` | warning | per target, the gaps `generate` reports (event or tool class) |
+| `setting-unmapped` | note | `canon.unmapped` entries |
+| `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
+| `fixtures-missing` | warning | built-in mapping has no `fixtures/<name>/*.json` |
+| `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
+| `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |
+
+Exit: 0 no errors (and, with `--strict`, no warnings); 1 findings fail; 2 usage or internal
+error. `text`: grouped by target, `severity code target: message`, then a summary line.
+`json`: `{findings, summary: {error, warning, note}}`. `sarif`: SARIF 2.1.0, driver `polymorph`,
+rules from the codes seen, `artifactLocation.uri` when `file` is known. Hook-script and
+drift checks need a readable settings file; if a hook command is rejected, canon-derived
+checks (gaps, unmapped, drift) are skipped for that run.
 
 ## Phase scope
 

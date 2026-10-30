@@ -6,6 +6,7 @@ Python 3.11+, stdlib only. Contract: `docs/SPEC.md`.
 
 ```
 python -m polymorph generate [--repo .] [--harness NAME ...] [--check]
+python -m polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
 python -m polymorph adapter --harness NAME -- SCRIPT
 python -m polymorph validate FILE.toml
 python -m polymorph conformance [--harness NAME]
@@ -58,5 +59,53 @@ file byte-for-byte (or stripping by marker if the file changed meanwhile). State
 
 Not done: capability/timing notes beyond what payloads show (feedback 8), and feedback items
 10 and 12. Not run against a live harness by this repo's tests.
+
+## `polymorph check`
+
+Static analysis of a repo's agent config, for CI and pre-commit. It never runs a hook
+script, a harness or the network, and never writes a file. Findings are
+`{severity, code, target, message, file}`; severities are error, warning, note. Exit 0 when
+there are no errors (with `--strict`, no warnings either), 1 when findings fail, 2 on usage
+or internal errors. `--format sarif` emits SARIF 2.1.0 for code-scanning upload.
+
+Codes: `no-targets`, `settings-invalid`, `mapping-invalid`, `mapping-unverified`,
+`mapping-untested-live`, `hook-outside-hooks-dir`, `hook-missing`, `hook-not-executable`,
+`hook-no-equivalent`, `setting-unmapped`, `generated-drift`, `fixtures-missing`,
+`fixtures-skipped`, `fixture-failed`. Contract: `docs/SPEC.md`.
+
+pre-commit (`.pre-commit-config.yaml`):
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: polymorph-check
+        name: polymorph check
+        entry: python -m polymorph check --strict
+        language: system
+        pass_filenames: false
+        files: ^\.(agents|zcode|claude)/
+```
+
+GitHub Actions:
+
+```yaml
+name: polymorph
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions: {contents: read, security-events: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install .   # or however polymorph is installed in your repo
+      - run: python -m polymorph check --format sarif > polymorph.sarif
+        continue-on-error: true
+      - uses: github/codeql-action/upload-sarif@v3
+        with: {sarif_file: polymorph.sarif}
+      - run: python -m polymorph check --strict
+```
 
 Tests: `python -m unittest discover -s tests`
