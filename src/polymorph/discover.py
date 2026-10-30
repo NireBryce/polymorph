@@ -47,12 +47,12 @@ _EVENT_CANON = (
 
 # ---- init -------------------------------------------------------------------
 
-def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = False,
+def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = True,
                 out: str | Path | None = None) -> str:
     """Hook command: absolute interpreter and log path, so it works from any cwd."""
     if out is None:
         out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
-    flag = " --redact" if redact else ""
+    flag = "" if redact else " --full"
     return f"{shlex.quote(sys.executable)} -m polymorph discover log{flag} --out {shlex.quote(str(Path(out).resolve()))}"
 
 
@@ -102,7 +102,7 @@ def _write_doc(p: Path, doc: dict) -> None:
 
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
                 matcher: str = "*", base: str | Path = ".", shape: str = "claude-settings",
-                log_dir: str | Path | None = None, redact: bool = False) -> Path:
+                log_dir: str | Path | None = None, redact: bool = True) -> Path:
     """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode)."""
     if shape not in ("claude-settings", "claude-like"):
         raise ValueError(f"unknown shape {shape!r}")
@@ -252,26 +252,36 @@ _JSON_TYPES = ((bool, "boolean"), (int, "number"), (float, "number"), (str, "str
                (list, "array"), (dict, "object"), (type(None), "null"))
 
 
+# Values kept verbatim under redaction: structure, never user content. Everything
+# else (cwd, transcript_path, prompts, tool_input, tool_response, ...) is reduced
+# to {type, length}.
+_SAFE_VALUES = ("hook_event_name", "hookEventName", "event", "tool_name", "toolName",
+                "session_id", "sessionId", "tool_use_id", "prompt_id",
+                "permission_mode", "effort", "source", "duration_ms")
+
+
 def _descriptor(v) -> dict:
     typ = next(n for t, n in _JSON_TYPES if isinstance(v, t))
     data = v if isinstance(v, str) else json.dumps(v, sort_keys=True, ensure_ascii=False)
-    return {"type": typ, "length": len(data),
-            "sha256": hashlib.sha256(data.encode("utf-8", "replace")).hexdigest()[:12]}
+    return {"type": typ, "length": len(data)}
 
 
 def _redact_payload(raw):
-    """Keys kept; tool_input/tool_response values become {type, length, sha256}."""
+    """Keys kept; only _SAFE_VALUES survive verbatim, the rest become {type, length}."""
     if not isinstance(raw, dict):
         return _descriptor(raw)
-    out = dict(raw)
-    for k in (*_INPUT_KEYS, *_RESPONSE_KEYS):
-        if k in out:
-            v = out[k]
-            out[k] = {kk: _descriptor(vv) for kk, vv in v.items()} if isinstance(v, dict) else _descriptor(v)
+    out = {}
+    for k, v in raw.items():
+        if k in _SAFE_VALUES and isinstance(v, (str, int, float, bool)) and not isinstance(v, dict):
+            out[k] = v
+        elif k in (*_INPUT_KEYS, *_RESPONSE_KEYS) and isinstance(v, dict):
+            out[k] = {kk: _descriptor(vv) for kk, vv in v.items()}
+        else:
+            out[k] = _descriptor(v)
     return out
 
 
-def _record(text: str, redact: bool = False) -> dict:
+def _record(text: str, redact: bool = True) -> dict:
     try:
         raw = json.loads(text)
     except (ValueError, RecursionError):
@@ -313,7 +323,7 @@ def _log_error(out: str, what: str) -> None:
         pass
 
 
-def log_stdin(out: str, stream=None, redact: bool = False) -> None:
+def log_stdin(out: str, stream=None, redact: bool = True) -> None:
     """Append one record. Never raises, never writes stdout: must not affect the harness."""
     try:
         stream = stream or sys.stdin

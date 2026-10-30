@@ -45,7 +45,7 @@ class DiscoverTests(unittest.TestCase):
     def test_log_silent_exit0_on_bad_stdin(self):
         out = self.d / "sub" / "l.jsonl"
         for stdin in ("", "not json {", "\x00\xff", "[1,2]"):
-            r = run_cli(["discover", "log", "--out", str(out)], stdin)
+            r = run_cli(["discover", "log", "--full", "--out", str(out)], stdin)
             self.assertEqual((r.returncode, r.stdout), (0, ""), stdin)
         lines = [json.loads(l) for l in out.read_text().splitlines()]
         self.assertEqual(len(lines), 4)
@@ -67,7 +67,7 @@ class DiscoverTests(unittest.TestCase):
     def test_log_record_fields(self):
         out = self.d / "l.jsonl"
         payload = {"tool_name": "Bash", "tool_input": {"command": "ls", "timeout": 1}, "cwd": "/x"}
-        run_cli(["discover", "log", "--out", str(out)], json.dumps(payload))
+        run_cli(["discover", "log", "--full", "--out", str(out)], json.dumps(payload))
         r = json.loads(out.read_text())
         self.assertEqual(r["raw"], payload)
         self.assertEqual(r["keys"], ["cwd", "tool_input", "tool_name"])
@@ -163,7 +163,7 @@ CLAUDE_PAYLOADS = [
 ]
 
 
-def _mk(d, payloads, redact=False):
+def _mk(d, payloads, redact=True):
     f = Path(d) / "l.jsonl"
     for p in payloads:
         discover.log_stdin(str(f), io.StringIO(json.dumps(p)), redact=redact)
@@ -235,38 +235,40 @@ class SummaryTest(unittest.TestCase):
 
 
 class RedactTest(unittest.TestCase):
-    def test_redact_values_keep_keys(self):
+    def test_default_keeps_keys_and_drops_values(self):
         with tempfile.TemporaryDirectory() as d:
-            f = _mk(d, CLAUDE_PAYLOADS[:3], redact=True)
+            payloads = [dict(p, cwd="/home/someone/proj", transcript_path="/home/someone/.t/x.jsonl")
+                        for p in CLAUDE_PAYLOADS[:3]]
+            f = _mk(d, payloads)
             text = f.read_text()
-            for leak in ("SECRETCMD", "/etc/hostsfile", "FILEBODY"):
+            for leak in ("SECRETCMD", "/etc/hostsfile", "FILEBODY", "/home/someone"):
                 self.assertNotIn(leak, text)
             r = json.loads(text.splitlines()[0])
             c = r["raw"]["tool_input"]["command"]
-            self.assertEqual((c["type"], c["length"]), ("string", len("echo SECRETCMD")))
-            self.assertEqual(len(c["sha256"]), 12)
+            self.assertEqual(c, {"type": "string", "length": len("echo SECRETCMD")})
+            self.assertNotIn("sha256", text)
+            self.assertEqual(r["raw"]["cwd"], {"type": "string", "length": len("/home/someone/proj")})
             self.assertEqual(r["tool_input_keys"], ["command"])
             self.assertEqual(r["tool_name"], "Bash")
             self.assertTrue(r["redacted"])
-            self.assertEqual(json.loads(text.splitlines()[2])["raw"]["tool_response"]["content"]["type"], "string")
 
-    def test_default_is_full_capture_and_init_bakes_redact(self):
+    def test_full_keeps_raw_and_init_bakes_it(self):
         with tempfile.TemporaryDirectory() as d:
-            f = _mk(d, CLAUDE_PAYLOADS[:1])
+            f = Path(d) / "f.jsonl"
+            discover.log_stdin(str(f), io.StringIO(json.dumps(CLAUDE_PAYLOADS[0])), redact=False)
             self.assertIn("SECRETCMD", f.read_text())
             cfg = Path(d) / "s.json"
-            discover.init_config("h", str(cfg), log_dir=d, redact=True)
-            self.assertIn("discover log --redact --out",
-                          json.loads(cfg.read_text())["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+            discover.init_config("h", str(cfg), log_dir=d)
+            self.assertNotIn("--full", cfg.read_text())
             cfg2 = Path(d) / "s2.json"
-            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg2), "--redact"])
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg2), "--full"])
             self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertIn("--redact", cfg2.read_text())
+            self.assertIn("log --full --out", cfg2.read_text())
 
-    def test_cli_redact_non_json_not_leaked(self):
+    def test_non_json_not_leaked_by_default(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "l.jsonl"
-            r = run_cli(["discover", "log", "--redact", "--out", str(out)], "TOPSECRET not json")
+            r = run_cli(["discover", "log", "--out", str(out)], "TOPSECRET not json")
             self.assertEqual((r.returncode, r.stdout), (0, ""))
             self.assertNotIn("TOPSECRET", out.read_text())
 

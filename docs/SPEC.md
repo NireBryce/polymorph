@@ -106,8 +106,8 @@ polymorph generate [--repo .] [--harness NAME ...] [--check]   # --check: exit 1
 polymorph adapter --harness NAME -- SCRIPT
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
-polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--redact]
-polymorph discover log [--redact] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
+polymorph discover log [--full] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl      # per-event/per-tool key tables, counts, sessions
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
 polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `verified`
@@ -115,7 +115,7 @@ polymorph discover draft FILE.jsonl --name NAME   # prints draft mapping, no `ve
 
 Discovery log line: `{ts, event, tool_name, session_id, env_keys (names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
-With `--redact`, tool_input/tool_response values in `raw` become `{type, length, sha256}`.
+By default every value in `raw` except structural ones (event, tool name, ids, permission mode) becomes `{type, length}`; `--full` logs raw payloads.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
 The default log holds full commands and file contents and must not be shared.
 The log is untrusted data: draft copies back only values matching strict name patterns,

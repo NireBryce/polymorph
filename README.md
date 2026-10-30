@@ -9,8 +9,8 @@ python -m polymorph generate [--repo .] [--harness NAME ...] [--check]
 python -m polymorph adapter --harness NAME -- SCRIPT
 python -m polymorph validate FILE.toml
 python -m polymorph conformance [--harness NAME]
-python -m polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--redact]
-python -m polymorph discover log [--redact] --out FILE   # the logger hook; silent, always exit 0
+python -m polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M] [--full]
+python -m polymorph discover log [--full] --out FILE   # the logger hook; silent, always exit 0
 python -m polymorph discover summary FILE.jsonl
 python -m polymorph discover draft FILE.jsonl --name NAME
 python -m polymorph discover reload-check --config-path P --scratch-log F [--finish]
@@ -38,12 +38,11 @@ list tools left unclassified with the reason, and infer `config_path`/`template`
 log evidence (a `cwd` plus Claude-style `hook_event_name` implies `.claude/settings.json`
 and `claude-settings`), saying so in a comment.
 
-**Privacy: the default log contains full commands, file paths and file contents** (tool_input
-and tool_response verbatim). It is gitignored by default; do not share it, attach it to an
-issue or commit it. `discover init --redact` (or `discover log --redact`) keeps keys but
-replaces every tool_input/tool_response value with `{type, length, sha256}` (first 12 hex);
-the hash is of the value, so short or guessable values can be confirmed from it. Env var
-names are always names only.
+**Privacy: logs are redacted by default.** Keys are kept; only structural values (event, tool
+name, ids, permission mode) survive verbatim, and everything else (tool_input, tool_response,
+`cwd`, `transcript_path`, prompts) becomes `{type, length}`, with no hash. `--full` (on `init` or
+`log`) logs raw payloads including commands, paths and file contents; such a log must not be
+shared, attached to an issue or committed. Env var names are always names only.
 
 Each log line has top-level `event`, `tool_name` and `session_id` (null when absent) next to
 `ts` and `keys`. `discover summary` tabulates per-event top-level keys, per-tool tool_input

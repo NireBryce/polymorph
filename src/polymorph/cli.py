@@ -41,11 +41,11 @@ def _parser() -> argparse.ArgumentParser:
     di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
                     help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
     di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph-discovery)")
-    di.add_argument("--redact", action="store_true", help="bake --redact into the logger command")
+    di.add_argument("--full", action="store_true", help="log raw payloads (commands, paths, contents); default is redacted")
     dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
     dl.add_argument("--out", required=True)
-    dl.add_argument("--redact", action="store_true",
-                    help="replace tool_input/tool_response values with {type, length, sha256}")
+    dl.add_argument("--full", action="store_true",
+                    help="log raw payloads; default replaces values with {type, length}")
     dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
     dr.add_argument("--config-path", required=True)
     dr.add_argument("--scratch-log", required=True)
@@ -66,11 +66,11 @@ def _cmd_discover(args) -> int:
     from . import discover
 
     if args.dcmd == "log":
-        discover.log_stdin(args.out, redact=args.redact)
+        discover.log_stdin(args.out, redact=not args.full)
         return 0
     if args.dcmd == "init":
         p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
-                                shape=args.shape, log_dir=args.log_dir, redact=args.redact)
+                                shape=args.shape, log_dir=args.log_dir, redact=not args.full)
         print(f"wrote {p}")
         return 0
     if args.dcmd == "summary":
