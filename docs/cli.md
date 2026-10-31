@@ -143,7 +143,7 @@ polymorph and chosen by name; an unknown name exits 2, lists the known drivers a
 | Driver | Command per step | Status |
 |---|---|---|
 | `opencode` | `opencode run --standalone --auto PROMPT`, logger plugin in `.opencode/plugins/polymorph-discovery/index.js` (from [the example plugin](examples/opencode-discovery-plugin.js)) | Flags from `opencode run --help` (v2.0.32); not run by the tests or by the author's session |
-| `claude` | `claude -p PROMPT --permission-mode bypassPermissions --setting-sources project`, hooks in `.claude/settings.json` | UNTESTED. Flags read from `claude --help` only; whether hooks fire under `-p` with that mode is unconfirmed |
+| `claude` | `claude -p PROMPT --permission-mode bypassPermissions --setting-sources project`, hooks in `.claude/settings.json` | **Blocked**: `capture --harness claude` refuses to run (exit 2). It has never run against a real `claude`, it needs `--permission-mode bypassPermissions`, and whether hooks fire under `-p` is unconfirmed, so a run could spend tokens and log nothing. Use `--print-prompts`. It is unblocked by removing `blocked` in `capture_drivers.py` once a person has confirmed it live. |
 
 Steps (fixed constants, in this order; `--steps` selects a subset): `shell` (`echo hello`),
 `file` (write, read and delete `scratch.txt`), `search`, `background` (`sleep 2; echo done`).

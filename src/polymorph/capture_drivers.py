@@ -29,6 +29,7 @@ class Driver:
     binary = ""
     summary = ""
     untested = ""   # non-empty: why this driver has never run against the real harness
+    blocked = ""    # non-empty: `capture` refuses to run this driver, and says why
 
     def log_path(self, scratch: Path) -> Path:
         return scratch / ".polymorph-discovery" / f"{self.name}.jsonl"
@@ -101,6 +102,9 @@ class ClaudeDriver(Driver):
     binary = "claude"
     summary = "Claude Code: hooks in .claude/settings.json, `claude -p` (UNTESTED)"
     untested = "never run against a real claude; flags taken from `claude --help` only"
+    blocked = ("it has never run against a real claude, it needs --permission-mode bypassPermissions, "
+               "and it is not known that hooks fire under `claude -p`, so a run could spend tokens and "
+               "log nothing. Until it is confirmed live, use `polymorph capture --print-prompts`")
 
     def install(self, scratch: Path, full: bool) -> None:
         cfg = ".claude/settings.json"

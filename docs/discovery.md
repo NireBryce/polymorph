@@ -11,7 +11,7 @@ not, use the self-report route at the end instead.
 
 **Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it.
 
-For a harness with a driver (`opencode`; `claude` is untested), one command does steps 1-4
+For a harness with a driver (`opencode`; `claude` is blocked until it is confirmed live), one command does steps 1-4
 below by itself in a scratch directory it creates and deletes:
 
 ```sh

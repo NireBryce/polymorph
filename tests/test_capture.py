@@ -261,9 +261,17 @@ class Running(CaptureCase):
                         {"XDG_DATA_HOME": "x", "HOME": "h", "PATH": "p"})
 
     def test_missing_binary_exit_2(self):
-        rc, _, err = self.run_cap("--yes", harness="claude")
+        with mock.patch.object(capture_drivers.DRIVERS["opencode"], "binary", "polymorph-no-such-harness"):
+            rc, _, err = self.run_cap("--yes")
         self.assertEqual(rc, 2)
         self.assertIn("not on PATH", err)
+
+    def test_blocked_claude_driver_refuses_before_anything_runs(self):
+        rc, out, err = self.run_cap("--yes", harness="claude")
+        self.assertEqual(rc, 2)
+        self.assertIn("blocked", err)
+        self.assertIn("--print-prompts", err)
+        self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
 
     def test_existing_results_dir_not_overwritten(self):
         (self.base / "results" / "r").mkdir()

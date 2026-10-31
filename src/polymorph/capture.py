@@ -338,6 +338,9 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
               "For any other harness use `polymorph capture --print-prompts`.", file=stderr)
         return 2
     driver = DRIVERS[args.harness]
+    if driver.blocked:
+        print(f"polymorph capture: the {driver.name} driver is blocked: {driver.blocked}.", file=stderr)
+        return 2
     names = args.steps or list(STEP_NAMES)
     bad = [n for n in names if n not in STEP_NAMES]
     if bad:

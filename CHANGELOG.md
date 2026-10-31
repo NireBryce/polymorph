@@ -33,7 +33,7 @@ First state of the project. Python 3.11+, standard library only.
   default; `--full` and `--env-be-very-careful` are opt-ins. Drafts are unverified and
   built only from observed names.
 - **`capture`:** `polymorph capture --harness NAME` runs the discovery procedure itself:
-  scratch directory, logger installed by a shipped driver (`opencode`; `claude`, untested),
+  scratch directory, logger installed by a shipped driver (`opencode`; `claude`, blocked until confirmed live),
   fixed steps through the harness's headless mode, then `summary.txt`, `draft.toml`,
   `report.md` and `log.jsonl`, and cleanup. It spends tokens, so nothing runs without a typed
   `yes` after a cost warning (`--yes` still prints a notice; a non-interactive stdin without it
