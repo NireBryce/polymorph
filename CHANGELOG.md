@@ -41,6 +41,9 @@ First state of the project. Python 3.11+, standard library only.
   met so far: the stub-harness tests cover confirmation, cancel, cleanup, timeouts, Ctrl-C,
   scratch-only writes and the environment; it has not been run against a real harness.
   `--print-prompts` prints the manual prompt kit. README gains "Cost and responsibility".
+- **`capture` and signals:** SIGTERM and SIGHUP now run the same cleanup as Ctrl-C (kill the
+  harness's process group, remove the scratch directory) and exit 143 and 129; the previous
+  handlers are restored afterwards.
 - **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
   repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
   repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a

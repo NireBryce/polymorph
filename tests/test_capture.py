@@ -281,6 +281,74 @@ class Running(CaptureCase):
         self.assertEqual(self.calls(), [])
 
 
+SLEEPER = '''#!{python}
+import os, sys, time
+if "--version" in sys.argv[1:]:
+    print("sleeper 0"); sys.exit(0)
+open({pidfile!r}, "w").write(str(os.getpid()))
+time.sleep(20)
+'''
+
+
+class Signals(unittest.TestCase):
+    """polymorph run as a real subprocess with a stub `opencode` that sleeps; then signalled."""
+
+    def start(self, *extra):
+        self.base = Path(tempfile.mkdtemp(prefix="pm-sigtest-")).resolve()
+        for d in ("tmp", "bin", "home", "work"):
+            (self.base / d).mkdir()
+        self.pidfile = self.base / "pid"
+        stub = self.base / "bin" / "opencode"
+        stub.write_text(SLEEPER.format(python=sys.executable, pidfile=str(self.pidfile)))
+        stub.chmod(0o755)
+        env = {"PATH": f"{self.base / 'bin'}:/usr/bin:/bin", "HOME": str(self.base / "home"),
+               "TMPDIR": str(self.base / "tmp"), "PYTHONPATH": SRC}
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "polymorph", "capture", "--harness", "opencode", "--yes",
+             "--steps", "shell", "--out", str(self.base / "results"), *extra],
+            env=env, cwd=self.base / "work", stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(self.proc.kill)
+        deadline = time.monotonic() + 15
+        while not self.pidfile.exists() or not self.pidfile.read_text():
+            self.assertLess(time.monotonic(), deadline, "the stub harness never started")
+            time.sleep(0.05)
+        self.stub_pid = int(self.pidfile.read_text())
+        self.addCleanup(self._kill_stub)
+
+    def _kill_stub(self):
+        try:
+            os.kill(self.stub_pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    def check(self, sig, code):
+        self.proc.send_signal(sig)
+        self.assertEqual(self.proc.wait(timeout=15), code)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            try:
+                os.kill(self.stub_pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        with self.assertRaises(ProcessLookupError, msg="the harness is still running"):
+            os.kill(self.stub_pid, 0)
+        self.assertEqual(list((self.base / "tmp").iterdir()), [], "scratch directory left behind")
+
+    def test_sigterm_kills_the_harness_and_removes_scratch(self):
+        self.start()
+        self.check(signal.SIGTERM, 143)
+
+    def test_sighup_kills_the_harness_and_removes_scratch(self):
+        self.start()
+        self.check(signal.SIGHUP, 129)
+
+    def test_sigint_exits_130(self):
+        self.start()
+        self.check(signal.SIGINT, 130)
+
+
 class Cli(unittest.TestCase):
     def cli(self, args, stdin="", bindir=None):
         env = {"PATH": f"{bindir}:/usr/bin:/bin" if bindir else "/usr/bin:/bin", "PYTHONPATH": SRC}

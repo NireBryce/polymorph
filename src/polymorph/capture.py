@@ -19,6 +19,7 @@ Rules this module keeps:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import os
 import shutil
@@ -323,6 +324,48 @@ def confirm(stdin, out, text: str) -> bool:
     return stdin.readline().strip().lower() == "yes"
 
 
+# ---- signals ----------------------------------------------------------------
+
+class Interrupted(KeyboardInterrupt):
+    """A SIGINT, SIGTERM or SIGHUP, handled like Ctrl-C: cleanup runs, then `code` is the exit status."""
+
+    def __init__(self, code: int = 130):
+        super().__init__()
+        self.code = code
+
+
+@contextlib.contextmanager
+def interrupt_on_signals():
+    """For the duration of the run, SIGTERM and SIGHUP raise `Interrupted` like Ctrl-C does.
+
+    The harness runs in its own session, so nothing else would stop it when polymorph is
+    killed. Only the first signal raises: a second one during cleanup is ignored so cleanup
+    finishes. The previous handlers are restored afterwards. Off the main thread (where
+    signal handlers cannot be set) this does nothing.
+    """
+    wanted = {signal.SIGINT: 130, signal.SIGTERM: 143, signal.SIGHUP: 129}
+    fired = False
+
+    def handler(signum, frame):
+        nonlocal fired
+        if fired:
+            return
+        fired = True
+        raise Interrupted(wanted[signum])
+
+    previous = {}
+    try:
+        for sig in wanted:
+            previous[sig] = signal.signal(sig, handler)
+    except ValueError:   # not the main thread
+        pass
+    try:
+        yield
+    finally:
+        for sig, old in previous.items():
+            signal.signal(sig, old)
+
+
 # ---- main -------------------------------------------------------------------
 
 def run(args, stdin=None, stdout=None, stderr=None) -> int:
@@ -360,6 +403,11 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
         print("polymorph capture: stdin is not a terminal; refusing without --yes", file=stderr)
         return 2
 
+    with interrupt_on_signals():
+        return _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr)
+
+
+def _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr) -> int:
     parent = Path(tempfile.gettempdir()) / SCRATCH_PARENT
     parent.mkdir(mode=0o700, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix=f"{driver.name}-", dir=parent)).resolve()
@@ -375,9 +423,9 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
                   "`--steps` runs fewer steps.", file=stdout)
             return 0
         return _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
         print("interrupted; cleaning up", file=stderr)
-        return 130
+        return getattr(e, "code", 130)
     finally:
         try:
             driver.remove(scratch)
