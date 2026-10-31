@@ -10,7 +10,8 @@ tests/test_docs.py runs every check on a bad tree to show it can fail.
            (name = directory, description, optional when_to_use, no other
            key) and a row in AGENTS.md's skill table; every row has a skill.
 - links:   every relative Markdown link points at a file that exists.
-- cli:     every subcommand in src/polymorph/cli.py appears in docs/cli.md
+- cli:     every subcommand in src/polymorph/cli.py, or registered by a function
+           cli.py imports and hands its subparsers to, appears in docs/cli.md
            (a missing docs/cli.md is a problem).
 - banner:  README.md carries the "Experimental and unvetted" notice.
 - cost:    README.md has the "Cost and responsibility" heading and docs/cli.md and
@@ -118,7 +119,26 @@ def cli_subcommands(root):
         parent = owner.get(subs)
         names[var] = name
         parent_name[var] = names.get(parent) if parent in names else None
-    return [f'{parent_name[v]} {n}' if parent_name[v] else n for v, n in names.items()]
+    found = [f'{parent_name[v]} {n}' if parent_name[v] else n for v, n in names.items()]
+    # A subcommand registered in another module: cli.py imports a function
+    # (`from .capture import build_parser as _capture_parser`) and hands it a
+    # subparsers object (`_capture_parser(sub)`); that function's first
+    # parameter is what it calls add_parser on.
+    imported = {m.group(3) or m.group(2): (m.group(1), m.group(2))
+                for m in re.finditer(r'from \.(\w+) import (\w+)(?: as (\w+))?', text)}
+    for m in re.finditer(r'\b(\w+)\(\s*(\w+)\s*\)', text):
+        alias, subs = m.groups()
+        if alias not in imported or subs not in owner:
+            continue
+        module, func = imported[alias]
+        path = root / 'src' / 'polymorph' / f'{module}.py'
+        d = re.search(rf'def {func}\(\s*(\w+)', path.read_text()) if path.exists() else None
+        if not d:
+            continue
+        parent = names.get(owner[subs])
+        for n in re.findall(rf'\b{d.group(1)}\.add_parser\(\s*["\']([\w-]+)["\']', path.read_text()):
+            found.append(f'{parent} {n}' if parent else n)
+    return found
 
 
 def check_cli(root):

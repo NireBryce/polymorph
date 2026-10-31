@@ -75,6 +75,16 @@ class DocsChecks(unittest.TestCase):
         write(self.root, 'docs/cli.md', 'polymorph generate\npolymorph discover\npolymorph discover init\n')
         self.assertEqual(docs.check_cli(self.root), [])
 
+    def test_subcommand_registered_in_another_module(self):
+        write(self.root, 'src/polymorph/cli.py', CLI + 'from .capture import build_parser as _cp\n_cp(sub)\n')
+        write(self.root, 'src/polymorph/capture.py',
+              'def build_parser(sub=None):\n    p = sub.add_parser("capture", help="x") if sub else None\n')
+        self.assertIn('capture', docs.cli_subcommands(self.root))
+        write(self.root, 'docs/cli.md', 'polymorph generate\npolymorph discover\npolymorph discover init\n')
+        problems = docs.check_cli(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn('capture', problems[0])
+
     def test_missing_cli_md_is_a_problem(self):
         problems = docs.check_cli(self.root)
         self.assertEqual(len(problems), 1)
