@@ -39,6 +39,35 @@ The reason to want this: if you keep guard hooks (a script that refuses `git res
 say) for one harness, you would otherwise hand-copy and hand-translate them for every other
 one, and the copies drift. polymorph keeps one source of truth and regenerates the rest.
 
+## Scope baseline — 2026-10-31
+
+Written down before the scope moves, so later changes have something to be measured
+against.
+
+The goal at this point: walk a repository and read everything that interacts with an
+agent's harness — `AGENTS.md`/`CLAUDE.md`, `.claude/`, and everything under `.agents/`
+(settings, hooks, skills, rules, and the scripts those pieces call) — and transliterate
+it into the files a given harness will actually use and honour, instead of letting each
+harness silently ignore whatever it does not recognise.
+
+What the tool does today, measured against that goal:
+
+- **Reads** `.agents/settings.json` and the hook scripts under `.agents/hooks/` into a
+  canonical config (three events, five tool classes). Settings with no cross-harness
+  meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
+  that resolve under `.agents/hooks/`.
+- **Transliterates** through declarative TOML mappings (`schema = 1`; `delivery` is
+  `direct` or `adapter`). Shipped: `claude` and `zcode`, each with `verified` text
+  stating what its mapping rests on, and a `gemini` draft with none.
+- **Generates** per-harness JSON hook configs from the `claude-settings` and
+  `claude-like` templates, with `--check` for drift; repo-local mappings under
+  `.agents/polymorph/mappings/` override the built-ins, with a warning.
+- **Checks** statically, with stable finding codes and text, JSON, and SARIF 2.1.0
+  output.
+
+The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`,
+`.claude/` — is intent, not coverage: nothing reads those yet.
+
 ## What it is not
 
 - **Not a security boundary.** The hooks it wires up are usually string matchers over a
