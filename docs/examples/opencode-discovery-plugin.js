@@ -2,7 +2,7 @@
 // `polymorph discover log`. An example from a capture of OpenCode v2.0.32
 // (docs/observed-opencode.md), not something polymorph installs for you.
 //
-// ADAPT BEFORE USE: every path below (POLYMORPH_CMD, the --out log file, the plugin
+// ADAPT BEFORE USE: every path below (POLYMORPH_CMD, POLYMORPH_ENV, the --out log file, the plugin
 // directory) is an example under /tmp. Point them at your own polymorph and log file.
 //
 // WARNING: OpenCode's hooks and event bus are server-wide. This plugin logs EVERY tool
@@ -35,6 +35,9 @@ const POLYMORPH_ARGS = [
   "--out",
   "/tmp/pm-opencode/.polymorph-discovery/opencode.jsonl", // example path
 ]
+// The logger's whole environment (the spawn is given nothing else). PYTHONPATH is only
+// needed when polymorph runs from a source checkout rather than an install.
+const POLYMORPH_ENV = { PYTHONPATH: "/tmp/pm-opencode/src" } // example path
 
 function serialize(payload) {
   try {
@@ -62,6 +65,7 @@ function pipeToPolymorph(payload) {
   try {
     const child = spawn(POLYMORPH_CMD, POLYMORPH_ARGS, {
       stdio: ["pipe", "ignore", "ignore"],
+      env: POLYMORPH_ENV, // minimal: only what the logger needs, not OpenCode's environment
     })
     child.on("error", () => {})
     const stdin = child.stdin
@@ -78,15 +82,16 @@ export default {
   async setup(ctx) {
     const registrations = []
 
-    // Register without ever letting a failure escape setup().
-    const track = (promise) =>
-      promise
-        .then((registration) => {
-          if (registration) registrations.push(registration)
-        })
-        .catch(() => {})
+    // Register without ever letting a failure escape setup(): the call is made inside the
+    // try, so a synchronous throw is caught as well as a rejected promise.
+    const track = async (register) => {
+      try {
+        const registration = await register()
+        if (registration) registrations.push(registration)
+      } catch {}
+    }
 
-    await track(
+    await track(() =>
       ctx.tool.hook("execute.before", (event) => {
         pipeToPolymorph({
           hook_event_name: "execute.before",
@@ -101,7 +106,7 @@ export default {
       }),
     )
 
-    await track(
+    await track(() =>
       ctx.tool.hook("execute.after", (event) => {
         pipeToPolymorph({
           hook_event_name: "execute.after",

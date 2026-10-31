@@ -34,10 +34,12 @@ class DocsChecks(unittest.TestCase):
         write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n')
         write(self.root, 'docs/a.md', 'hi\n')
         write(self.root, 'src/polymorph/cli.py', CLI)
+        write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n\n## Cost and responsibility\n\ntext\n')
+        write(self.root, 'docs/discovery.md', '[cost](../README.md#cost-and-responsibility)\n')
 
     def test_good_tree_passes(self):
         for check in docs.CHECKS:
-            if check is not docs.check_cli:
+            if check not in (docs.check_cli, docs.check_cost):
                 self.assertEqual(check(self.root), [], check.__name__)
 
     def test_skill_not_listed(self):
@@ -82,6 +84,15 @@ class DocsChecks(unittest.TestCase):
     def test_banner_missing(self):
         write(self.root, 'README.md', '# polymorph\n')
         self.assertEqual(len(docs.check_banner(self.root)), 1)
+
+    def test_cost_check_fails_without_heading_or_links(self):
+        write(self.root, 'docs/cli.md', '[cost](../README.md#cost-and-responsibility)\n')
+        self.assertEqual(docs.check_cost(self.root), [])
+        write(self.root, 'README.md', '> **Experimental and unvetted.**\n')
+        self.assertEqual(len(docs.check_cost(self.root)), 1)
+        write(self.root, 'docs/cli.md', 'no link\n')
+        write(self.root, 'docs/discovery.md', '[x](../README.md#something-else)\n')
+        self.assertEqual(len(docs.check_cost(self.root)), 3)
 
     def test_home_path(self):
         bad = '/ho' + 'me/realperson'  # built in pieces so this file passes its own check

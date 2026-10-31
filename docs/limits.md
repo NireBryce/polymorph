@@ -4,6 +4,8 @@ polymorph is experimental, unvetted and sits on a safety path. This page lists w
 established, in plain terms, so you can decide how much to lean on it. Read it before you
 trust a generated hook config.
 
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it. `polymorph capture` is the only command that does this.
+
 ## What `check` does and does not tell you
 
 A clean `polymorph check` means: the hook scripts named in your settings exist, are

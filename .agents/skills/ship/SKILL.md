@@ -62,23 +62,33 @@ gh pr create --base main --title "<subject>" --body-file <file>
 ## 2. Wait for CI, then ask
 
 ```sh
-gh pr checks <n> --watch
-gh pr view <n> --json mergeStateStatus --jq .mergeStateStatus
+just ci-wait <n>
 ```
 
-Only `CLEAN` is ready. A red check: `gh run view <run> --log-failed`, fix,
-push, wait again. When ready, show the title, URL, commit list and diff
-stat, and ask the one combined question. If not ready, leave the PR open,
-say so, and stop.
+It prints `<sha7> <status> <conclusion>` and the PR's mergeStateStatus, and
+exits 0 only when the run on the PR's current head succeeded and the PR is
+`CLEAN`. Read the exit status before going on. A red check: `gh run view
+<run> --log-failed`, fix, push, wait again. When it exits 0, show the title,
+URL, commit list and diff stat, and ask the one combined question. If it
+does not, leave the PR open, say so, and stop.
 
 ## 3. Merge, then delete -- on yes only
 
 ```sh
-gh pr merge <n> --rebase      # --merge for several commits, keeping each message
-git switch main && git pull --ff-only
-git branch -d feat/<thing>
-git push origin --delete feat/<thing>
+just ship-land <n>
 ```
 
-Not `--delete-branch`: it removes only the remote branch. A failed merge
-deletes nothing; report it.
+It re-checks what `ci-wait` checks and refuses otherwise, and refuses a PR from
+another repository, with a protected head branch (`main`, `master`,
+`experimental`, the default branch) or with a base other than the default branch
+(`--allow-base BRANCH` for a stacked PR), all before merging. It merges with
+`--rebase` (one commit) or `--merge` (several, each message kept), pinned
+with `--match-head-commit` to the head it checked, then fast-forwards the
+local base branch, removes a worktree on the branch, and deletes the local
+branch (`-D` only if it is exactly the verified head) and the remote branch (kept
+while another open PR is based on it; one already gone counts as done). Run it from
+a checkout other than the worktree being removed; it refuses otherwise. It
+prints each step. A failed merge deletes nothing; report it.
+
+It closes no issues. Close the ones the PR resolves by hand and say so; a
+closing keyword in a commit or PR body is not how this repo does it.

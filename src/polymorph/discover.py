@@ -62,12 +62,18 @@ def _event_kind(ev: str) -> tuple[str | None, bool]:
 # ---- init -------------------------------------------------------------------
 
 def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = True,
-                out: str | Path | None = None, env: bool = False) -> str:
-    """Hook command: absolute interpreter and log path, so it works from any cwd."""
+                out: str | Path | None = None, env: bool = False,
+                pythonpath: str | Path | None = None) -> str:
+    """Hook command: absolute interpreter and log path, so it works from any cwd.
+
+    pythonpath: prefix the command with `env PYTHONPATH=...`, for a polymorph that is run from a
+    source tree rather than installed (`capture` sets it; `discover init` does not)."""
     if out is None:
         out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
     flag = ("" if redact else " --full") + (" --env-be-very-careful" if env else "")
-    return f"{shlex.quote(sys.executable)} -m polymorph discover log{flag} --out {shlex.quote(str(Path(out).resolve()))}"
+    pre = f"env PYTHONPATH={shlex.quote(str(pythonpath))} " if pythonpath else ""
+    return (f"{pre}{shlex.quote(sys.executable)} -m polymorph discover log{flag} "
+            f"--out {shlex.quote(str(Path(out).resolve()))}")
 
 
 def _check_harness(harness: str) -> None:
@@ -150,14 +156,15 @@ def _write_doc(p: Path, doc: dict) -> None:
 
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
                 matcher: str = "*", base: str | Path = ".", shape: str = "claude-settings",
-                log_dir: str | Path | None = None, redact: bool = True, env: bool = False) -> Path:
+                log_dir: str | Path | None = None, redact: bool = True, env: bool = False,
+                pythonpath: str | Path | None = None) -> Path:
     """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode)."""
     if shape not in ("claude-settings", "claude-like"):
         raise ValueError(f"unknown shape {shape!r}")
     _check_harness(harness)
     p = _resolve(config_path, base)
     doc = _load_doc(p)
-    entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env)}
+    entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env, pythonpath=pythonpath)}
     # the logger's own entry is recognised by its --out file; the user's hooks stay
     out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
     _merge_hook(doc, shape, event_name, matcher, entry, marker=f"--out {shlex.quote(str(out))}")

@@ -150,6 +150,9 @@ polymorph discover reload-check --config-path P --scratch-log F [--finish]
                         [--event-name E] [--matcher M] [--shape claude-settings|claude-like]
 polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event EVENT ...]
                         # prints draft mapping, no `verified`
+polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S] [--total-timeout S]
+                  [--out DIR] [--full]   # runs a real harness headless in a scratch dir; typed `yes` unless --yes
+polymorph capture --print-prompts        # prints the manual prompt kit, runs nothing
 ```
 
 Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw

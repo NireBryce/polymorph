@@ -13,6 +13,8 @@ tests/test_docs.py runs every check on a bad tree to show it can fail.
 - cli:     every subcommand in src/polymorph/cli.py appears in docs/cli.md
            (a missing docs/cli.md is a problem).
 - banner:  README.md carries the "Experimental and unvetted" notice.
+- cost:    README.md has the "Cost and responsibility" heading and docs/cli.md and
+           docs/discovery.md link to it.
 - paths:   no text file holds a real home directory path.
 """
 import pathlib
@@ -135,6 +137,18 @@ def check_banner(root):
     return []
 
 
+def check_cost(root):
+    problems = []
+    readme = root / 'README.md'
+    if not readme.exists() or not re.search(r'^## Cost and responsibility\s*$', readme.read_text(), re.M):
+        problems.append('README.md: no "Cost and responsibility" heading')
+    for name in ('docs/cli.md', 'docs/discovery.md'):
+        path = root / name
+        if not path.exists() or '](../README.md#cost-and-responsibility)' not in path.read_text():
+            problems.append(f'{name}: no link to README.md#cost-and-responsibility')
+    return problems
+
+
 def check_paths(root):
     problems = []
     pattern = re.compile(r'(?:/home|/Users)/([A-Za-z0-9._-]+)')
@@ -149,7 +163,7 @@ def check_paths(root):
     return problems
 
 
-CHECKS = [check_skills, check_links, check_cli, check_banner, check_paths]
+CHECKS = [check_skills, check_links, check_cli, check_banner, check_cost, check_paths]
 
 
 def main():

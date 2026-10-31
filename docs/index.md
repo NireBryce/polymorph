@@ -7,7 +7,7 @@ polymorph is experimental and unvetted; read [Limits](limits.md) before relying 
 | Try it on a repo | [Getting started](getting-started.md) |
 | Understand the model (canonical config, mappings, delivery, trust) | [Concepts](concepts.md) |
 | Add support for a harness whose behaviour you know | [Writing a mapping](writing-a-mapping.md) |
-| Add support for a harness whose behaviour you do not know | [Discovery](discovery.md) |
+| Add support for a harness whose behaviour you do not know | [Discovery](discovery.md), or `polymorph capture` ([CLI](cli.md#capture); runs a model, read [Cost and responsibility](../README.md#cost-and-responsibility)) |
 | Look up a command or flag | [CLI reference](cli.md) |
 | Run it in pre-commit or GitHub Actions | [CI](ci.md) |
 | Know what is unverified and what "verified" means | [Limits](limits.md) |

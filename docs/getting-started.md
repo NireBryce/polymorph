@@ -4,6 +4,8 @@ This walks through a repo that has a Claude Code style agent config and one hook
 wires the same hook into ZCode. Every command below was run against a scratch repo with
 this exact content unless marked "not run".
 
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it. Nothing on this page runs a model.
+
 ## What you need
 
 - Python 3.11 or newer. No third-party packages.

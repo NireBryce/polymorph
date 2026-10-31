@@ -121,6 +121,60 @@ Replays `src/polymorph/fixtures/NAME/*.json` (all harnesses without `--harness`)
 translations. Prints `FAIL: ...` lines on stderr and `N passed, M failed`; exit 1 if any
 failed. See [fixtures](writing-a-mapping.md#fixtures).
 
+## `capture`
+
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it.
+
+Run the [discovery](discovery.md) procedure against a harness by itself.
+
+```
+polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S]
+                  [--total-timeout S] [--out DIR] [--full]
+polymorph capture --print-prompts
+```
+
+It makes a scratch directory as `<system temp>/polymorph-capture-NAME-XXXXXXXX` (a fresh mode-0700 directory), installs the
+discovery logger there through a driver, runs each step as a headless harness invocation with
+that directory as the working directory, then removes the logger and (unless `--keep`) the
+directory, also on an exception, a timeout, Ctrl-C (exit 130), SIGTERM (143) or SIGHUP (129). Drivers are code shipped with
+polymorph and chosen by name; an unknown name exits 2, lists the known drivers and points at
+`--print-prompts`.
+
+| Driver | Command per step | Status |
+|---|---|---|
+| `opencode` | `opencode run --standalone --auto PROMPT`, logger plugin in `.opencode/plugins/polymorph-discovery/index.js` (from [the example plugin](examples/opencode-discovery-plugin.js)) | Flags from `opencode run --help` (v2.0.32); not run by the tests or by the author's session |
+| `claude` | `claude -p PROMPT --permission-mode bypassPermissions --setting-sources project`, hooks in `.claude/settings.json` | **Blocked**: `capture --harness claude` refuses to run (exit 2). It has never run against a real `claude`, it needs `--permission-mode bypassPermissions`, and whether hooks fire under `-p` is unconfirmed, so a run could spend tokens and log nothing. Use `--print-prompts`. It is unblocked by removing `blocked` in `capture_drivers.py` once a person has confirmed it live. |
+
+Steps (fixed constants, in this order; `--steps` selects a subset): `shell` (`echo hello`),
+`file` (write, read and delete `scratch.txt`), `search`, `background` (`sleep 2; echo done`).
+Nothing read from a log, a mapping or a harness reply is used as a prompt or a command.
+
+| Flag | Meaning |
+|---|---|
+| `--harness NAME` | Driver name. Required unless `--print-prompts`. |
+| `--yes` | Skip the question. The cost warning is still printed, as a short notice. With a non-interactive stdin and no `--yes`, the command refuses (exit 2). Pass it only knowing [what it costs](../README.md#cost-and-responsibility). |
+| `--keep` | Keep the scratch directory after a run and print its path. Answering no at the question keeps nothing. |
+| `--steps STEP ...` | Run only these steps. |
+| `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds; each must be finite and above 0 (else exit 2). A timed-out step's process group is killed. |
+| `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty, and creatable and writable: checked before the first step (else exit 2). |
+| `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. |
+| `--print-prompts` | Print the [prompt kit](discovery.md#prompt-kit-for-a-harness-capture-has-no-driver-for) and exit 0, running nothing. |
+
+Confirmation: a framed warning says it runs a real model once per step, spends tokens, may
+cost money or count against plan limits, that polymorph cannot tell which or measure it, and
+that tool calls are auto-approved in the scratch directory. It shows the step count and the
+timeouts, not a price. The question is `Continue? Type "yes" to run, anything else cancels [no]:`;
+only `yes` (any case) proceeds, anything else exits 0 with a note that nothing ran.
+
+The harness runs with `PATH`, `HOME` and `XDG_*` only; the environment is never logged and the
+harness's authentication configuration is never read. Its stdout and stderr are discarded.
+
+Output in the results directory: `summary.txt` (`discover summary`), `draft.toml`
+(`discover draft`, unverified), `report.md` (polymorph version, `<harness> --version`, a row per
+step with its exit status and log lines, the tool calls from the log with counts and input key
+names, and the steps that produced no log line) and `log.jsonl`. Exit 0 if every step exited 0,
+1 if one failed, timed out or was skipped, 2 for a usage error.
+
 ## `discover`
 
 Capture what an unmapped harness sends to hooks. Walkthrough: [Discovery](discovery.md).
