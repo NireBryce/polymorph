@@ -65,6 +65,8 @@ class Result:
     merge_state: str
     pr: str
     head_branch: str
+    base_branch: str
+    cross_repo: bool
     ok: bool
     code: int
     reason: str
@@ -74,7 +76,7 @@ class Result:
 
 
 def snapshot(target: str) -> tuple[dict, str, str]:
-    pr = gh_json("pr", "view", target, "--json", "number,headRefOid,headRefName,mergeStateStatus,state")
+    pr = gh_json("pr", "view", target, "--json", "number,headRefOid,headRefName,baseRefName,isCrossRepository,mergeStateStatus,state")
     runs = gh_json("run", "list", "--commit", pr["headRefOid"], "--json", "status,conclusion")
     status, conclusion = aggregate(runs)
     return pr, status, conclusion
@@ -88,7 +90,10 @@ def wait(target: str | None = None, timeout: float = DEFAULT_TIMEOUT,
         pr, status, conclusion = snapshot(target)
         merge = pr.get("mergeStateStatus") or "UNKNOWN"
         base = dict(sha=pr["headRefOid"], status=status, conclusion=conclusion, merge_state=merge,
-                    pr=str(pr["number"]), head_branch=pr["headRefName"])
+                    pr=str(pr["number"]), head_branch=pr["headRefName"],
+                    base_branch=pr.get("baseRefName") or "",
+                    # fail closed: anything but an explicit False counts as a fork
+                    cross_repo=pr.get("isCrossRepository") is not False)
         if pr.get("state") != "OPEN":
             return Result(**base, ok=False, code=1, reason=f"PR is {pr.get('state')}, not OPEN")
         if status == "completed" and conclusion != "success":

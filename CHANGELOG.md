@@ -41,6 +41,11 @@ First state of the project. Python 3.11+, standard library only.
   met so far: the stub-harness tests cover confirmation, cancel, cleanup, timeouts, Ctrl-C,
   scratch-only writes and the environment; it has not been run against a real harness.
   `--print-prompts` prints the manual prompt kit. README gains "Cost and responsibility".
+- **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
+  repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
+  repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a
+  stacked PR). The local branch is deleted with `-d`, or `-D` only when it is exactly the
+  verified head; the remote branch is kept while another open PR is based on it.
 - **`discover` event names:** names may contain `.`, `-` and `:` (OpenCode sends
   `execute.before`, `execute.after`, `session.created`); the draft guesses `pre_tool` and
   `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other

@@ -78,11 +78,15 @@ does not, leave the PR open, say so, and stop.
 just ship-land <n>
 ```
 
-It re-checks what `ci-wait` checks and refuses otherwise, merges with
+It re-checks what `ci-wait` checks and refuses otherwise, and refuses a PR from
+another repository, with a protected head branch (`main`, `master`,
+`experimental`, the default branch) or with a base other than the default branch
+(`--allow-base BRANCH` for a stacked PR), all before merging. It merges with
 `--rebase` (one commit) or `--merge` (several, each message kept), pinned
 with `--match-head-commit` to the head it checked, then fast-forwards the
 local base branch, removes a worktree on the branch, and deletes the local
-and remote branch (a remote that is already gone counts as done). Run it from
+branch (`-D` only if it is exactly the verified head) and the remote branch (kept
+while another open PR is based on it; one already gone counts as done). Run it from
 a checkout other than the worktree being removed; it refuses otherwise. It
 prints each step. A failed merge deletes nothing; report it.
 
