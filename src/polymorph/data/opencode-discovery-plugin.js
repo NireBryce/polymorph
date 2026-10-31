@@ -1,8 +1,8 @@
 // polymorph capture: the OpenCode discovery plugin, installed into a scratch directory
 // for one capture and removed afterwards. Derived from
 // docs/examples/opencode-discovery-plugin.js (tests/test_capture.py checks the code below
-// the constants is identical); only the two constants differ: the absolute command and
-// arguments are written by `polymorph capture`, never read from anywhere else.
+// the constants is identical); only the constants differ: the absolute command, arguments
+// and logger environment are written by `polymorph capture`, never read from anywhere else.
 // It never throws, never blocks or alters a tool call, never prints, and pipes each
 // payload only to the `polymorph discover log` command.
 //
@@ -36,6 +36,7 @@ function pipeToPolymorph(payload) {
   try {
     const child = spawn(POLYMORPH_CMD, POLYMORPH_ARGS, {
       stdio: ["pipe", "ignore", "ignore"],
+      env: POLYMORPH_ENV, // minimal: only what the logger needs, not OpenCode's environment
     })
     child.on("error", () => {})
     const stdin = child.stdin
@@ -52,15 +53,16 @@ export default {
   async setup(ctx) {
     const registrations = []
 
-    // Register without ever letting a failure escape setup().
-    const track = (promise) =>
-      promise
-        .then((registration) => {
-          if (registration) registrations.push(registration)
-        })
-        .catch(() => {})
+    // Register without ever letting a failure escape setup(): the call is made inside the
+    // try, so a synchronous throw is caught as well as a rejected promise.
+    const track = async (register) => {
+      try {
+        const registration = await register()
+        if (registration) registrations.push(registration)
+      } catch {}
+    }
 
-    await track(
+    await track(() =>
       ctx.tool.hook("execute.before", (event) => {
         pipeToPolymorph({
           hook_event_name: "execute.before",
@@ -75,7 +77,7 @@ export default {
       }),
     )
 
-    await track(
+    await track(() =>
       ctx.tool.hook("execute.after", (event) => {
         pipeToPolymorph({
           hook_event_name: "execute.after",

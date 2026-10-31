@@ -68,11 +68,13 @@ class OpenCodeDriver(Driver):
         template = (DATA_DIR / "opencode-discovery-plugin.js").read_text(encoding="utf-8")
         if template.count(_CONSTANTS_MARK) != 1:
             raise RuntimeError("opencode plugin template is missing its constants marker")
-        # `env` sets PYTHONPATH without changing the plugin code under the constants
-        args = ["PYTHONPATH=" + PACKAGE_PARENT, sys.executable, "-m", "polymorph", "discover", "log",
-                *(["--full"] if full else []), "--out", str(self.log_path(scratch).resolve())]
-        consts = (f"const POLYMORPH_CMD = {json.dumps('/usr/bin/env')}\n"
-                  f"const POLYMORPH_ARGS = {json.dumps(args)}")
+        # python is spawned directly; PYTHONPATH goes through the spawn `env` option, which is
+        # the logger's whole environment
+        args = ["-m", "polymorph", "discover", "log", *(["--full"] if full else []),
+                "--out", str(self.log_path(scratch).resolve())]
+        consts = (f"const POLYMORPH_CMD = {json.dumps(sys.executable)}\n"
+                  f"const POLYMORPH_ARGS = {json.dumps(args)}\n"
+                  f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': PACKAGE_PARENT})}")
         return template.replace(_CONSTANTS_MARK, consts)
 
     def install(self, scratch: Path, full: bool) -> None:

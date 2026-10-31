@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -480,6 +481,30 @@ class Drivers(unittest.TestCase):
         self.assertNotIn("--full", js)
         d.remove(scratch)
         self.assertFalse((scratch / ".opencode/plugins/polymorph-discovery").exists())
+
+    def test_rendered_plugin_spawns_python_directly_with_a_minimal_env(self):
+        scratch = Path(tempfile.mkdtemp()).resolve()
+        d = capture_drivers.DRIVERS["opencode"]
+        d.install(scratch, full=True)
+        js = (scratch / ".opencode/plugins/polymorph-discovery/index.js").read_text()
+        d.remove(scratch)
+        self.assertNotIn("/usr/bin/env", js)
+        self.assertIn(f"const POLYMORPH_CMD = {json.dumps(sys.executable)}", js)
+        self.assertIn(f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': capture_drivers.PACKAGE_PARENT})}", js)
+        args = json.loads(js.split("const POLYMORPH_ARGS = ")[1].split("\nconst POLYMORPH_ENV")[0])
+        self.assertEqual(args[:2], ["-m", "polymorph"])
+        self.assertFalse([a for a in args if a.startswith("PYTHONPATH=")])
+        self.assertIn("env: POLYMORPH_ENV", js)
+
+    def test_plugin_tool_hook_registration_cannot_throw_out_of_setup(self):
+        # node is not available to the tests, so this reads the code: every ctx.tool.hook call
+        # must sit inside the function handed to track(), which try/catches it
+        tmpl = (ROOT / "src/polymorph/data/opencode-discovery-plugin.js").read_text()
+        self.assertEqual(tmpl.count("ctx.tool.hook("), 2)
+        self.assertEqual(len(re.findall(r"track\(\(\) =>\s*ctx\.tool\.hook\(", tmpl)), 2)
+        track = tmpl[tmpl.index("const track"):tmpl.index("await track(")]
+        self.assertIn("try {", track)
+        self.assertIn("catch", track)
 
     def test_claude_driver_writes_project_settings_with_both_events(self):
         scratch = Path(tempfile.mkdtemp()).resolve()
