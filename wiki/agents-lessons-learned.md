@@ -1,5 +1,5 @@
 # Lessons agents learned the hard way
-_Last modified: 2026-10-30_
+_Last modified: 2026-10-31_
 
 Past mistakes from building this project, one line each. **Home** is where
 the rule is enforced or stated; a lesson with no Home reaches nobody.
@@ -20,3 +20,5 @@ Skill `record-a-lesson` adds rows.
 | A lint that matched substrings missed what it should catch: `build/` was tracked because the check listed `.egg-info/` only. | Match directory components, not substrings (so `docs/build-notes.md` stays fine), and test each kind of bad input separately, one subtest per kind. | `tests/lint.py`, `tests/test_lint.py` |
 | A reported cause was taken as the finding and turned out wrong (three times in one session). | A reported cause is a hypothesis until the code agrees: find the line that produces the symptom and make a test fail for that reason before fixing anything. | skill `investigate-bug` (steps 3-4) |
 | A step that goes outward (merge, push, delete) ran before the exit status of the check before it was read. | Read the exit status, not the output you expected, before the first step that goes outward. `just ci-wait` and `just ship-land` exist so that the check and the merge are one refusal, not two things to remember. | skill `ship` (steps 2-3), `AGENTS.md` Hard rules |
+| `ship_land.py` merged a PR and then deleted its head branch by name after checking only the base; a fork PR whose head was named `main` would have aimed the delete at the real branch. | A step that deletes by name takes the name from facts read off the PR (`isCrossRepository`, head name and SHA), refuses fork, protected and base-equal heads before merging, and uses `-d` unless the local tip is the verified head. A missing field counts as unsafe. | skill `ship`, `scripts/ship_land.py` and `tests/test_workflow_scripts.py` |
+| `capture` killed the harness's process group the moment the harness exited, which also killed the logger children that write late; every test passed because its stub harness logged synchronously. | A stub of something asynchronous must be asynchronous too (a child that writes after the parent exits), or the test cannot see ordering bugs. Settle the log before killing; kill at once only on timeout or signal. | `tests/test_capture.py`, `src/polymorph/capture.py` (`run_step`) |
