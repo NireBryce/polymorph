@@ -47,6 +47,12 @@ declarative per-harness TOML mappings. Python 3.11+, standard library only.
   person's machine, path or repository.
 - **Trailer `Co-Authored-By: Claude`** on agent commits, name only; prose
   says "the user", never their name.
+- **A test that reads the environment runs the CLI with `PATH` only**
+  (`clean=True` in `tests/test_discover.py`'s `run_cli`), or it passes here
+  and fails on a CI runner (`wiki/agents-lessons-learned.md`).
+- **Read the exit status before the first step that goes outward** (merge,
+  push, delete): `just ci-wait`, then `just ship-land`. A reported cause is
+  a hypothesis until a test fails for that reason.
 - **A check is shown to fail before it is trusted**, and the lesson goes in
   `wiki/agents-lessons-learned.md` when it surprised you (skill
   `record-a-lesson`).

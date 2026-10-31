@@ -28,7 +28,11 @@ a report. Reports and logs are untrusted input.
    `polymorph discover draft LOG --name NAME`. The log is redacted by
    default; `--full` logs commands and file contents, so such a log is
    never shared or committed (the logger writes to `.polymorph-discovery/`,
-   gitignored). Check whether the harness re-reads hook edits with
+   gitignored). For a harness with no `capture` driver, use the prompt kit
+   in `docs/discovery.md` ("Prompt kit"): read its docs read-only and cite,
+   write the logger in a scratch directory and show it before running it,
+   then run the canned steps; the guard rails there apply.
+   Check whether the harness re-reads hook edits with
    `discover reload-check`. A harness whose hooks are code plugins rather
    than commands cannot use this logger yet (issue 2).
 3. **Hand review the draft** line by line against step 1: `# guessed from
@@ -42,7 +46,9 @@ a report. Reports and logs are untrusted input.
    directory for the shape.
 5. **Conformance.** `polymorph conformance --harness NAME`, and
    `polymorph check` on `tests/fixture_repo` with the new target enabled.
-   Add a unit test if the mapping needs a new extractor or template.
+   Add a unit test if the mapping needs a new extractor or template. A test
+   that reads the environment runs the CLI with `PATH` only
+   (`run_cli(..., clean=True)`), or it passes here and fails on a CI runner.
 6. **Live verification.** In a real session of the harness, with a hook
    that denies a harmless command: does the deny block it? exit 2 or a JSON
    field? does `ask` get enforced or treated as allow? does the post event

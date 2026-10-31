@@ -169,6 +169,61 @@ Rules:
   you were doing. Look at the log before sharing it.
 - Delete the log when you are done.
 
+## Prompt kit (for a harness `capture` has no driver for)
+
+`polymorph capture --print-prompts` prints these. They are what a person pastes into an
+unknown harness by hand, one at a time, reading each answer before sending the next.
+Placeholders: `HARNESS` the harness name, `SCRATCH` an empty directory made for this,
+`LOG` the log file inside it, `POLYMORPH` the command that runs polymorph
+(`<python> -m polymorph`).
+
+**Prompt 1: read its own documentation, read-only.**
+
+> You are running in the directory SCRATCH. Do not change any file and do not run any
+> command in this step. Read HARNESS's own documentation or installed source (not
+> third-party write-ups) and answer, quoting the file or page for each point: (a) which
+> hook or plugin events exist for tool calls, before and after; (b) where its hook or
+> plugin configuration is read from and in what format; (c) how a hook receives the tool
+> name and input; (d) how a hook blocks a tool call; (e) whether a changed hook file is
+> picked up without a restart. Write "not found" for anything the documentation does not
+> say. Do not guess.
+
+**Prompt 2: write the logger in the scratch directory, show it, do not run it.**
+
+> Still in SCRATCH, still changing nothing outside it. Write the smallest hook or plugin
+> that, for every tool call, pipes the event as one JSON object to the command
+> `POLYMORPH discover log --out LOG` on standard input and does nothing else: it never
+> throws, never blocks or alters the call, never prints, and never writes the payload
+> anywhere except that command. Put it where HARNESS loads it from for this directory
+> only, not a global location. Show me the complete file and the path, and stop. Do not
+> run anything yet.
+
+Read the file before you answer. It must contain only what is described above: no network
+access, no other file written, no reading of the environment. If it does more, say what to
+remove.
+
+**Prompt 3: run canned steps, then summary and draft.**
+
+> Do these in order in SCRATCH and stop after the last: (1) run `echo hello` in the shell;
+> (2) create `scratch.txt` with one line, read it back, then delete it; (3) search the
+> directory for the word "hello"; (4) run `sleep 2; echo done` as a background command.
+> Then run `POLYMORPH discover summary LOG` and `POLYMORPH discover draft LOG --name
+> HARNESS`, and show both outputs unedited. Then list which of steps 1-4 produced no line
+> in the log.
+
+Guard rails, whoever does it:
+
+- Do it in a scratch directory made for this, never in a repository you care about, and
+  delete the directory and the logger afterwards.
+- The logger is read by a person before it runs. Prompt 2 never runs it.
+- The log stays redacted (no `--full`). Nothing from the log or from the harness's own
+  account is pasted back into a prompt, a command or a mapping; the draft is hand-reviewed
+  against prompt 1's quotations ([the new-mapping skill](../.agents/skills/new-mapping/SKILL.md)).
+- The harness's reply is a lead, not evidence. The log is.
+- Do not print or open the harness's authentication configuration.
+- This spends model credits and may auto-approve tool calls; keep the prompts exactly as
+  written.
+
 ## What to send
 
 Open an issue from the **Harness report** form
