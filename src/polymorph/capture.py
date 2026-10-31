@@ -13,6 +13,8 @@ Rules this module keeps:
   and the harness's authentication configuration is never read.
 - Nothing runs without a typed `yes` (or --yes, which still prints a notice), and not at all on a
   non-interactive stdin without --yes. The default answer is no.
+- A step's process group is killed only after the harness exits and the log has settled (the
+  plugin's logger children live in that group and write late), or at once on a timeout or signal.
 - The report lists what the log recorded. The harness's own account of what it did is never
   captured: its stdout and stderr go to /dev/null.
 """
@@ -36,7 +38,8 @@ from .capture_drivers import DRIVERS, Driver, quoted
 SCRATCH_PARENT = "polymorph-capture"   # under the system temp dir; polymorph owns it
 DEFAULT_STEP_TIMEOUT = 120.0
 DEFAULT_TOTAL_TIMEOUT = 600.0
-SETTLE_SECONDS = 0.6   # detached loggers write after the step returns: wait for the count to stop moving
+SETTLE_SECONDS = 0.6   # loggers write after the harness exits: wait for the line count to stop moving
+SETTLE_CAP = 10.0      # ...and for the harness's process group to empty, but never longer than this
 ENV_KEEP_EXACT = ("PATH", "HOME")
 ENV_KEEP_PREFIX = ("XDG_",)
 
@@ -140,11 +143,15 @@ def minimal_env(src=None) -> dict[str, str]:
 
 # ---- running a step ---------------------------------------------------------
 
-def run_step(argv: list[str], cwd: Path, env: dict, timeout: float) -> str:
+def run_step(argv: list[str], cwd: Path, env: dict, timeout: float, log: Path | None = None) -> str:
     """Run one headless step; returns 'ok', 'exit N', 'timeout' or 'not started: ...'.
 
-    The harness's output goes nowhere: only its exit status is kept. The process group is
-    killed on timeout and on any exception (Ctrl-C included).
+    The harness's output goes nowhere: only its exit status is kept. When the harness exits
+    by itself, its process group is NOT killed at once: the plugin's logger children are in
+    that group (spawned unref'd, not detached) and write after the harness is gone, so the
+    step waits until no group member is alive and `log` has stopped growing (capped by
+    SETTLE_CAP) and only then kills whatever is left. On a timeout, an exception or a signal
+    (Ctrl-C, SIGTERM, SIGHUP) the group is killed immediately.
     """
     try:
         proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
@@ -157,25 +164,32 @@ def run_step(argv: list[str], cwd: Path, env: dict, timeout: float) -> str:
             rc = proc.wait(timeout=max(timeout, 0.01))
         except subprocess.TimeoutExpired:
             return "timeout"
+        if log is not None:
+            settled_count(log, group=proc.pid)
         return "ok" if rc == 0 else f"exit {rc}"
     finally:
-        if proc.poll() is None:
-            _kill_group(proc)
-        else:
-            # the step may have left background children in its group
-            _kill_group(proc, wait=False)
+        _kill_group(proc)
 
 
-def _kill_group(proc, wait: bool = True) -> None:
+def _kill_group(proc) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError):
         pass
-    if wait:
-        try:
-            proc.wait(timeout=5)
-        except Exception:
-            pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        pass
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _line_count(log: Path) -> int:
@@ -185,16 +199,21 @@ def _line_count(log: Path) -> int:
         return 0
 
 
-def settled_count(log: Path) -> int:
-    """Line count once it stops moving: the loggers are spawned detached and write late."""
+def settled_count(log: Path, group: int | None = None) -> int:
+    """Line count once it stops moving for SETTLE_SECONDS and, given `group` (a process group
+    id), once no process in that group is alive; gives up after SETTLE_CAP seconds."""
     last = _line_count(log)
-    quiet_since = time.monotonic()
-    while time.monotonic() - quiet_since < SETTLE_SECONDS:
+    start = quiet_since = time.monotonic()
+    while True:
         time.sleep(0.05)
         now = _line_count(log)
         if now != last:
             last, quiet_since = now, time.monotonic()
-    return last
+        t = time.monotonic()
+        if t - start >= SETTLE_CAP:
+            return last
+        if t - quiet_since >= SETTLE_SECONDS and not (group is not None and _group_alive(group)):
+            return last
 
 
 def harness_version(driver: Driver, env: dict, cwd: Path) -> str:
@@ -454,8 +473,8 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
                 results.append({"name": name, "status": "skipped", "lines": 0})
                 continue
             before = _line_count(log)
-            status = run_step(driver.step_argv(prompt), scratch, env, min(args.step_timeout, remaining))
-            after = settled_count(log)
+            status = run_step(driver.step_argv(prompt), scratch, env, min(args.step_timeout, remaining), log)
+            after = _line_count(log)   # run_step already waited for the log to settle
             results.append({"name": name, "status": status, "lines": after - before})
             print(f"{name}: {status}, {after - before} log lines", file=stdout)
     finally:

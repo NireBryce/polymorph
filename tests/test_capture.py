@@ -37,6 +37,15 @@ if mode == "hang":
     time.sleep(60)
 if mode == "fail":
     sys.exit(3)
+if mode == "late":
+    # a logger child in the SAME process group (no setsid) that writes after the stub has exited
+    child = ("import json, subprocess, sys, time\\n"
+             "time.sleep(0.3)\\n"
+             "p = {{'hook_event_name': 'execute.before', 'tool_name': 'bash', 'session_id': 's1', 'input': {{'command': 'x'}}}}\\n"
+             "subprocess.run([sys.executable, '-m', 'polymorph', 'discover', 'log', '--out', sys.argv[1]],"
+             " input=json.dumps(p), text=True, env={{'PYTHONPATH': sys.argv[2]}})\\n")
+    subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl"), src])
+    sys.exit(0)
 silent = os.path.exists(os.path.join(ctrl, "silent")) and "sleep" in prompt
 log = os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl")
 tools = [("bash", {{"command": "echo hello"}})]
@@ -227,6 +236,16 @@ class Running(CaptureCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
         self.assert_clean()
+
+    def test_logger_child_that_writes_after_the_harness_exits_is_not_lost(self):
+        self.set_mode("late")
+        rc, out, err = self.run_cap("--yes", "--steps", "shell")
+        self.assertEqual(rc, 0, out + err)
+        r = self.base / "results" / "r"
+        report = (r / "report.md").read_text()
+        self.assertIn("| shell | ok | 1 |", report)
+        self.assertIn("none", report.split("no log line")[1])
+        self.assertEqual(len((r / "log.jsonl").read_text().splitlines()), 1)
 
     def test_exception_in_driver_cleans_up(self):
         with mock.patch.object(capture_drivers.OpenCodeDriver, "install", side_effect=RuntimeError("boom")):

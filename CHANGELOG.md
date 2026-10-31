@@ -44,6 +44,10 @@ First state of the project. Python 3.11+, standard library only.
 - **`capture` and signals:** SIGTERM and SIGHUP now run the same cleanup as Ctrl-C (kill the
   harness's process group, remove the scratch directory) and exit 143 and 129; the previous
   handlers are restored afterwards.
+- **`capture` keeps late log lines:** when the harness exits by itself, its process group is no
+  longer killed at once (that killed the plugin's logger children before they wrote); the
+  step waits, up to 10s, until the group is empty and the log has stopped growing. A timeout
+  or a signal still kills it immediately.
 - **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
   repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
   repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a
