@@ -115,6 +115,13 @@ class CaptureCase(unittest.TestCase):
         rc = capture.main(argv, stdin=stdin if stdin is not None else Pipe(""), stdout=out, stderr=err)
         return rc, out.getvalue(), err.getvalue()
 
+    def kept(self):
+        """The scratch directories left in the (patched) system temp dir, which must be direct children."""
+        found = sorted((self.base / "tmp").iterdir())
+        for p in found:
+            self.assertTrue(p.name.startswith("polymorph-capture-opencode-"), p.name)
+        return found
+
     def assert_clean(self):
         self.assertEqual(list((self.base / "tmp").iterdir()), [], "scratch parent left behind")
         self.assertEqual((self.base / "work").iterdir().__next__().name, "sentinel.txt")
@@ -145,6 +152,13 @@ class Confirmation(CaptureCase):
                 self.assertIn("--steps", out)
                 self.assertEqual(self.calls(), [])
                 self.assert_clean()
+
+    def test_cancel_with_keep_says_nothing_was_left_and_keeps_nothing(self):
+        rc, out, err = self.run_cap("--keep", stdin=Tty("no\n"))
+        self.assertEqual(rc, 0)
+        self.assertIn("no scratch directory was left", out)
+        self.assertNotIn("kept scratch directory", out + err)
+        self.assert_clean()
 
     def test_yes_proceeds_case_insensitive(self):
         for answer in ("yes\n", "YES\n", " Yes \n"):
@@ -253,10 +267,22 @@ class Running(CaptureCase):
                 self.run_cap("--yes")
         self.assert_clean()
 
+    def test_keep_run_says_kept_and_not_that_none_was_left(self):
+        rc, out, err = self.run_cap("--yes", "--steps", "shell", "--keep")
+        self.assertIn("kept scratch directory", err)
+        self.assertNotIn("no scratch directory was left", out + err)
+
+    def test_scratch_is_a_fresh_directory_directly_in_the_temp_dir(self):
+        self.run_cap("--yes", "--steps", "shell", "--keep")
+        self.run_cap("--yes", "--steps", "shell", "--keep", "--out", str(self.base / "results" / "r2"))
+        a, b = self.kept()
+        self.assertNotEqual(a, b)
+        self.assertEqual(a.stat().st_mode & 0o777, 0o700)
+
     def test_keep_leaves_scratch_without_the_logger(self):
         rc, _, err = self.run_cap("--yes", "--steps", "shell", "--keep")
         self.assertEqual(rc, 0)
-        kept = list((self.base / "tmp" / capture.SCRATCH_PARENT).iterdir())
+        kept = self.kept()
         self.assertEqual(len(kept), 1)
         self.assertFalse((kept[0] / ".opencode" / "plugins" / "polymorph-discovery").exists())
         self.assertIn(str(kept[0]), err)
@@ -266,12 +292,12 @@ class Running(CaptureCase):
         rc, _, _ = self.run_cap("--yes", "--keep")
         self.assertEqual(rc, 0)
         self.assertEqual(before, (tree_hash(self.base / "work"), tree_hash(self.base / "home")))
-        scratch = next((self.base / "tmp" / capture.SCRATCH_PARENT).iterdir())
+        scratch = self.kept()[0]
         self.assertEqual((scratch / "plugin-present.txt").read_text(), "True")
 
     def test_harness_environment_is_minimal(self):
         rc, _, _ = self.run_cap("--yes", "--keep", "--steps", "shell")
-        scratch = next((self.base / "tmp" / capture.SCRATCH_PARENT).iterdir())
+        scratch = self.kept()[0]
         names = set((scratch / "env-names.txt").read_text().split())
         allowed = {"PATH", "HOME", "XDG_CONFIG_HOME", "LC_CTYPE"}   # LC_CTYPE: Python adds it itself in a C locale
         self.assertLessEqual(names, allowed)

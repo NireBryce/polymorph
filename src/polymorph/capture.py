@@ -35,7 +35,6 @@ from pathlib import Path
 from . import __version__, discover
 from .capture_drivers import DRIVERS, Driver, quoted
 
-SCRATCH_PARENT = "polymorph-capture"   # under the system temp dir; polymorph owns it
 DEFAULT_STEP_TIMEOUT = 120.0
 DEFAULT_TOTAL_TIMEOUT = 600.0
 SETTLE_SECONDS = 0.6   # loggers write after the harness exits: wait for the line count to stop moving
@@ -427,9 +426,9 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
 
 
 def _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr) -> int:
-    parent = Path(tempfile.gettempdir()) / SCRATCH_PARENT
-    parent.mkdir(mode=0o700, exist_ok=True)
-    scratch = Path(tempfile.mkdtemp(prefix=f"{driver.name}-", dir=parent)).resolve()
+    # mkdtemp makes a fresh 0700 directory with an unpredictable name directly in the system
+    # temp dir: no shared, guessable parent to pre-create, and nothing for concurrent runs to race on
+    scratch = Path(tempfile.mkdtemp(prefix=f"polymorph-capture-{driver.name}-")).resolve()
     keep = args.keep
     try:
         block = warning_block(driver, steps, scratch, args.full, args.step_timeout,
@@ -437,6 +436,7 @@ def _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr) -> 
         if args.yes:
             stdout.write(short_notice(driver, steps))
         elif not confirm(stdin, stdout, block):
+            keep = False   # nothing was run; the directory goes, so do not claim to keep it
             print("cancelled: nothing was run and no scratch directory was left. "
                   "`polymorph capture --print-prompts` prints a manual procedure; "
                   "`--steps` runs fewer steps.", file=stdout)
@@ -453,10 +453,6 @@ def _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr) -> 
                 print(f"kept scratch directory {scratch} (remove it yourself)", file=stderr)
             else:
                 shutil.rmtree(scratch, ignore_errors=True)
-                try:
-                    parent.rmdir()   # only succeeds when no other capture is using it
-                except OSError:
-                    pass
 
 
 def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:

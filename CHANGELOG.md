@@ -48,6 +48,9 @@ First state of the project. Python 3.11+, standard library only.
   longer killed at once (that killed the plugin's logger children before they wrote); the
   step waits, up to 10s, until the group is empty and the log has stopped growing. A timeout
   or a signal still kills it immediately.
+- **`capture` scratch directory:** made with `mkdtemp` directly in the system temp dir
+  (`polymorph-capture-NAME-XXXXXXXX`), no shared `/tmp/polymorph-capture` parent. Cancelling
+  with `--keep` no longer prints both "no scratch directory was left" and "kept scratch directory".
 - **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
   repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
   repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a

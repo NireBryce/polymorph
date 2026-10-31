@@ -133,7 +133,7 @@ polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-tim
 polymorph capture --print-prompts
 ```
 
-It makes a scratch directory under `<system temp>/polymorph-capture/`, installs the
+It makes a scratch directory as `<system temp>/polymorph-capture-NAME-XXXXXXXX` (a fresh mode-0700 directory), installs the
 discovery logger there through a driver, runs each step as a headless harness invocation with
 that directory as the working directory, then removes the logger and (unless `--keep`) the
 directory, also on an exception, a timeout, Ctrl-C (exit 130), SIGTERM (143) or SIGHUP (129). Drivers are code shipped with
@@ -153,7 +153,7 @@ Nothing read from a log, a mapping or a harness reply is used as a prompt or a c
 |---|---|
 | `--harness NAME` | Driver name. Required unless `--print-prompts`. |
 | `--yes` | Skip the question. The cost warning is still printed, as a short notice. With a non-interactive stdin and no `--yes`, the command refuses (exit 2). Pass it only knowing [what it costs](../README.md#cost-and-responsibility). |
-| `--keep` | Keep the scratch directory and print its path. |
+| `--keep` | Keep the scratch directory after a run and print its path. Answering no at the question keeps nothing. |
 | `--steps STEP ...` | Run only these steps. |
 | `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds. A timed-out step's process group is killed. |
 | `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty. |
