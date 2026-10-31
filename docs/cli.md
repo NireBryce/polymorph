@@ -155,8 +155,8 @@ Nothing read from a log, a mapping or a harness reply is used as a prompt or a c
 | `--yes` | Skip the question. The cost warning is still printed, as a short notice. With a non-interactive stdin and no `--yes`, the command refuses (exit 2). Pass it only knowing [what it costs](../README.md#cost-and-responsibility). |
 | `--keep` | Keep the scratch directory after a run and print its path. Answering no at the question keeps nothing. |
 | `--steps STEP ...` | Run only these steps. |
-| `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds. A timed-out step's process group is killed. |
-| `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty. |
+| `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds; each must be finite and above 0 (else exit 2). A timed-out step's process group is killed. |
+| `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty, and creatable and writable: checked before the first step (else exit 2). |
 | `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. |
 | `--print-prompts` | Print the [prompt kit](discovery.md#prompt-kit-for-a-harness-capture-has-no-driver-for) and exit 0, running nothing. |
 

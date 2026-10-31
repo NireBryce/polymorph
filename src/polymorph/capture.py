@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
+import math
 import os
 import shutil
 import signal
@@ -386,6 +387,20 @@ def interrupt_on_signals():
 
 # ---- main -------------------------------------------------------------------
 
+def _out_problem(out_dir: Path) -> str | None:
+    """Why `out_dir` cannot be created or written, found before any step spends tokens."""
+    existing = out_dir
+    while not existing.exists():
+        if existing.parent == existing:
+            break
+        existing = existing.parent
+    if not existing.is_dir():
+        return f"{existing} is not a directory"
+    if not os.access(existing, os.W_OK | os.X_OK):
+        return f"{existing} is not writable"
+    return None
+
+
 def run(args, stdin=None, stdout=None, stderr=None) -> int:
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
@@ -412,7 +427,16 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
     if shutil.which(driver.binary, path=env.get("PATH", "")) is None:
         print(f"polymorph capture: {driver.binary!r} is not on PATH", file=stderr)
         return 2
+    for flag, value in (("--step-timeout", args.step_timeout), ("--total-timeout", args.total_timeout)):
+        if not math.isfinite(value) or value <= 0:
+            print(f"polymorph capture: {flag} must be a finite number of seconds above 0, got {value!r}",
+                  file=stderr)
+            return 2
     out_dir = Path(args.out or f"polymorph-capture-{driver.name}").resolve()
+    problem = _out_problem(out_dir)
+    if problem:
+        print(f"polymorph capture: --out {out_dir}: {problem}", file=stderr)
+        return 2
     if out_dir.exists() and (not out_dir.is_dir() or any(out_dir.iterdir())):
         print(f"polymorph capture: {out_dir} exists and is not an empty directory", file=stderr)
         return 2

@@ -60,6 +60,12 @@ for name, inp in tools:
 '''
 
 
+def capture_main(argv):
+    out, err = io.StringIO(), io.StringIO()
+    rc = capture.main(argv, stdin=Pipe(""), stdout=out, stderr=err)
+    return rc, out.getvalue(), err.getvalue()
+
+
 class Tty(io.StringIO):
     def isatty(self):
         return True
@@ -317,6 +323,31 @@ class Running(CaptureCase):
         self.assertIn("blocked", err)
         self.assertIn("--print-prompts", err)
         self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
+
+    def test_unusable_out_exits_2_before_any_step(self):
+        (self.base / "afile").write_text("x")
+        cases = [str(self.base / "afile" / "sub")]
+        if os.geteuid() != 0:
+            (self.base / "ro").mkdir(mode=0o500)
+            self.addCleanup((self.base / "ro").chmod, 0o700)
+            cases.append(str(self.base / "ro" / "r"))
+        for out in cases:
+            with self.subTest(out=out):
+                rc, o, err = capture_main(["--harness", "opencode", "--yes", "--out", out])
+                self.assertEqual(rc, 2, o)
+                self.assertIn("--out", err)
+                self.assertEqual(self.calls(), [])
+                self.assert_clean()
+
+    def test_non_finite_or_non_positive_timeouts_exit_2(self):
+        for flag in ("--step-timeout", "--total-timeout"):
+            for bad in ("inf", "nan", "0", "-5"):
+                with self.subTest(flag=flag, value=bad):
+                    rc, o, err = self.run_cap("--yes", flag, bad)
+                    self.assertEqual(rc, 2, o)
+                    self.assertIn(flag, err)
+                    self.assertEqual(self.calls(), [])
+                    self.assert_clean()
 
     def test_existing_results_dir_not_overwritten(self):
         (self.base / "results" / "r").mkdir()

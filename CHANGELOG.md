@@ -51,6 +51,9 @@ First state of the project. Python 3.11+, standard library only.
 - **`capture` scratch directory:** made with `mkdtemp` directly in the system temp dir
   (`polymorph-capture-NAME-XXXXXXXX`), no shared `/tmp/polymorph-capture` parent. Cancelling
   with `--keep` no longer prints both "no scratch directory was left" and "kept scratch directory".
+- **`capture` argument checks:** `--out` that cannot be created or written, and a
+  `--step-timeout` or `--total-timeout` that is not finite and above 0, exit 2 before the
+  question and before any step runs.
 - **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
   repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
   repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a
