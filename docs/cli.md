@@ -136,7 +136,7 @@ polymorph capture --print-prompts
 It makes a scratch directory as `<system temp>/polymorph-capture-NAME-XXXXXXXX` (a fresh mode-0700 directory), installs the
 discovery logger there through a driver, runs each step as a headless harness invocation with
 that directory as the working directory, then removes the logger and (unless `--keep`) the
-directory, also on an exception, a timeout, Ctrl-C (exit 130), SIGTERM (143) or SIGHUP (129). Drivers are code shipped with
+directory, also on an exception, a timeout, Ctrl-C (exit 130), SIGTERM (143) or SIGHUP (129), including one that arrives during that cleanup. Drivers are code shipped with
 polymorph and chosen by name; an unknown name exits 2, lists the known drivers and points at
 `--print-prompts`.
 

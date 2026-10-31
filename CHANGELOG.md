@@ -43,7 +43,8 @@ First state of the project. Python 3.11+, standard library only.
   `--print-prompts` prints the manual prompt kit. README gains "Cost and responsibility".
 - **`capture` and signals:** SIGTERM and SIGHUP now run the same cleanup as Ctrl-C (kill the
   harness's process group, remove the scratch directory) and exit 143 and 129; the previous
-  handlers are restored afterwards.
+  handlers are restored afterwards. A signal that arrives during that cleanup no longer cuts
+  it short: the cleanup runs again to the end, and the exit status is the signal's.
 - **`capture` keeps late log lines:** when the harness exits by itself, its process group is no
   longer killed at once (that killed the plugin's logger children before they wrote); the
   step waits, up to 10s, until the group is empty and the log has stopped growing. A timeout
