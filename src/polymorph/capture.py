@@ -358,9 +358,10 @@ def interrupt_on_signals():
     """For the duration of the run, SIGTERM and SIGHUP raise `Interrupted` like Ctrl-C does.
 
     The harness runs in its own session, so nothing else would stop it when polymorph is
-    killed. Only the first signal raises: a second one during cleanup is ignored so cleanup
-    finishes. The previous handlers are restored afterwards. Off the main thread (where
-    signal handlers cannot be set) this does nothing.
+    killed. Only the first signal raises; a later one is ignored. If the first lands inside
+    the cleanup, `_run_confirmed` runs the cleanup again, and nothing can interrupt that pass.
+    The previous handlers are restored afterwards. Off the main thread (where signal handlers
+    cannot be set) this does nothing.
     """
     wanted = {signal.SIGINT: 130, signal.SIGTERM: 143, signal.SIGHUP: 129}
     fired = False
@@ -450,33 +451,54 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
 
 
 def _run_confirmed(args, driver, steps, env, out_dir, stdin, stdout, stderr) -> int:
+    state = {"scratch": None, "keep": args.keep, "said_kept": False}
+    try:
+        try:
+            return _confirm_and_capture(args, driver, steps, env, out_dir, stdin, stdout, stderr, state)
+        except KeyboardInterrupt as e:
+            print("interrupted; cleaning up", file=stderr)
+            return getattr(e, "code", 130)
+        finally:
+            _cleanup(driver, state, stderr)
+    except KeyboardInterrupt as e:
+        # The first signal landed in the `finally` cleanup above, which may have stopped part
+        # way. Only the first signal raises (interrupt_on_signals), so this pass runs to the end.
+        print("interrupted during cleanup; cleaning up", file=stderr)
+        _cleanup(driver, state, stderr)
+        return getattr(e, "code", 130)
+
+
+def _cleanup(driver, state, stderr) -> None:
+    """Remove the logger, then the scratch directory unless kept. Safe to run twice: each step
+    ignores what is already gone, and the 'kept' line prints once."""
+    scratch = state["scratch"]
+    if scratch is None:
+        return
+    try:
+        driver.remove(scratch)
+    finally:
+        if not state["keep"]:
+            shutil.rmtree(scratch, ignore_errors=True)
+        elif not state["said_kept"]:
+            state["said_kept"] = True
+            print(f"kept scratch directory {scratch} (remove it yourself)", file=stderr)
+
+
+def _confirm_and_capture(args, driver, steps, env, out_dir, stdin, stdout, stderr, state) -> int:
     # mkdtemp makes a fresh 0700 directory with an unpredictable name directly in the system
     # temp dir: no shared, guessable parent to pre-create, and nothing for concurrent runs to race on
-    scratch = Path(tempfile.mkdtemp(prefix=f"polymorph-capture-{driver.name}-")).resolve()
-    keep = args.keep
-    try:
-        block = warning_block(driver, steps, scratch, args.full, args.step_timeout,
-                              args.total_timeout, stdout)
-        if args.yes:
-            stdout.write(short_notice(driver, steps))
-        elif not confirm(stdin, stdout, block):
-            keep = False   # nothing was run; the directory goes, so do not claim to keep it
-            print("cancelled: nothing was run and no scratch directory was left. "
-                  "`polymorph capture --print-prompts` prints a manual procedure; "
-                  "`--steps` runs fewer steps.", file=stdout)
-            return 0
-        return _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr)
-    except KeyboardInterrupt as e:
-        print("interrupted; cleaning up", file=stderr)
-        return getattr(e, "code", 130)
-    finally:
-        try:
-            driver.remove(scratch)
-        finally:
-            if keep:
-                print(f"kept scratch directory {scratch} (remove it yourself)", file=stderr)
-            else:
-                shutil.rmtree(scratch, ignore_errors=True)
+    scratch = state["scratch"] = Path(tempfile.mkdtemp(prefix=f"polymorph-capture-{driver.name}-")).resolve()
+    block = warning_block(driver, steps, scratch, args.full, args.step_timeout,
+                          args.total_timeout, stdout)
+    if args.yes:
+        stdout.write(short_notice(driver, steps))
+    elif not confirm(stdin, stdout, block):
+        state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
+        print("cancelled: nothing was run and no scratch directory was left. "
+              "`polymorph capture --print-prompts` prints a manual procedure; "
+              "`--steps` runs fewer steps.", file=stdout)
+        return 0
+    return _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr)
 
 
 def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:

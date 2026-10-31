@@ -258,6 +258,26 @@ class Running(CaptureCase):
             os.kill(pid, 0)
         self.assert_clean()
 
+    def test_signal_inside_the_final_cleanup_still_removes_scratch(self):
+        # driver.remove runs twice on a normal run: after the steps, then in the final cleanup.
+        # SIGTERM is delivered from inside the second call, before it removes anything.
+        real = capture_drivers.OpenCodeDriver.remove
+        calls = []
+
+        def remove(drv, scratch):
+            calls.append(scratch)
+            if len(calls) == 2:
+                os.kill(os.getpid(), signal.SIGTERM)
+            real(drv, scratch)
+
+        with mock.patch.object(capture_drivers.OpenCodeDriver, "remove", remove):
+            rc, _, err = self.run_cap("--yes", "--steps", "shell")
+        self.assertEqual(rc, 143, err)
+        self.assertIn("interrupted during cleanup", err)
+        self.assertGreaterEqual(len(calls), 3, "cleanup was not run again")
+        self.assert_clean()
+        self.assertIs(signal.getsignal(signal.SIGTERM), signal.SIG_DFL)
+
     def test_logger_child_that_writes_after_the_harness_exits_is_not_lost(self):
         self.set_mode("late")
         rc, out, err = self.run_cap("--yes", "--steps", "shell")
