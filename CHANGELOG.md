@@ -32,6 +32,15 @@ First state of the project. Python 3.11+, standard library only.
 - **`discover`:** `init`, `log`, `summary`, `draft`, `reload-check`. Logs are redacted by
   default; `--full` and `--env-be-very-careful` are opt-ins. Drafts are unverified and
   built only from observed names.
+- **`capture`:** `polymorph capture --harness NAME` runs the discovery procedure itself:
+  scratch directory, logger installed by a shipped driver (`opencode`; `claude`, untested),
+  fixed steps through the harness's headless mode, then `summary.txt`, `draft.toml`,
+  `report.md` and `log.jsonl`, and cleanup. It spends tokens, so nothing runs without a typed
+  `yes` after a cost warning (`--yes` still prints a notice; a non-interactive stdin without it
+  refuses). The harness runs with `PATH`, `HOME` and `XDG_*` only. Acceptance for issue 16, as
+  met so far: the stub-harness tests cover confirmation, cancel, cleanup, timeouts, Ctrl-C,
+  scratch-only writes and the environment; it has not been run against a real harness.
+  `--print-prompts` prints the manual prompt kit. README gains "Cost and responsibility".
 - **`discover` event names:** names may contain `.`, `-` and `:` (OpenCode sends
   `execute.before`, `execute.after`, `session.created`); the draft guesses `pre_tool` and
   `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other

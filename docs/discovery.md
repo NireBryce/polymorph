@@ -7,7 +7,32 @@ what the harness actually sent. The draft is unverified and says so.
 Discovery needs a harness that runs command hooks from a JSON config file. If yours does
 not, use the self-report route at the end instead.
 
-Examples use a made-up harness `mytool` whose config is `.mytool/config.json`.
+## Fastest route: `polymorph capture`
+
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it.
+
+For a harness with a driver (`opencode`; `claude` is untested), one command does steps 1-4
+below by itself in a scratch directory it creates and deletes:
+
+```sh
+python -m polymorph capture --harness opencode
+```
+
+It shows the harness, the steps, the scratch directory and a cost warning, and runs nothing
+unless you type `yes` (`--yes` skips the question and still prints a notice; a
+non-interactive stdin without `--yes` refuses). It then runs the fixed steps (a trivial
+command; write, read and delete a file; a search; a background `sleep 2; echo done`) through
+the harness's headless mode, and writes `summary.txt`, `draft.toml`, `report.md` and
+`log.jsonl` to `polymorph-capture-NAME/`. `report.md` lists the tool calls taken from the
+redacted log, and the steps that produced no log line; it never contains the agent's own
+account. The draft is unverified: review it by hand ([new-mapping skill](../.agents/skills/new-mapping/SKILL.md)).
+Flags are in the [CLI reference](cli.md#capture). `capture` has not been run against any real
+harness yet; its tests use a stub harness.
+
+For any other harness, do the steps below by hand, or use the [prompt kit](#prompt-kit-for-a-harness-capture-has-no-driver-for).
+`polymorph capture --print-prompts` prints the kit.
+
+Examples below use a made-up harness `mytool` whose config is `.mytool/config.json`.
 
 ## 1. Install the logger
 
@@ -40,11 +65,8 @@ things. Aim for coverage, because the draft only contains what was seen:
   use each once,
 - start a fresh session, if you also ran `init` for the session-start event.
 
-A prompt you can paste:
-
-> Please do these in order and stop after the last: run `echo hello` in the shell; create
-> `scratch.txt` containing one line; change that line; read the file back; search the
-> directory for the word "hello".
+The fixed steps `polymorph capture` uses are in the [CLI reference](cli.md#capture); to drive an
+AI harness through them by hand, use the prompt kit below.
 
 Only the events you ran `init` for are logged. Run `init` again with
 `--event-name PostToolUse` (and the native session-start name) to see those payloads.
@@ -170,6 +192,8 @@ Rules:
 - Delete the log when you are done.
 
 ## Prompt kit (for a harness `capture` has no driver for)
+
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it.
 
 `polymorph capture --print-prompts` prints these. They are what a person pastes into an
 unknown harness by hand, one at a time, reading each answer before sending the next.

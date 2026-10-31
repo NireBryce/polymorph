@@ -22,4 +22,4 @@ polymorph = "polymorph.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-polymorph = ["mappings/*.toml", "fixtures/*/*.json"]
+polymorph = ["mappings/*.toml", "fixtures/*/*.json", "data/*.js"]

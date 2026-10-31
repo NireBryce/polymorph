@@ -37,6 +37,9 @@ def _parser() -> argparse.ArgumentParser:
     c = sub.add_parser("conformance", help="run fixtures against mappings")
     c.add_argument("--harness", default=None)
 
+    from .capture import build_parser as _capture_parser
+    _capture_parser(sub)
+
     d = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
     ds = d.add_subparsers(dest="dcmd", required=True)
     di = ds.add_parser("init", help="add a catch-all logger hook to a config, keeping the hooks already there")
@@ -139,6 +142,12 @@ def _cmd_generate(args) -> int:
     return 1 if (args.check and drift) else 0
 
 
+def _cmd_capture(args) -> int:
+    from . import capture
+
+    return capture.run(args)
+
+
 def _cmd_check(args) -> int:
     from . import check
 
@@ -192,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         raise
     handler = {
         "generate": _cmd_generate, "check": _cmd_check, "adapter": _cmd_adapter,
-        "validate": _cmd_validate, "discover": _cmd_discover, "conformance": _cmd_conformance,
+        "validate": _cmd_validate, "discover": _cmd_discover, "capture": _cmd_capture, "conformance": _cmd_conformance,
     }[args.cmd]
     try:
         return handler(args)

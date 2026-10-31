@@ -7,6 +7,8 @@ and are the most useful contribution right now.
 
 ## Reporting a harness
 
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](README.md#cost-and-responsibility) before running it. This applies to anyone running `polymorph capture` or asking an agent to run a capture for a report.
+
 The most wanted report is "here is how harness X's hooks actually behave". Open an issue
 with the **Harness report** form. What to include, and how to capture it with the discovery
 logger without leaking your files, is in [Discovery](docs/discovery.md#what-to-send). In

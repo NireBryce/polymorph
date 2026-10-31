@@ -8,6 +8,27 @@
 > consistent", not "the guards work". Interfaces and the mapping schema may change without
 > notice. Reports of problems are welcome.
 
+## Cost and responsibility
+
+`polymorph capture`, and any manual procedure that drives an AI coding harness (including
+the prompt kit in [Discovery](docs/discovery.md)), runs a real AI model on your account.
+
+- That spends tokens. If the harness is billed per token on an API key, it costs real
+  money. On a subscription plan it counts against the plan's usage limits and may be
+  billed as extra usage.
+- polymorph cannot tell which of these applies to you, and it cannot measure or cap the
+  cost. Each step may take several model turns, and the tool shows the number of steps, not
+  a price.
+- Tool calls are auto-approved inside a scratch directory the tool creates. The prompts
+  are fixed, but a model can misbehave regardless, and the scratch directory is a working
+  directory, not a sandbox.
+- You decide whether to run it. You are responsible for the cost and for checking your
+  provider's terms for use through third-party tools. Nothing runs unless you type `yes`
+  (or pass `--yes`, which you should do only knowing all of the above).
+- polymorph is experimental and unvetted and, as the Apache-2.0 licence says, is provided
+  without warranty. The maintainers accept no liability for charges, data loss or action
+  taken against an account.
+
 polymorph reads a repo's Claude Code agent config (`.agents/settings.json` and the hook
 scripts in `.agents/hooks/`) and writes the equivalent hook config for other coding
 harnesses, such as ZCode or Gemini CLI. What differs between harnesses (config file
@@ -87,6 +108,7 @@ disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
 | `validate` | Check one mapping file against schema 1. |
 | `conformance` | Replay the shipped fixtures through the adapter. |
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
+| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Spends tokens: see Cost and responsibility. |
 
 Every flag is in [CLI reference](docs/cli.md).
 

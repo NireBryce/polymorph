@@ -13,3 +13,4 @@ from pathlib import Path
 DATA_ROOT = Path(str(files("polymorph")))
 MAPPINGS_DIR = DATA_ROOT / "mappings"
 FIXTURES_DIR = DATA_ROOT / "fixtures"
+DATA_DIR = DATA_ROOT / "data"   # files `capture` installs into a scratch directory
