@@ -61,6 +61,8 @@ just docs            # skills listed, links resolve, every CLI subcommand docume
 just lint            # byte-compile, stdlib-only imports, no committed build output
 just preflight       # test + docs + lint + check: what CI runs
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
+just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)
+just ship-land PR    # merge pinned to the head, sync main --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
 ```
 
 `git add` a new file before `just check`: flakes ignore untracked files, so
@@ -82,6 +84,7 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
 | `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
+| `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
 | `wiki/agents-lessons-learned.md` | what past sessions got wrong, one line each, with its Home |

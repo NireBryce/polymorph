@@ -16,7 +16,7 @@ docs:
 
 # Byte-compile, stdlib-only imports, no committed build output
 lint:
-    python3 -m compileall -q src tests
+    python3 -m compileall -q src tests scripts
     python3 tests/lint.py
 
 # Everything CI runs
@@ -25,3 +25,11 @@ preflight: test docs lint check
 # Point git at .githooks (pre-commit runs docs and lint)
 install-hooks:
     git config core.hooksPath .githooks
+
+# Wait for CI on a PR's (or branch's) head commit; exit 0 only when it succeeded and the PR is CLEAN
+ci-wait *args:
+    python3 scripts/ci_wait.py {{args}}
+
+# Merge a green PR pinned to its head, sync main, delete the branch and its worktree (closes no issues)
+ship-land pr *args:
+    python3 scripts/ship_land.py {{pr}} {{args}}
