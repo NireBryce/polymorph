@@ -179,6 +179,15 @@ hook behaves; the coverage table says what the harness reads). A harness with no
 table is *unknown*: the report says so instead of claiming gaps. See
 [the CLI reference](cli.md#inventory).
 
+## The env contract
+
+A loadout includes how a session runs, not only which files exist: `polymorph env` turns
+host facts in `.polymorph/basecamp/env.toml` (the machine key's path, the sockets a
+session must not inherit, per-harness session markers) into shell exports, or runs a
+command under them. It is **emit-only** — the key is a path, never opened; nothing is
+written; no daemon. Harness names come from the host facts and the mappings, so the same
+contract works for any harness the repo equips. See [the CLI reference](cli.md#env).
+
 ## What polymorph stores in a repo
 
 ```

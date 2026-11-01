@@ -42,6 +42,10 @@ stays coherent. Until a slice lands, everything here describes a proposal.
   discover-and-report kinds; a kind the repo provides but the table does not
   cover is a gap. Not the mapping's `[capabilities]` flags, which say how a
   hook behaves.
+- **env contract** — the shell exports `polymorph env` emits from host facts
+  (`.polymorph/basecamp/env.toml`): the agent key by path, the sockets a
+  session must not inherit, the harness's session markers. Emit-only: the
+  key's contents are never read.
 - **equipped artifact** — anything polymorph writes or points at when
   equipping a harness, as opposed to files the repo's authors maintain by
   hand. Equipped artifacts record where they came from, so an edit made in

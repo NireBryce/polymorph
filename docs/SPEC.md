@@ -151,6 +151,21 @@ Hook scripts and `.agents/settings.json` are never moved: they stay where the ha
 reads them. adopt never edits a file through a symlink -- the store copy is the only one
 written -- and writes nothing outside the repository. Owner: `adopt.py`.
 
+## The env contract
+
+`.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path
+(and optional scope), the environment variable names a harness session must not inherit
+(`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1,
+closed-world like everything else. `polymorph env` emits the contract as shell exports
+(a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's
+exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the contract
+applied and exits with its status. A `--harness` name must appear in the host facts or
+resolve to a mapping.
+
+Emit-only: the key is referenced by path and its contents are never read, printed or
+moved; no file is written; there is no daemon. A missing harness section that a mapping
+backs is valid but emits no markers. Owner: `env.py`.
+
 ## Trust
 
 Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
@@ -169,6 +184,8 @@ polymorph inventory [--repo .] [--harness NAME ...] [--json]
                         # discover-and-report kinds and per-harness gaps; reads paths and symlink targets, never file contents
 polymorph adopt [--repo .] [--dry-run]
                         # moves agent files at rest into the basecamp store and symlinks back; refuses dirty trees and symlinks
+polymorph env [--repo .] [--harness NAME] [--exec CMD]
+                        # emits the env contract from host facts (.polymorph/basecamp/env.toml) as shell exports, or runs CMD under it; emit-only
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
