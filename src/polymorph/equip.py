@@ -62,17 +62,15 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
 
 
-def _posture(repo: Path) -> tuple[str, list[str]]:
+def _posture(repo: Path) -> str:
     """maintainer: the basecamp config is committed (artifacts are committed too).
 
     contributor: it is not (artifacts are regenerable and belong in .gitignore).
     """
     p = _git(repo, "ls-files", "--", ".polymorph/basecamp/config.toml")
     if p.returncode != 0:
-        return "unknown", []
-    if p.stdout.strip():
-        return "maintainer", []
-    return "contributor", [".zcode/config.json"]
+        return "unknown"
+    return "maintainer" if p.stdout.strip() else "contributor"
 
 
 def _loadout_lines(artifacts: list[Artifact]) -> str:
@@ -149,15 +147,14 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
     except Exception:
         result.env_lines = None
 
-    posture, suggested = _posture(repo)
-    result.posture = posture
-    if posture == "contributor" and (result.written or result.unchanged):
-        result.gitignore_suggested = suggested
+    result.posture = _posture(repo)
+    if result.posture == "contributor" and (result.written or result.unchanged):
+        result.gitignore_suggested = [r.path] if r.path else []
         if gitignore and not dry_run:
             gi = repo / ".gitignore"
             current = gi.read_text() if gi.is_file() else ""
             if GITIGNORE_MARK not in current:
-                block = GITIGNORE_MARK + "\n" + "\n".join(sorted(set(suggested))) + "\n"
+                block = GITIGNORE_MARK + "\n" + "\n".join(sorted(set(result.gitignore_suggested))) + "\n"
                 gi.write_text(current + ("\n" if current and not current.endswith("\n") else "") + block)
                 result.gitignore_appended = True
     return result

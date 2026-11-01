@@ -28,10 +28,18 @@ MAPPING = {
 TOML = """
 schema = 1
 name = "fake"
+config_path = ".fake/config.json"
+format = "json"
+template = "claude-settings"
+[events]
+pre_tool = "BeforeTool"
 [tools]
 shell = "run_shell"
 [capabilities]
 ask = false
+post_event = false
+exit_2_blocks = true
+rewrites_input = false
 json_answers = true
 [payload_in]
 tool_name = "tool"
@@ -181,3 +189,51 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFixTests(unittest.TestCase):
+    """The 2026-11-01 review fixes: usage errors and invalid mappings land in the
+    same visible NOT-checked path as every other fault, and the hook timeout is
+    plumbed instead of hard-coded."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.repo = Path(self.tmp.name).resolve()
+        (self.repo / ".agents" / "hooks").mkdir(parents=True)
+        (self.repo / ".polymorph" / "basecamp" / "mappings").mkdir(parents=True)
+        (self.repo / ".polymorph" / "basecamp" / "mappings" / "fake.toml").write_text(TOML)
+        slow = self.repo / ".agents" / "hooks" / "slow.sh"
+        slow.write_text("#!/bin/sh\nsleep 2\n")
+        slow.chmod(0o755)
+
+    def run_adapter(self, extra, payload="{}"):
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", "fake", "--repo", str(self.repo), *extra, "--", ".agents/hooks/slow.sh"],
+            stdin=io.StringIO(payload), stdout=out, stderr=err)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_usage_error_is_not_checked_never_exit_2(self):
+        code, out, err = self.run_adapter(["a.sh", "b.sh"])  # two scripts: a usage error
+        joined = out + err
+        self.assertNotEqual(code, 2, joined)
+        self.assertIn("NOT checked", joined)
+
+    def test_invalid_mapping_is_not_checked(self):
+        (self.repo / ".polymorph" / "basecamp" / "mappings" / "broken.toml").write_text(
+            'schema = 1\nname = "broken"\n[capabilities]\nask = "false"\n')
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", "broken", "--repo", str(self.repo), "--", ".agents/hooks/slow.sh"],
+            stdin=io.StringIO("{}"), stdout=out, stderr=err)
+        joined = out.getvalue() + err.getvalue()
+        self.assertNotEqual(code, 2, joined)
+        self.assertIn("invalid", joined)
+        self.assertIn("NOT checked", joined)
+
+    def test_timeout_flag_kills_a_slow_hook_into_not_checked(self):
+        code, out, err = self.run_adapter(["--timeout", "0.2"])
+        joined = out + err
+        self.assertNotEqual(code, 2, joined)
+        self.assertIn("NOT checked", joined)

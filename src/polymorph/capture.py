@@ -234,7 +234,7 @@ def tool_calls(log: Path) -> dict[str, dict]:
     """tool name -> {n, keys: {input key -> count}} from the log's tool events. Names and keys only."""
     if not log.exists():
         return {}
-    recs, _ = discover._load_records(log)
+    recs, _, _ = discover._load_records(log)
     sel, _ = discover._select(recs)
     table: dict[str, dict] = {}
     for _, rec in sel:
@@ -492,12 +492,18 @@ def _confirm_and_capture(args, driver, steps, env, out_dir, stdin, stdout, stder
                           args.total_timeout, stdout)
     if args.yes:
         stdout.write(short_notice(driver, steps))
-    elif not confirm(stdin, stdout, block):
-        state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
-        print("cancelled: nothing was run and no scratch directory was left. "
-              "`polymorph capture --print-prompts` prints a manual procedure; "
-              "`--steps` runs fewer steps.", file=stdout)
-        return 0
+    else:
+        try:
+            ok = confirm(stdin, stdout, block)
+        except KeyboardInterrupt:
+            state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
+            raise
+        if not ok:
+            state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
+            print("cancelled: nothing was run and no scratch directory was left. "
+                  "`polymorph capture --print-prompts` prints a manual procedure; "
+                  "`--steps` runs fewer steps.", file=stdout)
+            return 0
     return _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr)
 
 
@@ -523,7 +529,8 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
         driver.remove(scratch)   # the logger goes even if a step raised or was interrupted
     report = build_report(driver, version, results, log, args.full, started)
     write_results(out_dir, driver, log, report)
-    print(f"results: {out_dir} (summary.txt, draft.toml, report.md, log.jsonl)", file=stdout)
+    listed = "summary.txt, draft.toml, report.md" + (", log.jsonl" if log.exists() else "")
+    print(f"results: {out_dir} ({listed})", file=stdout)
     if args.full:
         print("WARNING: --full: log.jsonl holds raw commands and file contents; do not share it", file=stderr)
     bad = [r for r in results if r["status"] != "ok"]

@@ -42,9 +42,10 @@ def enabled_targets(repo: Path) -> list[str]:
     return list(data.get("enabled", []))
 
 
-def adapter_command(harness: str, script: str) -> str:
+def adapter_command(harness: str, script: str, timeout: int | None = None) -> str:
+    extra = f" --timeout {timeout}" if timeout is not None else ""
     return (
-        f'python -m polymorph adapter --harness {harness} -- '
+        f'python -m polymorph adapter --harness {harness}{extra} -- '
         f'"$CLAUDE_PROJECT_DIR/{script}"'
     )
 
@@ -54,10 +55,10 @@ def direct_command(script: str) -> str:
     return f'"$CLAUDE_PROJECT_DIR/{script}"'
 
 
-def hook_command(m: Mapping, script: str) -> str:
+def hook_command(m: Mapping, script: str, timeout: int | None = None) -> str:
     if m.delivery == "direct":
         return direct_command(script)
-    return adapter_command(m.name, script)
+    return adapter_command(m.name, script, timeout)
 
 
 def _matcher(h: Hook, m: Mapping) -> tuple[str | None, list[str]]:
@@ -172,7 +173,7 @@ def _claude_shape(canon: Canon, m: Mapping, existing: dict, wrapped: bool,
                 drop = True
         if drop or native is None:
             continue
-        entry: dict = {"type": "command", "command": hook_command(m, h.script)}
+        entry: dict = {"type": "command", "command": hook_command(m, h.script, h.timeout)}
         if wrapped:
             entry["enabled"] = True
         if h.timeout is not None:

@@ -39,6 +39,7 @@ CODES = {
     "fixtures-missing": ("warning", "A built-in mapping has no conformance fixtures."),
     "fixtures-skipped": ("note", "Fixtures are not checked for a repo-local mapping."),
     "fixture-failed": ("error", "A conformance fixture does not pass."),
+    "mapping-override": ("note", "A repo-local mapping overrides a built-in of the same name."),
 }
 
 
@@ -134,7 +135,8 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
 
     for name in names:
         try:
-            m = load_mapping(name, repo, warn=lambda msg: None)
+            m = load_mapping(name, repo,
+                             warn=lambda msg: findings.append(_f("mapping-override", name, msg)))
         except MappingError as e:
             findings.append(_f("mapping-invalid", name, str(e)))
             continue

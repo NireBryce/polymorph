@@ -37,6 +37,16 @@ saying "done".
 - **Public text** that narrates what could slip past a guard instead of
   stating what it enforces.
 
+## Whole-repo sweeps
+
+For a review of the whole tool rather than one change: two read-only subagents sweep
+disjoint module groups (the big unglamorous ones -- discover, capture -- are their own
+group), each with the checklist above in its prompt, asked for file:line findings with
+a concrete trigger and a confidence. Every finding is verified with a failing test
+before the fix; design-level items become issues instead of changes, because they need
+a contract decision. The 2026-11-01 sweep (redaction holes, the adapter's usage-error
+exit, the hard-coded hook timeout) is the worked example.
+
 ## Saying the outcome
 
 "Unit tests pass", "ran the CLI" and "ran in a live harness" are different

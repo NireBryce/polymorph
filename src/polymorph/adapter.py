@@ -155,6 +155,8 @@ _NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: list[Path] = ()) -> dict:
+    from .validate import validate_mapping
+
     if not _NAME.fullmatch(name):
         raise AdapterError(f"bad harness name {name!r}")
     dirs = [repo / ".polymorph" / "basecamp" / "mappings", MAPPINGS_DIR]
@@ -167,19 +169,27 @@ def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: li
         f = d / f"{name}.toml"
         if f.is_file():
             with open(f, "rb") as fh:
-                return tomllib.load(fh)
+                raw = tomllib.load(fh)
+            errs = validate_mapping(raw)
+            if errs:
+                # an invalid mapping must be a visible NOT-checked, never a silently
+                # mis-wired guard: validation here is the runtime trust boundary
+                raise AdapterError(f"mapping {name} is invalid: {'; '.join(errs)}")
+            return raw
     raise AdapterError(f"no mapping {name}.toml found")
 
 
-def run_hook(script: Path, canonical: dict, env_extra: dict, cwd: Path) -> subprocess.CompletedProcess:
+def run_hook(script: Path, canonical: dict, env_extra: dict, cwd: Path,
+             timeout: float = HOOK_TIMEOUT) -> subprocess.CompletedProcess:
     env = {**os.environ, **env_extra}
     return subprocess.run(
         [str(script)], input=json.dumps(canonical), capture_output=True, text=True,
-        env=env, cwd=cwd, timeout=HOOK_TIMEOUT,
+        env=env, cwd=cwd, timeout=timeout,
     )
 
 
-def adapt(mapping: dict, repo: Path, script: str, stdin_text: str) -> dict:
+def adapt(mapping: dict, repo: Path, script: str, stdin_text: str,
+          timeout: float = HOOK_TIMEOUT) -> dict:
     real = resolve_script(repo, script)
     try:
         native = json.loads(stdin_text)
@@ -187,7 +197,7 @@ def adapt(mapping: dict, repo: Path, script: str, stdin_text: str) -> dict:
         raise AdapterError(f"native payload is not valid JSON: {e}") from e
     canonical = translate_in(mapping, native)
     try:
-        cp = run_hook(real, canonical, capability_env(mapping), repo)
+        cp = run_hook(real, canonical, capability_env(mapping), repo, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise AdapterError(f"hook could not run: {e}") from e
     if cp.returncode == 2:
@@ -214,14 +224,23 @@ def run_adapter(argv: list[str] | None = None, stdin=None, stdout=None, stderr=N
     ap.add_argument("--mappings", type=Path)
     ap.add_argument("--trust-dir", type=Path, action="append", default=[])
     ap.add_argument("--repo", type=Path)
+    ap.add_argument("--timeout", type=float, default=HOOK_TIMEOUT,
+                    help="seconds before the hook is killed (a killed hook is NOT checked, never a deny)")
     ap.add_argument("script", help="hook script (after --)")
-    args = ap.parse_args(argv)
     stdin, stdout, stderr = stdin or sys.stdin, stdout or sys.stdout, stderr or sys.stderr
     mapping = None
     try:
+        try:
+            args = ap.parse_args(argv)
+        except SystemExit as e:
+            # a usage error must land in the same visible NOT-checked path as every other
+            # fault: on a harness that reads exit 2 as deny, argparse's exit 2 would deny
+            raise AdapterError(f"usage error ({e.code})") from None
+        if not (args.timeout > 0) or args.timeout in (float("inf"), float("nan")):
+            raise AdapterError("--timeout must be finite and above 0")
         repo = (args.repo or find_repo(Path.cwd())).resolve()
         mapping = load_mapping(repo, args.harness, args.mappings, args.trust_dir)
-        result = adapt(mapping, repo, args.script, stdin.read())
+        result = adapt(mapping, repo, args.script, stdin.read(), timeout=args.timeout)
     except AdapterError as e:
         result = not_checked(mapping, str(e))
     except Exception as e:  # any fault: still visible, still never a deny

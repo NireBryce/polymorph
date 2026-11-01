@@ -1,8 +1,10 @@
 import copy
 import json
 import sys
+import tempfile
 import tomllib
 import unittest
+from pathlib import Path
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "polymorph"
@@ -102,3 +104,70 @@ class RunFixturesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SyntheticFixtureTests(unittest.TestCase):
+    """stderr comparison and null-answer verification, pinned with a synthetic fixture."""
+
+    MAPPING = '''schema = 1
+name = "synth"
+config_path = ".synth/config.json"
+format = "json"
+template = "claude-settings"
+[events]
+pre_tool = "PreToolUse"
+[tools]
+shell = "Bash"
+[capabilities]
+ask = true
+post_event = true
+exit_2_blocks = true
+rewrites_input = false
+json_answers = true
+[payload_in]
+tool_name = "tool_name"
+"shell.command" = "tool_input.command"
+[payload_out]
+deny = { exit = 2, stderr = "{reason}" }
+'''
+
+    def write_root(self, fixture: dict) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "mappings").mkdir()
+        (root / "mappings" / "synth.toml").write_text(self.MAPPING)
+        (root / "fixtures" / "synth").mkdir(parents=True)
+        (root / "fixtures" / "synth" / "case.json").write_text(json.dumps(fixture))
+        return root
+
+    @staticmethod
+    def deny_fixture(stderr_declared: bool) -> dict:
+        out = {"exit": 2, "stdout": ""}
+        if stderr_declared:
+            out["stderr"] = "would discard changes"
+        return {
+            "native_in": {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}},
+            "canonical_in": {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}},
+            "hook_answer": {"hookSpecificOutput": {"permissionDecision": "deny",
+                                                   "permissionDecisionReason": "would discard changes"}},
+            "native_out": out,
+        }
+
+    def test_stderr_is_verified(self):
+        passed, failures = conformance.run_fixtures(harness="synth", root=self.write_root(self.deny_fixture(True)))
+        self.assertEqual((passed, failures), (1, []))
+        bad = self.deny_fixture(True)
+        bad["native_out"]["stderr"] = "different"
+        _, failures = conformance.run_fixtures(harness="synth", root=self.write_root(bad))
+        self.assertTrue(any("stderr" in f for f in failures), failures)
+
+    def test_null_answer_fixture_is_verified(self):
+        fixture = self.deny_fixture(False)
+        fixture["hook_answer"] = None
+        fixture["native_out"] = {"exit": 0, "stdout": ""}
+        passed, failures = conformance.run_fixtures(harness="synth", root=self.write_root(fixture))
+        self.assertEqual((passed, failures), (1, []))
+        fixture["native_out"] = {"exit": 1, "stdout": ""}
+        _, failures = conformance.run_fixtures(harness="synth", root=self.write_root(fixture))
+        self.assertTrue(any("exit" in f for f in failures), failures)
