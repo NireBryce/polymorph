@@ -27,7 +27,9 @@ loadout manager (its role), onboarding run, gap report — is fixed in
   mapping can fail open. Say what a change breaks, since nothing here
   promises compatibility.
 - **"push" means skill `ship`**: branch, PR, one confirmation covering
-  merge and branch deletion. Never push to `main` directly.
+  merge and branch deletion. Work lands on `experimental` by default;
+  `main` takes stabilized updates from it, by PR, once stable. Neither
+  branch takes a direct push.
 - **Branching work happens in its own worktree** (skill `use-a-worktree`).
 - **File issues and PRs only in `NireBryce/polymorph`**, unless the user
   names another project in their own message (skill `propose-issue`).
