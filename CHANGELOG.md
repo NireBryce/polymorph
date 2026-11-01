@@ -108,3 +108,7 @@ First state of the project. Python 3.11+, standard library only.
   emits them, `--exec CMD` runs CMD under them and exits with its status. Emit-only: the
   key is referenced by path, its contents are never read; nothing is written; no daemon.
   Harness names come from the host facts and the mappings, never a hardcoded list.
+- **Docs:** `docs/observed-zcode-session.md` — what the author's own live ZCode 3.16.2
+  session showed (session markers, no inherited agent socket, AGENTS.md ingestion,
+  skills loading through the basecamp-store symlink), claims kept apart by how they
+  were observed; the zcode coverage table's basis note cites it.
