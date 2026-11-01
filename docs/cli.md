@@ -17,7 +17,7 @@ Writes each target's config file from `.agents/settings.json`.
 | Flag | Meaning |
 |---|---|
 | `--repo PATH` | Repo root. Default `.`. |
-| `--harness NAME` | Target; repeatable. Default: `enabled` in `.agents/polymorph/config.toml`. With neither, prints `no targets: ...` and exits 2. |
+| `--harness NAME` | Target; repeatable. Default: `enabled` in `.polymorph/basecamp/config.toml`. With neither, prints `no targets: ...` and exits 2. |
 | `--check` | Write nothing. Exit 1 if any generated file differs from what is on disk (a missing file is drift). |
 | `--mappings DIR` | Read mappings from DIR instead of the usual lookup. DIR must be the repo's mapping folder, the built-in one, or trusted. |
 | `--trust-dir DIR` | Allow `--mappings DIR`. Repeatable. |
@@ -35,7 +35,7 @@ lines:
 **Decisions.** When a target lacks an event (`no-event`), a tool class (`no-tool-class`) or a
 payload field (`missing-field`) that a hook needs, `generate` writes nothing for that target,
 prints one `question:` block per item (id, hook, problem, options, default `skip`) and exits
-`3` after handling the other targets. Answer in `.agents/polymorph/decisions/NAME.toml` and
+`3` after handling the other targets. Answer in `.polymorph/basecamp/decisions/NAME.toml` and
 run again; it never prompts. `--check` also exits 3 for undecided items. Format and choices:
 [SPEC, Decisions](SPEC.md#decisions).
 

@@ -12,7 +12,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
 | conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
-| report | `.agents/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
+| report | `.polymorph/basecamp/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
 
@@ -114,7 +114,7 @@ the adapter.
 ## Repo layout (everything polymorph stores in a repo)
 
 ```
-.agents/polymorph/
+.polymorph/basecamp/
   config.toml          # enabled = ["zcode", ...]  (targets to generate)
   mappings/NAME.toml   # repo-local mapping; overrides a built-in of the same name, with a warning
   decisions/NAME.toml  # answers to generation-time mismatches; see "Decisions"
@@ -130,7 +130,7 @@ raw log is not one `git add` away from being committed.
 
 Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
-mappings from outside the repo's `.agents/polymorph/mappings/` or the built-in `src/polymorph/mappings/`.
+mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in `src/polymorph/mappings/`.
 
 ## CLI
 
@@ -173,7 +173,7 @@ decision file), 3 undecided mismatches.
 
 When a target harness has more or fewer fields or events than a hook needs, `generate` does
 not guess and does not drop the hook silently. Each mismatch is *undecided* until
-`.agents/polymorph/decisions/NAME.toml` answers it. The file is data: validated, never executed.
+`.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
 
 ```toml
 schema = 1
@@ -209,7 +209,7 @@ Undecided means: `generate` writes nothing for that target, prints each item as 
     problem: <what the target lacks>
     options: <choice> | <choice>
     default: skip
-    answer:  in .agents/polymorph/decisions/NAME.toml add [decisions."<id>"] with choice = ..., date = ...
+    answer:  in .polymorph/basecamp/decisions/NAME.toml add [decisions."<id>"] with choice = ..., date = ...
 ```
 
 and exits 3. Other targets are still written. polymorph never prompts; an agent relays the

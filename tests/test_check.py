@@ -39,7 +39,7 @@ class CheckTest(unittest.TestCase):
         self.repo = Path(self._tmp.name) / "repo"
         shutil.copytree(FIXTURE, self.repo)
         # use the built-in (verified, fixture-backed) zcode mapping
-        shutil.rmtree(self.repo / ".agents/polymorph/mappings")
+        shutil.rmtree(self.repo / ".polymorph/basecamp/mappings")
         generate(self.repo)
 
     def codes(self, **kw):
@@ -53,7 +53,7 @@ class CheckTest(unittest.TestCase):
         self.assertIn("0 error(s), 0 warning(s)", out)
 
     def test_no_targets(self):
-        (self.repo / ".agents/polymorph/config.toml").unlink()
+        (self.repo / ".polymorph/basecamp/config.toml").unlink()
         rc, out = run("--repo", str(self.repo))
         self.assertEqual(rc, 1)
         self.assertIn("no-targets", out)
@@ -69,7 +69,7 @@ class CheckTest(unittest.TestCase):
                 skip = line.strip() == f"[{table}]"
             if not skip:
                 keep.append(line)
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir(exist_ok=True)
         (d / "zcode.toml").write_text("\n".join(keep) + "\n")
         return d / "zcode.toml"
@@ -94,13 +94,13 @@ class CheckTest(unittest.TestCase):
                 self.assertTrue(fs, "check accepted it")
 
     def test_mapping_unloadable(self):
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir()
         (d / "zcode.toml").write_text("not = [toml")
         self.assertIn("mapping-invalid", self.codes())
 
     def test_unverified_warning_and_strict(self):
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir()
         text = (Path(check.BUILTIN_DIR) / "zcode.toml").read_text()
         text = "\n".join(l for l in text.splitlines() if not l.startswith("verified"))
@@ -134,9 +134,9 @@ class CheckTest(unittest.TestCase):
         self.assertIn("settings-invalid", self.codes())
 
     def test_undecided_mismatch(self):
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir()
-        shutil.copy(FIXTURE / ".agents/polymorph/mappings/nopost.toml", d)
+        shutil.copy(FIXTURE / ".polymorph/basecamp/mappings/nopost.toml", d)
         fs = check.run_check(self.repo, harnesses=["nopost"])
         gaps = [f for f in fs if f.code == "decision-undecided"]
         self.assertTrue(gaps)
@@ -170,7 +170,7 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(fs and fs[0].severity == "error")
 
     def test_local_mapping_fixtures_skipped_with_note(self):
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir()
         shutil.copy(Path(check.BUILTIN_DIR) / "zcode.toml", d)
         fs = check.run_check(self.repo)

@@ -2,7 +2,7 @@
 
 When a target harness lacks an event, a tool class or a payload field that a hook needs,
 `generate` neither guesses nor drops the hook silently: the item is *undecided* until
-`.agents/polymorph/decisions/NAME.toml` answers it. The file is data, validated here and
+`.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data, validated here and
 never executed.
 """
 
@@ -14,7 +14,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-DECISIONS_DIR = ".agents/polymorph/decisions"
+DECISIONS_DIR = ".polymorph/basecamp/decisions"
 SCHEMA = 1
 
 # kind -> allowed choices ("substitute" takes ":<native event>")

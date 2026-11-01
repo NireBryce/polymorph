@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: polymorph version or commit
-      description: The commit hash (`git rev-parse HEAD`) or the release you installed.
+      description: The commit hash (`git rev-parse HEAD`) or the release you installed, and the Python version.
     validations:
       required: true
   - type: input
@@ -22,6 +22,7 @@ body:
     id: rung
     attributes:
       label: How far did you see it?
+      description: The repo's rungs, from weakest to strongest evidence: unit tests, a polymorph command whose output you read, a live harness session. "Docs are wrong" covers a report where nothing was run.
       options:
         - unit test or fixture replay
         - ran a polymorph command and read the output
@@ -32,7 +33,13 @@ body:
   - type: textarea
     id: what
     attributes:
-      label: What happened vs what you expected
-      description: The command, its output, and what should have happened.
+      label: What happened vs what was expected
+      description: Actual behavior, expected behavior, and the exact command that shows it.
     validations:
       required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Command output
+      description: The full output of the command that shows it, plus a minimal `.agents/settings.json` and mapping that reproduce it. Redact anything secret-shaped.
+      render: shell

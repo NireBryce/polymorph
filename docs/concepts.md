@@ -57,9 +57,9 @@ do, how its payloads are laid out and how its answers must look. Field by field 
 
 Where mappings are looked up, in order:
 
-1. `--mappings DIR`, only if DIR is the repo's `.agents/polymorph/mappings`, the built-in
+1. `--mappings DIR`, only if DIR is the repo's `.polymorph/basecamp/mappings`, the built-in
    `mappings/`, or listed with `--trust-dir`. Otherwise it is refused.
-2. The repo's `.agents/polymorph/mappings/NAME.toml`. If a built-in of the same name
+2. The repo's `.polymorph/basecamp/mappings/NAME.toml`. If a built-in of the same name
    exists, the repo one wins and a warning is printed.
 3. The built-in `src/polymorph/mappings/NAME.toml` shipped with polymorph.
 
@@ -158,7 +158,7 @@ scripts themselves are safe, or that a guard cannot be bypassed.
 Harnesses differ: one may have no post-tool event, no tool for a class, or no payload field
 a hook reads. polymorph does not guess a substitute and does not drop the hook quietly.
 `generate` stops for that target (exit 3), writes nothing for it, and prints each item as a
-question with its options. The answer goes in `.agents/polymorph/decisions/NAME.toml`, keyed
+question with its options. The answer goes in `.polymorph/basecamp/decisions/NAME.toml`, keyed
 by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a choice you
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
 event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
@@ -166,7 +166,7 @@ event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.
 ## What polymorph stores in a repo
 
 ```
-.agents/polymorph/
+.polymorph/basecamp/
   config.toml          enabled = ["zcode", ...]
   mappings/NAME.toml   repo-local mapping; overrides a built-in of the same name, with a warning
   decisions/NAME.toml  answers to generation-time mismatches (see below)

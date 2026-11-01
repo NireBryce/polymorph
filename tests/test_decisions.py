@@ -36,14 +36,14 @@ class Base(unittest.TestCase):
                            hook("Read", "read-guard.sh")],
             "PostToolUse": [hook("Edit", "post-edit.sh")],
         }}))
-        (self.repo / ".agents/polymorph").mkdir()
-        (self.repo / ".agents/polymorph/config.toml").write_text('enabled = ["gemini"]\n')
+        (self.repo / ".polymorph/basecamp").mkdir(parents=True)
+        (self.repo / ".polymorph/basecamp/config.toml").write_text('enabled = ["gemini"]\n')
 
     def drop_post_event(self):
         """gemini ships an AfterTool event; a repo-local copy without it makes `no-event` reachable."""
         text = (BUILTIN_DIR / "gemini.toml").read_text()
         self.assertIn('post_tool = "AfterTool"\n', text)
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir()
         (d / "gemini.toml").write_text(text.replace('post_tool = "AfterTool"\n', ""))
 
@@ -51,7 +51,7 @@ class Base(unittest.TestCase):
         lines = ["schema = 1", ""]
         for did, (choice, extra) in entries.items():
             lines += [f'[decisions."{did.replace("__", ":")}"]', f'choice = "{choice}"', 'date = "2026-10-30"', *extra, ""]
-        d = self.repo / ".agents/polymorph/decisions"
+        d = self.repo / ".polymorph/basecamp/decisions"
         d.mkdir(exist_ok=True)
         (d / "gemini.toml").write_text("\n".join(lines))
 
@@ -104,7 +104,7 @@ class UndecidedTests(Base):
         self.assertEqual(self.gen("--check")[0], 3)
 
     def test_one_target_undecided_other_still_written(self):
-        (self.repo / ".agents/polymorph/config.toml").write_text('enabled = ["gemini", "zcode"]\n')
+        (self.repo / ".polymorph/basecamp/config.toml").write_text('enabled = ["gemini", "zcode"]\n')
         (self.repo / ".agents/settings.json").write_text(json.dumps({"hooks": {
             "PreToolUse": [hook("Bash", "shell-guard.sh"), hook("Read", "read-guard.sh")]}}))
         rc, out, _ = self.gen()
@@ -175,7 +175,7 @@ class DecidedTests(Base):
 
 class InvalidTests(Base):
     def write(self, text):
-        d = self.repo / ".agents/polymorph/decisions"
+        d = self.repo / ".polymorph/basecamp/decisions"
         d.mkdir(exist_ok=True)
         (d / "gemini.toml").write_text(text)
 

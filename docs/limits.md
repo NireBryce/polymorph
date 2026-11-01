@@ -89,9 +89,18 @@ covered.
 - `context_file` and `skills_dir` are recorded and validated but nothing uses them yet.
 - Hooks must be a single bare script path; commands with arguments are refused.
 
+### Built-in memory
+
+polymorph's output — and the loadouts the [loadout pivot plan](plan-loadout-pivot.md)
+proposes: sets of initial conditions meant to be loaded at every agent launch — is
+as-yet untested on agents whose harness has a built-in memory that persists across
+launches, and it probably never will be tested. Loading the same conditions at every
+launch can make such a memory accumulate, duplicate or contradict them, so the
+combination may cause adverse effects.
+
 **Not built**
 
-- `.agents/polymorph/decisions/` and `generated/`, code-generating targets, plugin
+- `.polymorph/basecamp/decisions/` and `generated/`, code-generating targets, plugin
   packaging, and capability or timing notes beyond what payloads show.
 - Only a Claude Code reader exists. Canonical config comes from `.agents/settings.json`.
 

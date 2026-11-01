@@ -124,7 +124,7 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
         raise ValueError(f"cannot read enabled targets: {e}") from e
     if not names:
         return [_f("no-targets", None, "nothing enabled: pass --harness or list targets in "
-                   ".agents/polymorph/config.toml")]
+                   ".polymorph/basecamp/config.toml")]
 
     findings += check_hook_scripts(repo)
     try:

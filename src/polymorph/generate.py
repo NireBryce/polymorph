@@ -12,8 +12,8 @@ from .decisions import Applied, Decision, DecisionError, Mismatch, load_decision
 from .mapping import Mapping, load_mapping
 from .reader_claude import read_claude
 
-ENABLED_FILE = ".agents/polymorph/config.toml"
-DECISIONS_FILE_FMT = ".agents/polymorph/decisions/{}.toml"
+ENABLED_FILE = ".polymorph/basecamp/config.toml"
+DECISIONS_FILE_FMT = ".polymorph/basecamp/decisions/{}.toml"
 
 
 @dataclass
