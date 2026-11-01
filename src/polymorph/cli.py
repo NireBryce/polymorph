@@ -45,6 +45,12 @@ def _parser() -> argparse.ArgumentParser:
     d.add_argument("--repo", default=".")
     d.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
 
+    e = sub.add_parser("env", help="emit the env contract from .polymorph/basecamp/env.toml, or run a command under it")
+    e.add_argument("--repo", default=".")
+    e.add_argument("--harness", default=None, metavar="NAME", help="harness whose session markers to emit")
+    e.add_argument("--exec", dest="exec_cmd", default=None, metavar="CMD",
+                   help="run CMD under sh -c with the contract applied, and exit with its status")
+
     c = sub.add_parser("conformance", help="run fixtures against mappings")
     c.add_argument("--harness", default=None)
 
@@ -220,6 +226,21 @@ def _cmd_adopt(args) -> int:
     return 1 if r.refused else 0
 
 
+def _cmd_env(args) -> int:
+    from .env import contract_lines, load_env, run_exec
+
+    if args.exec_cmd is not None:
+        return run_exec(args.repo, args.harness, args.exec_cmd)
+    facts = load_env(args.repo)
+    if args.harness is not None and args.harness not in facts.harness:
+        from .env import _harness_known
+
+        if not _harness_known(Path(args.repo), args.harness, facts):
+            raise ValueError(f"unknown harness {args.harness!r}: no [harness.{args.harness}] in env.toml and no mapping")
+    print("\n".join(contract_lines(facts, args.harness)))
+    return 0
+
+
 def _cmd_check(args) -> int:
     from . import check
 
@@ -275,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         "generate": _cmd_generate, "check": _cmd_check, "adapter": _cmd_adapter,
         "validate": _cmd_validate, "discover": _cmd_discover, "capture": _cmd_capture,
         "conformance": _cmd_conformance, "inventory": _cmd_inventory, "adopt": _cmd_adopt,
+        "env": _cmd_env,
     }[args.cmd]
     try:
         return handler(args)

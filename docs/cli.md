@@ -135,6 +135,50 @@ repo is a no-op. `--dry-run` reports without writing. adopt writes nothing outsi
 repository and never edits a file through a symlink: the store copy is the only one
 written.
 
+## `env`
+
+```
+polymorph env [--repo .] [--harness NAME] [--exec CMD]
+```
+
+Emits the **env contract** — shell exports a harness session should run under — from the
+host facts in `.polymorph/basecamp/env.toml`, or runs CMD under it. **Emit-only**: the
+agent key is referenced by path and its contents are never read, printed or moved;
+nothing is written anywhere; there is no daemon. The output is valid shell, safe to
+`eval`.
+
+Host facts (all sections optional, unknown keys are errors):
+
+```toml
+schema = 1
+
+[key]                    # the machine's agent key
+path = "~/.ssh/agent_key"  # rendered path; echoed, never opened
+scope = "repos/ORG/*"    # optional free text, echoed in the info line
+
+[vault]                  # sockets a harness session must not inherit
+unset = ["SSH_AUTH_SOCK"]
+
+[harness.NAME]           # per-harness session markers
+exports = ["POLYMORPH_HARNESS=NAME"]
+```
+
+Emission, in order: a comment header; `# agent key: PATH (scope: ...)`; `unset` of the
+vault names; `export GIT_SSH_COMMAND='ssh -i PATH -o IdentitiesOnly=yes'`; the harness's
+exports (values shell-quoted). Without `--harness`, the base contract only (no session
+markers). A `--harness` name must have a `[harness.NAME]` section or a mapping — the
+contract keys off harness names from the host facts and the mappings, never a hardcoded
+list.
+
+| Flag | Meaning |
+|---|---|
+| `--repo PATH` | Repo root. Default `.`. |
+| `--harness NAME` | Emit that harness's session markers; also validated against host facts and mappings. |
+| `--exec CMD` | Run CMD under `sh -c` with the contract applied to the environment (vault names removed, exports set), and exit with its status. |
+
+env.toml holds **machine facts**: if the repo is shared across machines, keep it out of
+git yourself — polymorph never edits `.gitignore`.
+
 ## `adapter`
 
 ```

@@ -102,3 +102,9 @@ First state of the project. Python 3.11+, standard library only.
   symlink, uncommitted changes (git status; a non-git directory refuses everything) and a
   store copy that already exists beside the at-rest file; a second run is a no-op; hook
   scripts and `.agents/settings.json` are never moved.
+- **`env`, the env contract:** host facts in `.polymorph/basecamp/env.toml` (the machine
+  key's rendered path and scope, the vault-socket names a session must not inherit,
+  per-harness session markers) become shell exports — `polymorph env [--harness NAME]`
+  emits them, `--exec CMD` runs CMD under them and exits with its status. Emit-only: the
+  key is referenced by path, its contents are never read; nothing is written; no daemon.
+  Harness names come from the host facts and the mappings, never a hardcoded list.
