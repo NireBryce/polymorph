@@ -86,6 +86,55 @@ If a hook command is rejected, checks derived from the config (decisions, unmapp
 skipped for that run. `mapping-untested-live` is a note, so even `--strict` never makes it
 fail: it is a standing reminder, not a result.
 
+## `inventory`
+
+```
+polymorph inventory [--repo .] [--harness NAME ...] [--json]
+```
+
+The discover-and-report half of the loadout: what the repo provides for each
+non-transliterate kind — skills (`.agents/skills/`), rules (`.claude/rules/`,
+`.agents/rules/`), memory (`AGENTS.md`, `CLAUDE.md`) and the entries of `.claude/` — then
+each harness's gap report. It reads directory structure and symlink targets only; file
+contents are never opened. Every found path is reported, including a skill directory with
+no `SKILL.md`.
+
+| Flag | Meaning |
+|---|---|
+| `--repo PATH` | Repo root. Default `.`. |
+| `--harness NAME` | Report only this harness's gaps. Repeatable. Default: every coverage table found. |
+| `--json` | `{"inventory": {kind: [{"path", "target"}...]}, "gaps": [{"harness", "kind", "path"}...]}`. |
+
+What a harness honours comes from its **coverage table**, `coverage/NAME.toml` — shipped
+beside the mappings, overridable at `.polymorph/basecamp/coverage/NAME.toml` (with a
+warning, like mappings). It is not the mapping's `[capabilities]` flags: those say how a
+hook behaves; the coverage table says what the harness reads. A harness with no coverage
+table prints `no coverage table; nothing is known` — absence is unknown, never a gap. A
+symlinked path reports its resolved target, so a basecamp store shows through. Gap lines
+do not fail the run: the report is information, not a check.
+
+## `adopt`
+
+```
+polymorph adopt [--repo .] [--dry-run]
+```
+
+Moves a repo's agent files at rest into the basecamp store and replaces each original path
+with a relative symlink into it — the maintainer-side conversion that puts a repo into
+store-and-symlink shape (issue #24). Candidates: `AGENTS.md`, `CLAUDE.md`,
+`.agents/skills/` (to `skills/`), `.claude/rules/` and `.agents/rules/` (to
+`rules/claude/`, `rules/agents/`). Hook scripts and `.agents/settings.json` are never
+touched: they stay where the harness reads them.
+
+Per candidate it prints one of `moved|already|absent|refused [kind] PATH`, then a count
+line. Refusals (per path; exit 1 when any): a path that is already a symlink is left alone
+and reported with where it points; a path with uncommitted changes (`git status
+--porcelain`) is refused — no clean tree, no safety net; a store copy that already exists
+beside a real file at rest is refused rather than overwritten. A second run on an adopted
+repo is a no-op. `--dry-run` reports without writing. adopt writes nothing outside the
+repository and never edits a file through a symlink: the store copy is the only one
+written.
+
 ## `adapter`
 
 ```

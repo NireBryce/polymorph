@@ -1,0 +1,11 @@
+# What ZCode honours of the discover-and-report inventory kinds.
+# Basis: skills_dir and context_file as recorded in zcode.toml's mapping
+# (hook-script comments, not a live session). rules and .claude/ are left
+# out because nothing records ZCode honouring them; the gap report will
+# name them as ignored until a coverage entry is observed.
+schema = 1
+name = "zcode"
+
+[inventory]
+skills = ".agents/skills"
+memory = ["AGENTS.md"]

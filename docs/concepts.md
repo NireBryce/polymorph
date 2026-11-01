@@ -163,14 +163,31 @@ by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a cho
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
 event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
 
+## Inventory and the gap report
+
+Beyond the transliterate kinds (settings, hooks), the reader's job, polymorph discovers
+the **discover-and-report** kinds: skills (`.agents/skills/`), rules (`.claude/rules/`,
+`.agents/rules/`), memory (`AGENTS.md`, `CLAUDE.md`) and the entries of `.claude/`. They
+are reported as paths and symlink targets -- contents are never opened, and nothing found
+is dropped. `polymorph inventory` prints that surface plus each harness's **gap report**:
+the provided paths the harness has no recorded way of honouring, which it will silently
+ignore even after equipping.
+
+What a harness honours is the **coverage table**, `coverage/NAME.toml` -- data with the
+same character as the mappings, not the mapping's `[capabilities]` flags (those say how a
+hook behaves; the coverage table says what the harness reads). A harness with no coverage
+table is *unknown*: the report says so instead of claiming gaps. See
+[the CLI reference](cli.md#inventory).
+
 ## What polymorph stores in a repo
 
 ```
 .polymorph/basecamp/
-  config.toml          enabled = ["zcode", ...]
-  mappings/NAME.toml   repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  answers to generation-time mismatches (see below)
-  generated/NAME/      planned, not built
+  config.toml            enabled = ["zcode", ...]
+  mappings/NAME.toml     repo-local mapping; overrides a built-in of the same name, with a warning
+  coverage/NAME.toml     what one harness honours of the discover-and-report kinds (see [Inventory](#inventory-and-the-gap-report))
+  decisions/NAME.toml    answers to generation-time mismatches (see below)
+  generated/NAME/        planned, not built
 ```
 
 `config.toml` accepts only the key `enabled`; anything else is an error. Generated harness

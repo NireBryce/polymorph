@@ -89,3 +89,16 @@ First state of the project. Python 3.11+, standard library only.
   limits.
 - Packaging: a Nix flake and `pyproject.toml`. Built-in mappings and fixtures are package
   data under `src/polymorph/`, so a plain `pip install .` works.
+- **`inventory` and coverage tables:** the discover-and-report kinds (skills, rules,
+  memory, `.claude/`) are read as paths and symlink targets only, never contents; every
+  found path is reported. Per-harness coverage tables (`src/polymorph/coverage/*.toml`,
+  repo-local overrides at `.polymorph/basecamp/coverage/`, same lookup and trust rules as
+  mappings) say what each harness honours; `polymorph inventory` prints the surface plus
+  each harness's gap report — provided paths the harness will silently ignore. A harness
+  with no coverage table is unknown, never a gap. Shipped for `claude` and `zcode`.
+- **`adopt`:** moves a repo's agent files at rest (`AGENTS.md`, `CLAUDE.md`,
+  `.agents/skills/`, `.claude/rules/`, `.agents/rules/`) into the basecamp store and
+  replaces each original path with a relative symlink. Refuses a path that is already a
+  symlink, uncommitted changes (git status; a non-git directory refuses everything) and a
+  store copy that already exists beside the at-rest file; a second run is a no-op; hook
+  scripts and `.agents/settings.json` are never moved.

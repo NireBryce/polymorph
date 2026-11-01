@@ -12,6 +12,8 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
 | conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
+| inventory | `src/polymorph/inventory.py`, `src/polymorph/coverage/*.toml` | `read_inventory`, `load_coverage`, `gaps` |
+| adopt | `src/polymorph/adopt.py` | `adopt` |
 | report | `.polymorph/basecamp/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
@@ -115,16 +117,39 @@ the adapter.
 
 ```
 .polymorph/basecamp/
-  config.toml          # enabled = ["zcode", ...]  (targets to generate)
-  mappings/NAME.toml   # repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  # answers to generation-time mismatches; see "Decisions"
-  generated/NAME/      # generated shims and plugin files (planned)
+  config.toml            # enabled = ["zcode", ...]  (targets to generate)
+  mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
+  coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
+  decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
+  generated/NAME/        # generated shims and plugin files (planned)
 ```
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
 Discovery logs go to `.polymorph-discovery/` (by default under the current directory, or
 `--log-dir`). polymorph never edits `.gitignore`: add `.polymorph-discovery/` yourself so a
 raw log is not one `git add` away from being committed.
+
+## Inventory and coverage tables
+
+The discover-and-report kinds (skills, rules, memory, `.claude/`) are read as paths and
+symlink targets only; file contents are never opened, and every found path is reported --
+nothing is dropped for lacking a `SKILL.md` or any other marker. What a harness honours of
+those kinds is data, not code: `coverage/NAME.toml`, schema 1, closed-world (an unknown key
+or kind is an error), with `load_mapping`'s lookup rules (the repo-local file overrides the
+built-in with a warning; an explicit dir must be the repo's, the built-in's or trusted). A
+harness with no coverage table means nothing is known about it: the gap report claims
+nothing rather than claiming a gap. The gap report lists each provided path the table gives
+no way of honouring. Owner: `inventory.py`.
+
+`adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
+`CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp
+store and replaces each original path with a relative symlink into it. It refuses a path
+that is already a symlink (reporting where it points), a path with uncommitted changes
+(`git status --porcelain`; a directory that is not a git worktree refuses everything), and
+a store copy that already exists beside the file at rest. A second run is a no-op.
+Hook scripts and `.agents/settings.json` are never moved: they stay where the harness
+reads them. adopt never edits a file through a symlink -- the store copy is the only one
+written -- and writes nothing outside the repository. Owner: `adopt.py`.
 
 ## Trust
 
@@ -140,6 +165,10 @@ polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIP
 polymorph validate FILE.toml
 polymorph conformance [--harness NAME]
 polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph inventory [--repo .] [--harness NAME ...] [--json]
+                        # discover-and-report kinds and per-harness gaps; reads paths and symlink targets, never file contents
+polymorph adopt [--repo .] [--dry-run]
+                        # moves agent files at rest into the basecamp store and symlinks back; refuses dirty trees and symlinks
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
