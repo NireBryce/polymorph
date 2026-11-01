@@ -188,6 +188,16 @@ command under them. It is **emit-only** — the key is a path, never opened; not
 written; no daemon. Harness names come from the host facts and the mappings, so the same
 contract works for any harness the repo equips. See [the CLI reference](cli.md#env).
 
+## The equip run
+
+`polymorph equip --harness NAME` is the onboarding run: it writes the harness's config
+files (`manage generate`'s output), reports the honoured surface and the gap report from
+[the inventory](#inventory-and-the-gap-report), emits the [env contract](cli.md#env)
+lines, and records a provenance manifest (`loadout.toml`: per issued artifact, its
+sha256 and source). Posture-aware: a committed basecamp gets committed artifacts; in a
+contributor checkout the artifacts are regenerable and `--gitignore` appends a marked,
+idempotent section to `.gitignore`. See [the CLI reference](cli.md#equip).
+
 ## What polymorph stores in a repo
 
 ```
@@ -196,6 +206,7 @@ contract works for any harness the repo equips. See [the CLI reference](cli.md#e
   mappings/NAME.toml     repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     what one harness honours of the discover-and-report kinds (see [Inventory](#inventory-and-the-gap-report))
   decisions/NAME.toml    answers to generation-time mismatches (see below)
+  loadout.toml           equip's provenance manifest: per issued artifact, its sha256 and source
   generated/NAME/        planned, not built
 ```
 

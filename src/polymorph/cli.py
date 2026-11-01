@@ -13,18 +13,38 @@ def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="polymorph")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    g = sub.add_parser("generate", help="write harness configs from .agents/settings.json")
-    g.add_argument("--repo", default=".")
-    g.add_argument("--harness", action="append", default=None)
-    g.add_argument("--check", action="store_true", help="exit 1 on drift, write nothing")
-    g.add_argument("--mappings", default=None)
-    g.add_argument("--trust-dir", action="append", default=[])
+    m = sub.add_parser("manage", help="maintainer half: keep the basecamp and generate harness configs")
+    ms = m.add_subparsers(dest="mcmd", required=True)
 
-    k = sub.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
-    k.add_argument("--repo", default=".")
-    k.add_argument("--harness", action="append", default=None)
-    k.add_argument("--format", choices=["text", "json", "sarif"], default="text")
-    k.add_argument("--strict", action="store_true", help="warnings also fail the run")
+    mg = ms.add_parser("generate", help="write harness configs from .agents/settings.json")
+    mg.add_argument("--repo", default=".")
+    mg.add_argument("--harness", action="append", default=None)
+    mg.add_argument("--check", action="store_true", help="exit 1 on drift, write nothing")
+    mg.add_argument("--mappings", default=None)
+    mg.add_argument("--trust-dir", action="append", default=[])
+
+    mk = ms.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
+    mk.add_argument("--repo", default=".")
+    mk.add_argument("--harness", action="append", default=None)
+    mk.add_argument("--format", choices=["text", "json", "sarif"], default="text")
+    mk.add_argument("--strict", action="store_true", help="warnings also fail the run")
+
+    mv = ms.add_parser("validate", help="validate a mapping file")
+    mv.add_argument("file")
+
+    mc = ms.add_parser("conformance", help="run fixtures against mappings")
+    mc.add_argument("--harness", default=None)
+
+    md = ms.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
+    md.add_argument("--repo", default=".")
+    md.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
+
+    q = sub.add_parser("equip", help="the onboarding run: write the loadout and report honoured surface, gaps and the env contract")
+    q.add_argument("--repo", default=".")
+    q.add_argument("--harness", required=True)
+    q.add_argument("--dry-run", action="store_true", help="write nothing; report what equip would do")
+    q.add_argument("--gitignore", action="store_true",
+                   help="contributor posture: append the marked regenerable-artifacts section to .gitignore")
 
     a = sub.add_parser("adapter", help="run a hook script through a harness adapter")
     a.add_argument("--harness", required=True)
@@ -32,27 +52,17 @@ def _parser() -> argparse.ArgumentParser:
     a.add_argument("--trust-dir", action="append", default=[])
     a.add_argument("script", nargs="+", help="after `--`: hook script (and args)")
 
-    v = sub.add_parser("validate", help="validate a mapping file")
-    v.add_argument("file")
-
     i = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
     i.add_argument("--repo", default=".")
     i.add_argument("--harness", action="append", default=None, metavar="NAME",
                    help="coverage tables to report (default: every table found)")
     i.add_argument("--json", dest="as_json", action="store_true", help="machine-readable output")
 
-    d = sub.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
-    d.add_argument("--repo", default=".")
-    d.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
-
     e = sub.add_parser("env", help="emit the env contract from .polymorph/basecamp/env.toml, or run a command under it")
     e.add_argument("--repo", default=".")
     e.add_argument("--harness", default=None, metavar="NAME", help="harness whose session markers to emit")
     e.add_argument("--exec", dest="exec_cmd", default=None, metavar="CMD",
                    help="run CMD under sh -c with the contract applied, and exit with its status")
-
-    c = sub.add_parser("conformance", help="run fixtures against mappings")
-    c.add_argument("--harness", default=None)
 
     from .capture import build_parser as _capture_parser
     _capture_parser(sub)
@@ -241,6 +251,44 @@ def _cmd_env(args) -> int:
     return 0
 
 
+def _cmd_equip(args) -> int:
+    from .equip import equip
+
+    r = equip(args.repo, args.harness, args.dry_run, args.gitignore)
+    verb = "would write" if args.dry_run else "wrote"
+    for p in r.written:
+        print(f"[{r.harness}] {verb} {p}")
+    for p in r.unchanged:
+        print(f"[{r.harness}] unchanged {p}")
+    for p in r.not_written:
+        print(f"[{r.harness}] NOT WRITTEN {p}: {r.undecided} undecided (polymorph manage generate prints the questions)")
+    if r.coverage_known:
+        print(f"[{r.harness}] honoured surface:")
+        for kind, path in r.honoured:
+            print(f"  - {kind} {path}")
+        print(f"[{r.harness}] gaps (will be silently ignored): {len(r.gaps)}")
+        for kind, path in r.gaps:
+            print(f"  - {kind} {path}")
+    else:
+        print(f"[{r.harness}] coverage: no coverage table; nothing is known about what this harness honours")
+    if r.env_lines is None:
+        print(f"[{r.harness}] env: no env.toml; no env contract emitted")
+    else:
+        print(f"[{r.harness}] env contract:")
+        for line in r.env_lines:
+            print(f"  {line}")
+    if r.manifest_written:
+        print(f"[{r.harness}] manifest: .polymorph/basecamp/loadout.toml")
+    print(f"[{r.harness}] posture: {r.posture}")
+    if r.gitignore_suggested and not r.gitignore_appended:
+        print(f"[{r.harness}] gitignore: issued artifacts are regenerable; pass --gitignore to append:")
+        for line in r.gitignore_suggested:
+            print(f"  {line}")
+    if r.gitignore_appended:
+        print(f"[{r.harness}] gitignore: appended the marked regenerable-artifacts section")
+    return 0
+
+
 def _cmd_check(args) -> int:
     from . import check
 
@@ -292,12 +340,14 @@ def main(argv: list[str] | None = None) -> int:
         if argv[:2] == ["discover", "log"]:
             return 0
         raise
-    handler = {
-        "generate": _cmd_generate, "check": _cmd_check, "adapter": _cmd_adapter,
-        "validate": _cmd_validate, "discover": _cmd_discover, "capture": _cmd_capture,
-        "conformance": _cmd_conformance, "inventory": _cmd_inventory, "adopt": _cmd_adopt,
-        "env": _cmd_env,
-    }[args.cmd]
+    if args.cmd == "manage":
+        handler = {"generate": _cmd_generate, "check": _cmd_check, "validate": _cmd_validate,
+                   "conformance": _cmd_conformance, "adopt": _cmd_adopt}[args.mcmd]
+    else:
+        handler = {
+            "adapter": _cmd_adapter, "discover": _cmd_discover, "capture": _cmd_capture,
+            "inventory": _cmd_inventory, "env": _cmd_env, "equip": _cmd_equip,
+        }[args.cmd]
     try:
         return handler(args)
     except Exception as e:  # visible, non-zero, never silent

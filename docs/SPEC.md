@@ -121,6 +121,7 @@ the adapter.
   mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
   decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
+  loadout.toml           # equip's provenance manifest: per issued artifact, its sha256 and source
   generated/NAME/        # generated shims and plugin files (planned)
 ```
 
@@ -175,14 +176,16 @@ mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in
 ## CLI
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
+polymorph manage generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
 polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
-polymorph validate FILE.toml
-polymorph conformance [--harness NAME]
-polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph manage validate FILE.toml
+polymorph manage conformance [--harness NAME]
+polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore]
+                        # the onboarding run: writes the loadout, reports honoured surface, gaps, env; records provenance
 polymorph inventory [--repo .] [--harness NAME ...] [--json]
                         # discover-and-report kinds and per-harness gaps; reads paths and symlink targets, never file contents
-polymorph adopt [--repo .] [--dry-run]
+polymorph manage adopt [--repo .] [--dry-run]
                         # moves agent files at rest into the basecamp store and symlinks back; refuses dirty trees and symlinks
 polymorph env [--repo .] [--harness NAME] [--exec CMD]
                         # emits the env contract from host facts (.polymorph/basecamp/env.toml) as shell exports, or runs CMD under it; emit-only
@@ -286,7 +289,7 @@ The `gemini` mapping is an unverified draft written from a sketch, not from a ca
 so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies
 real ones. Invented fixtures would only restate the guess.
 
-## polymorph check
+## polymorph manage check
 
 `polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
 (`check.py`). Static: never executes a hook script, a harness or the network; writes nothing.

@@ -181,16 +181,16 @@ class CliTests(Base):
         return rc, out.getvalue(), err.getvalue()
 
     def test_generate_then_check(self):
-        rc, _, _ = self.run_cli("generate", "--repo", str(self.repo), "--check")
+        rc, _, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
         self.assertEqual(rc, 1)
-        rc, out, _ = self.run_cli("generate", "--repo", str(self.repo))
+        rc, out, _ = self.run_cli("manage", "generate", "--repo", str(self.repo))
         self.assertEqual(rc, 0)
         self.assertIn("unmapped setting: attribution", out)
-        rc, _, _ = self.run_cli("generate", "--repo", str(self.repo), "--check")
+        rc, _, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
         self.assertEqual(rc, 0)
 
     def test_missing_mapping_is_error(self):
-        rc, _, err = self.run_cli("generate", "--repo", str(self.repo), "--harness", "nope")
+        rc, _, err = self.run_cli("manage", "generate", "--repo", str(self.repo), "--harness", "nope")
         self.assertEqual(rc, 2)
         self.assertIn("nope", err)
 

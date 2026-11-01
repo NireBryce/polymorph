@@ -112,3 +112,13 @@ First state of the project. Python 3.11+, standard library only.
   session showed (session markers, no inherited agent socket, AGENTS.md ingestion,
   skills loading through the basecamp-store symlink), claims kept apart by how they
   were observed; the zcode coverage table's basis note cites it.
+- **`equip`, the onboarding run (slice 3):** `polymorph equip --harness NAME` composes
+  the loadout -- `manage generate`'s config files, the inventory's honoured surface and
+  gap report, and the env contract -- into one summary, and records a provenance
+  manifest (`.polymorph/basecamp/loadout.toml`: per issued artifact, its sha256 and
+  source). Posture-aware: a committed basecamp gets committed artifacts; in a
+  contributor checkout the artifacts are regenerable and `--gitignore` appends a marked,
+  idempotent `.gitignore` section. `--dry-run` writes nothing. The maintainer half is
+  now a command group -- `polymorph manage generate|check|validate|conformance|adopt`
+  (the old top-level names are gone); `equip`, `inventory`, `env`, `adapter`,
+  `discover` and `capture` stay top-level.

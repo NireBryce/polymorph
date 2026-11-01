@@ -67,7 +67,7 @@ printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 ## 3. Preview, then generate
 
 ```sh
-python -m polymorph generate --check
+python -m polymorph manage generate --check
 ```
 ```
 [zcode] would write .zcode/config.json (DRIFT)
@@ -76,7 +76,7 @@ python -m polymorph generate --check
 Exit code 1: the file does not exist, so it differs. Nothing was written.
 
 ```sh
-python -m polymorph generate
+python -m polymorph manage generate
 ```
 ```
 [zcode] wrote .zcode/config.json (DRIFT)
