@@ -1,0 +1,12 @@
+# What Claude Code honours of the discover-and-report inventory kinds.
+# Basis: the harness's own file layout (hook-script comments and the paths
+# its config names); not a live session. A kind left out here means the gap
+# report treats it as ignored, so only claim what is recorded.
+schema = 1
+name = "claude"
+
+[inventory]
+skills = ".claude/skills"
+rules = ".claude/rules"
+memory = ["AGENTS.md", "CLAUDE.md"]
+claude_dir = ".claude"

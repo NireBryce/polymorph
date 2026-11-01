@@ -37,6 +37,11 @@ stays coherent. Until a slice lands, everything here describes a proposal.
   prose about the agent's experience; the command is `equip`.
 - **gap report** — the part of the loadout that says what a harness honours
   and what it will silently ignore even after equipping.
+- **coverage table** — the per-harness data file (`coverage/NAME.toml`, same
+  character as the mappings) that says what a harness honours of the
+  discover-and-report kinds; a kind the repo provides but the table does not
+  cover is a gap. Not the mapping's `[capabilities]` flags, which say how a
+  hook behaves.
 - **equipped artifact** — anything polymorph writes or points at when
   equipping a harness, as opposed to files the repo's authors maintain by
   hand. Equipped artifacts record where they came from, so an edit made in

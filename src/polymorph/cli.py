@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from .canon import Canon  # noqa: F401  (re-export convenience)
 
@@ -33,6 +34,16 @@ def _parser() -> argparse.ArgumentParser:
 
     v = sub.add_parser("validate", help="validate a mapping file")
     v.add_argument("file")
+
+    i = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
+    i.add_argument("--repo", default=".")
+    i.add_argument("--harness", action="append", default=None, metavar="NAME",
+                   help="coverage tables to report (default: every table found)")
+    i.add_argument("--json", dest="as_json", action="store_true", help="machine-readable output")
+
+    d = sub.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
+    d.add_argument("--repo", default=".")
+    d.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
 
     c = sub.add_parser("conformance", help="run fixtures against mappings")
     c.add_argument("--harness", default=None)
@@ -148,6 +159,67 @@ def _cmd_capture(args) -> int:
     return capture.run(args)
 
 
+def _cmd_inventory(args) -> int:
+    from . import inventory
+
+    repo = Path(args.repo)
+    inv = inventory.read_inventory(repo)
+    names = args.harness if args.harness else inventory.available_tables(repo)
+    tables: dict[str, dict | None] = {}
+    gaps: list[dict] = []
+    for name in names:
+        cap = inventory.load_coverage(name, repo)
+        if cap is None:
+            tables[name] = None
+            continue
+        tables[name] = {"skills": cap.skills, "rules": cap.rules,
+                        "memory": list(cap.memory), "claude_dir": cap.claude_dir}
+        for g in inventory.gaps(inv, cap):
+            gaps.append({"harness": g.harness, "kind": g.kind, "path": g.path})
+    if args.as_json:
+        import json
+
+        print(json.dumps({
+            "inventory": {kind: [{"path": i.path, "target": i.target} for i in inv.kind(kind)]
+                          for kind in inventory.KINDS},
+            "gaps": gaps,
+        }, indent=2))
+        return 0
+    for kind in inventory.KINDS:
+        entries = inv.kind(kind)
+        print(f"{kind}: {len(entries)}")
+        for i in entries:
+            suffix = f" -> {i.target}" if i.target else ""
+            print(f"  - {i.path}{suffix}")
+    for name in names:
+        if tables[name] is None:
+            print(f"gaps for {name}: no coverage table; nothing is known")
+            continue
+        found = [g for g in gaps if g["harness"] == name]
+        print(f"gaps for {name}: {len(found)}")
+        for g in found:
+            print(f"  - {g['kind']} {g['path']}")
+    return 0
+
+
+def _cmd_adopt(args) -> int:
+    from .adopt import adopt
+
+    r = adopt(args.repo, args.dry_run)
+    verb = "would move" if args.dry_run else "moved"
+    for a in r.moved:
+        print(f"{verb} [{a.kind}] {a.path} -> {a.store}")
+    for kind, path, points in r.already:
+        print(f"already [{kind}] {path} -> {points}")
+    for kind, path in r.absent:
+        print(f"absent [{kind}] {path}")
+    for kind, path, reason in r.refused:
+        print(f"refused [{kind}] {path}: {reason}")
+    n = len(r.moved)
+    print(f"{n} moved, {len(r.already)} already adopted, {len(r.absent)} absent, {len(r.refused)} refused")
+    return 1 if r.refused else 0
+
+
 def _cmd_check(args) -> int:
     from . import check
 
@@ -201,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         raise
     handler = {
         "generate": _cmd_generate, "check": _cmd_check, "adapter": _cmd_adapter,
-        "validate": _cmd_validate, "discover": _cmd_discover, "capture": _cmd_capture, "conformance": _cmd_conformance,
+        "validate": _cmd_validate, "discover": _cmd_discover, "capture": _cmd_capture,
+        "conformance": _cmd_conformance, "inventory": _cmd_inventory, "adopt": _cmd_adopt,
     }[args.cmd]
     try:
         return handler(args)
