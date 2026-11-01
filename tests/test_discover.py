@@ -668,3 +668,107 @@ class NewFeatureRedactionTest(unittest.TestCase):
             r = json.loads(f.read_text())
         self.assertEqual(r["raw"]["messageID"], "msg_9")
         self.assertEqual(r["raw"]["id"]["type"], "string")
+
+
+class RedactionFixTests(unittest.TestCase):
+    """The 2026-11-01 review fixes: ids guard their shape, key names are log content."""
+
+    def record(self, payload):
+        return discover._record(json.dumps(payload))
+
+    def test_tool_use_id_that_is_not_an_id_is_reduced(self):
+        rec = self.record({"tool_name": "Bash", "tool_use_id": "echo SECRETCMD; cat /etc/shadow"})
+        self.assertEqual(rec["raw"]["tool_use_id"],
+                         {"type": "string", "length": len("echo SECRETCMD; cat /etc/shadow")})
+
+    def test_real_tool_use_id_still_survives_for_pairing(self):
+        rec = self.record({"tool_name": "Bash", "tool_use_id": "toolu_01Ab-2"})
+        self.assertEqual(rec["raw"]["tool_use_id"], "toolu_01Ab-2")
+
+    def test_unsafe_tool_input_keys_are_masked(self):
+        rec = self.record({"tool_name": "X", "tool_input": {"cat /etc/shadow > /tmp/x": 1, "cmd": "ls"}})
+        masked = rec["raw"]["tool_input"]
+        self.assertIn("cmd", masked)
+        self.assertIn("<invalid key>", masked)
+        self.assertNotIn("cat /etc/shadow", json.dumps(masked))
+
+    def test_unsafe_top_level_keys_are_masked_in_the_keys_field(self):
+        rec = self.record({"tool_name": "X", "cat /etc/shadow": 1})
+        self.assertNotIn("cat /etc/shadow", rec["keys"])
+        self.assertIn("<invalid key>", rec["keys"])
+
+
+class SummaryRobustnessTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.log = Path(tmp.name) / "log.jsonl"
+
+    def test_unparseable_lines_are_counted_not_dropped(self):
+        good = discover._record(json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
+        self.log.write_text(json.dumps(good) + '\ntorn{"raw": {"tool_name"\n')
+        recs, other, broken = discover._load_records(self.log)
+        self.assertEqual((len(recs), other, broken), (1, 0, 1))
+        self.assertIn("unparseable lines: 1", discover.summarize(self.log))
+
+    def test_hostile_key_shapes_do_not_crash_summary(self):
+        line = json.dumps({"schema": 1, "ts": 1.0, "raw": {"tool_name": "X"},
+                           "keys": 5, "tool_input_keys": {"a": 1}})
+        self.log.write_text(line + "\n")
+        text = discover.summarize(self.log)
+        self.assertIn("payloads: 1", text)
+
+
+class ReloadFinishGuardTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cfg = Path(tmp.name) / "settings.json"
+        self.scratch = Path(tmp.name) / "scratch.jsonl"
+        self.cfg.write_text('{"hooks": {}}\n')
+
+    def test_finish_does_not_resurrect_a_deleted_config(self):
+        discover.reload_check_start(str(self.cfg), str(self.scratch))
+        self.cfg.unlink()
+        seen, msg = discover.reload_check_finish(str(self.cfg), str(self.scratch))
+        self.assertFalse(self.cfg.exists())
+        self.assertIn("gone", msg)
+
+    def test_finish_does_not_rewrite_when_the_user_removed_the_hook(self):
+        discover.reload_check_start(str(self.cfg), str(self.scratch))
+        users_version = '{"hooks": {}, "note": "reformatted by hand"}'
+        self.cfg.write_text(users_version)
+        _, msg = discover.reload_check_finish(str(self.cfg), str(self.scratch))
+        self.assertEqual(self.cfg.read_text(), users_version)
+
+
+class InitShapeTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cfg = Path(tmp.name) / "cfg.json"
+
+    def test_init_autodetects_the_claude_like_shape(self):
+        self.cfg.write_text('{"hooks": {"enabled": true, "events": {"PreToolUse": []}}}')
+        discover.init_config("h", str(self.cfg), "PreToolUse")
+        doc = json.loads(self.cfg.read_text())
+        self.assertIn("PreToolUse", doc["hooks"]["events"])
+        self.assertNotIn("PreToolUse", doc["hooks"])
+
+    def test_init_log_dir_change_replaces_the_logger(self):
+        discover.init_config("h", str(self.cfg), "PreToolUse", log_dir=Path(self.cfg.parent) / "d1")
+        first = self.cfg.read_text()
+        discover.init_config("h", str(self.cfg), "PreToolUse", log_dir=Path(self.cfg.parent) / "d2")
+        doc = json.loads(self.cfg.read_text())
+        groups = doc["hooks"]["PreToolUse"]
+        self.assertEqual(len(groups), 1, "a changed --log-dir must replace the logger, not add one")
+        self.assertIn("d2", groups[0]["hooks"][0]["command"])
+        self.assertNotIn("d1", groups[0]["hooks"][0]["command"])
+
+
+class LeafPathTests(unittest.TestCase):
+    def test_full_log_deep_dicts_report_object(self):
+        deep = {"a": {"b": {"c": {"d": {"e": {"f": 1}}}}}}
+        paths = dict(discover._leaf_paths(deep, "out"))
+        # the old walk omitted a dict it ran out of depth on; now it reports "object"
+        self.assertEqual(paths.get("out.a.b.c.d"), "object")

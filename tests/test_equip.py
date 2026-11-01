@@ -163,3 +163,32 @@ class PostureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PosturePathTests(unittest.TestCase):
+    """The gitignore suggestion names the mapping's real config path, not a hardcoded one."""
+
+    def run_cli(self, *argv: str) -> tuple[int, str, str]:
+        from polymorph import cli
+
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = cli.main(list(argv))
+        return rc, out.getvalue(), err.getvalue()
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = equip_repo(Path(tmp.name), git_init=True)
+        text = (FIXTURE / ".polymorph/basecamp/mappings/zcode.toml").read_text()
+        text = text.replace('name = "zcode"', 'name = "fake"').replace(
+            'config_path = ".zcode/config.json"', 'config_path = ".fake/config.json"')
+        (self.repo / ".polymorph/basecamp/mappings/fake.toml").write_text(text)
+        (self.repo / ".polymorph/basecamp/config.toml").write_text('enabled = ["fake"]\n')
+
+    def test_suggestion_names_the_real_config_path(self):
+        rc, out, _ = self.run_cli("equip", "--repo", str(self.repo), "--harness", "fake")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("posture: contributor", out)
+        self.assertIn(".fake/config.json", out)
+        self.assertNotIn("pass --gitignore to append:\n  .zcode/config.json", out)

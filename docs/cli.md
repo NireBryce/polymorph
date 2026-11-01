@@ -89,6 +89,7 @@ grouped by target, then a summary line.
 | `fixtures-missing` | warning | A built-in mapping has no fixtures. |
 | `fixtures-skipped` | note | A repo-local mapping: fixtures are not checked. |
 | `fixture-failed` | error | A fixture did not replay. |
+| `mapping-override` | note | A repo-local mapping overrides a built-in of the same name. |
 
 If a hook command is rejected, checks derived from the config (decisions, unmapped, drift) are
 skipped for that run. `mapping-untested-live` is a note, so even `--strict` never makes it
@@ -222,14 +223,16 @@ git yourself — polymorph never edits `.gitignore`.
 ## `adapter`
 
 ```
-polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] [--timeout S] -- SCRIPT
 ```
 
 The runtime shim. Generated configs call it; you rarely do, except to test by hand.
 Reads the harness's JSON payload on stdin, runs SCRIPT (which must be a file under the
 repo's `.agents/hooks/`; the repo is the nearest ancestor of the working directory with an
 `.agents/` folder), and writes the harness-shaped answer to stdout/stderr and exits with
-its exit code. The `--` is required. Details and failure behaviour:
+its exit code. `--timeout S` kills the hook after S seconds (default 60); a killed or mis-used adapter
+lands in the same NOT-checked path as every other fault -- a usage error, an invalid
+mapping or a timeout is never a deny and never exit 2. The `--` is required. Details and failure behaviour:
 [Concepts](concepts.md#delivery-direct-and-adapter). Any fault prints
 `polymorph adapter: this tool call was NOT checked by the guard hook (...)` and does not
 deny.

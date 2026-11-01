@@ -37,6 +37,8 @@ def check_shape(fx: object) -> list[str]:
             errs.append("native_out must be an object with stdout and exit")
         elif not isinstance(no["exit"], int) or isinstance(no["exit"], bool):
             errs.append("native_out.exit must be an integer")
+        if isinstance(no, dict) and "stderr" in no and not isinstance(no["stderr"], str):
+            errs.append("native_out.stderr must be a string when present")
     return errs
 
 
@@ -76,13 +78,14 @@ def run_fixtures(harness: str | None = None, root: Path = DATA_ROOT):
             bad = []
             if got_in != fx["canonical_in"]:
                 bad.append(f"translate_in: want {fx['canonical_in']!r}, got {got_in!r}")
-            if fx["hook_answer"] is not None:
-                out = adapter.translate_out(mapping, fx["hook_answer"])
-                want = fx["native_out"]
-                if out.get("exit") != want["exit"]:
-                    bad.append(f"exit: want {want['exit']!r}, got {out.get('exit')!r}")
-                if not _same_stdout(want["stdout"], out.get("stdout")):
-                    bad.append(f"stdout: want {want['stdout']!r}, got {out.get('stdout')!r}")
+            out = adapter.translate_out(mapping, fx["hook_answer"])
+            want = fx["native_out"]
+            if out.get("exit") != want["exit"]:
+                bad.append(f"exit: want {want['exit']!r}, got {out.get('exit')!r}")
+            if not _same_stdout(want["stdout"], out.get("stdout")):
+                bad.append(f"stdout: want {want['stdout']!r}, got {out.get('stdout')!r}")
+            if "stderr" in want and out.get("stderr") != want["stderr"]:
+                bad.append(f"stderr: want {want['stderr']!r}, got {out.get('stderr')!r}")
         except Exception as e:  # report, never crash the run
             failures.append(f"{label}: {type(e).__name__}: {e}")
             continue

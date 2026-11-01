@@ -97,18 +97,23 @@ def read_claude(repo: str | Path) -> Canon:
         else:
             unmapped.append(key)
 
-    for event, groups in (data.get("hooks") or {}).items():
-        canon_event = EVENT_MAP.get(event)
-        if canon_event is None:
-            unmapped.append(f"hooks.{event}")
-            continue
-        for group in groups:
-            classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
-            for h in group.get("hooks", []):
-                if h.get("type", "command") != "command":
-                    unmapped.append(f"hooks.{event}[type={h.get('type')}]")
-                    continue
-                script = resolve_script(h.get("command", ""), repo)
-                t = h.get("timeout")
-                hooks.append(Hook(canon_event, classes, script, int(t) if t is not None else None))
+    try:
+        for event, groups in (data.get("hooks") or {}).items():
+            canon_event = EVENT_MAP.get(event)
+            if canon_event is None:
+                unmapped.append(f"hooks.{event}")
+                continue
+            for group in groups:
+                classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
+                for h in group.get("hooks", []):
+                    if h.get("type", "command") != "command":
+                        unmapped.append(f"hooks.{event}[type={h.get('type')}]")
+                        continue
+                    script = resolve_script(h.get("command", ""), repo)
+                    t = h.get("timeout")
+                    hooks.append(Hook(canon_event, classes, script, int(t) if t is not None else None))
+    except (AttributeError, TypeError, ValueError) as e:
+        # a malformed entry is a settings problem, not a crash: check reports
+        # settings-invalid and keeps going, generate exits 2 with the message
+        raise ReaderError(f"malformed hooks entry: {e}") from e
     return Canon(tuple(hooks), tuple(unmapped))

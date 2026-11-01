@@ -198,9 +198,6 @@ class CliTests(Base):
         self.assertTrue(cli._parser().parse_args(["adapter", "--harness", "x", "--", "s.sh"]).script == ["s.sh"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class SettingsShapeTest(unittest.TestCase):
     def test_claude_settings_template_has_no_wrapper(self):
@@ -271,3 +268,18 @@ class DirectDeliveryTests(Base):
             + '\n[payload_out.deny]\nexit = 2\n')
         findings = check.run_check(self.repo, ["zcode"])
         self.assertTrue(any(f.severity == "error" and f.code == "mapping-invalid" for f in findings))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class HookCommandTimeoutTests(unittest.TestCase):
+    def test_adapter_command_carries_the_hook_timeout(self):
+        from polymorph import generate, mapping as mapping_mod
+
+        m = mapping_mod.load_mapping("gemini")   # adapter delivery
+        self.assertIn("--timeout 300", generate.hook_command(m, "s.sh", 300))
+        self.assertNotIn("--timeout", generate.hook_command(m, "s.sh"))
+        direct = mapping_mod.load_mapping("zcode")   # direct delivery: the harness owns the timeout
+        self.assertNotIn("--timeout", generate.hook_command(direct, "s.sh", 300))

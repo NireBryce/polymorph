@@ -5,7 +5,7 @@ the draft only copies back values that match strict name patterns (tool names, k
 names), never command text or paths.
 
 Tool-name heuristics (case-insensitive, first match wins, checked in this order):
-  shell: bash, shell, sh, terminal, command, exec, run_command, run_terminal_cmd
+  shell: bash, shell, sh, terminal, command, exec, run_command
   edit:  edit, write, patch, replace, create, multiedit, str_replace, apply_patch
   read:  read, grep, glob, search, find, list, view, cat
 Anything else (including mcp tools) is left out of [tools], not guessed.
@@ -151,23 +151,29 @@ def _merge_hook(doc: dict, shape: str, event_name: str, matcher: str, entry: dic
 
 def _write_doc(p: Path, doc: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(doc, indent=2) + "\n")
+    tmp = p.with_name(p.name + ".polymorph-tmp")
+    tmp.write_text(json.dumps(doc, indent=2) + "\n")
+    os.replace(tmp, p)
 
 
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
-                matcher: str = "*", base: str | Path = ".", shape: str = "claude-settings",
+                matcher: str = "*", base: str | Path = ".", shape: str | None = None,
                 log_dir: str | Path | None = None, redact: bool = True, env: bool = False,
                 pythonpath: str | Path | None = None) -> Path:
-    """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode)."""
-    if shape not in ("claude-settings", "claude-like"):
+    """shape: claude-settings (hooks.<Event>, Claude Code and its SDK) or claude-like (ZCode);
+    None detects from the existing file, falling back to claude-settings."""
+    if shape is not None and shape not in ("claude-settings", "claude-like"):
         raise ValueError(f"unknown shape {shape!r}")
     _check_harness(harness)
     p = _resolve(config_path, base)
     doc = _load_doc(p)
+    if shape is None:
+        shape = _detect_shape(doc)   # installing where the harness never fires logs nothing
     entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env, pythonpath=pythonpath)}
     # the logger's own entry is recognised by its --out file; the user's hooks stay
     out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
-    _merge_hook(doc, shape, event_name, matcher, entry, marker=f"--out {shlex.quote(str(out))}")
+    _merge_hook(doc, shape, event_name, matcher, entry,
+                marker=("-m polymorph discover log", f"{harness}.jsonl"))
     _write_doc(p, doc)
     return p
 
@@ -230,7 +236,9 @@ def _restore(p: Path, state: dict) -> None:
         p.unlink(missing_ok=True)
 
 
-def _strip_marker(doc: dict, marker: str) -> int:
+def _strip_marker(doc: dict, marker: str | tuple[str, ...]) -> int:
+    """Remove hook entries whose command carries every marker (one, or a tuple of all)."""
+    markers = (marker,) if isinstance(marker, str) else tuple(marker)
     n = 0
 
     def groups(lst):
@@ -238,7 +246,8 @@ def _strip_marker(doc: dict, marker: str) -> int:
         out = []
         for g in lst:
             if isinstance(g, dict) and isinstance(g.get("hooks"), list):
-                keep = [h for h in g["hooks"] if not (isinstance(h, dict) and marker in str(h.get("command", "")))]
+                keep = [h for h in g["hooks"]
+                        if not (isinstance(h, dict) and all(m in str(h.get("command", "")) for m in markers))]
                 n += len(g["hooks"]) - len(keep)
                 if not keep:
                     continue
@@ -269,10 +278,13 @@ def reload_check_finish(config_path: str, scratch_log: str, base: str | Path = "
         if cur is not None and _sha(cur) == state.get("written_sha256"):
             _restore(p, state)
             notes.append(f"{p} restored byte-for-byte")
+        elif cur is None:
+            notes.append(f"{p} is gone; nothing to clean up")
         else:
             doc = _load_doc(p)
             removed = _strip_marker(doc, str(scratch))
-            _write_doc(p, doc)
+            if removed:
+                _write_doc(p, doc)
             notes.append(f"{p} changed since the check began; removed {removed} temporary hook(s) "
                          "by marker instead of restoring")
         st.unlink(missing_ok=True)
@@ -309,7 +321,7 @@ _JSON_TYPES = ((bool, "boolean"), (int, "number"), (float, "number"), (str, "str
 # else (cwd, transcript_path, prompts, tool_input, tool_response, ...) is reduced
 # to {type, length}.
 _SAFE_VALUES = ("hook_event_name", "hookEventName", "event", "tool_name", "toolName",
-                "session_id", "sessionId", "tool_use_id", "prompt_id",
+                "session_id", "sessionId",
                 "permission_mode", "effort", "source", "duration_ms")
 
 
@@ -321,7 +333,7 @@ def _descriptor(v) -> dict:
 
 # Call and message ids, kept verbatim only when they look like ids, so before/after lines
 # can be paired. Anything else under these names is reduced like any other value.
-_CALL_ID_KEYS = ("tool_use_id", "id", "call_id", "callID", "toolCallID")
+_CALL_ID_KEYS = ("tool_use_id", "id", "call_id", "callID", "toolCallID", "prompt_id")
 _MESSAGE_ID_KEYS = ("messageID", "message_id")
 _ID_VALUE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
@@ -356,7 +368,8 @@ def _redact_payload(raw):
         elif k in _OUTPUT_KEYS and isinstance(v, dict):
             out[k] = _shape(v)
         elif k in _INPUT_KEYS and isinstance(v, dict):
-            out[k] = {kk: _descriptor(vv) for kk, vv in v.items()}
+            out[k] = {(kk if _safe(str(kk), _KEY_RE) else "<invalid key>"): _descriptor(vv)
+                      for kk, vv in v.items()}
         else:
             out[k] = _descriptor(v)
     return out
@@ -379,10 +392,10 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
     tool_input_keys: list = []
     event = tool_name = session_id = None
     if isinstance(raw, dict):
-        keys = sorted(str(k) for k in raw)
+        keys = sorted(_safe(str(k), _KEY_RE) or "<invalid key>" for k in raw)
         for k in _INPUT_KEYS:
             if isinstance(raw.get(k), dict):
-                tool_input_keys = sorted(str(x) for x in raw[k])
+                tool_input_keys = sorted(_safe(str(x), _KEY_RE) or "<invalid key>" for x in raw[k])
                 break
         event = _first_str(raw, _EVENT_KEYS)
         tool_name = _first_str(raw, _TOOL_NAME_KEYS)
@@ -454,21 +467,27 @@ def classify_tool(name: str) -> str | None:
     return None
 
 
-def _load_records(path: str | Path) -> tuple[list[dict], int]:
-    """Log lines whose raw payload is an object, plus the count of other lines."""
-    recs, other = [], 0
+def _load_records(path: str | Path) -> tuple[list[dict], int, int]:
+    """(log lines whose raw payload is an object, non-object lines, unparseable lines)."""
+    recs, other, broken = [], 0, 0
     for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             r = json.loads(line)
         except ValueError:
+            broken += 1
             continue
         if not isinstance(r, dict):
+            other += 1
             continue
+        for f in ("keys", "tool_input_keys"):
+            v = r.get(f)
+            if v is not None and not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
+                del r[f]   # untrusted shape: treated as absent rather than crashing summary
         if isinstance(r.get("raw"), dict):
             recs.append(r)
         else:
             other += 1
-    return recs, other
+    return recs, other, broken
 
 
 def _top(rec: dict) -> tuple[str | None, str | None, str | None]:
@@ -574,7 +593,9 @@ def _leaf_paths(v, prefix: str, depth: int = _SHAPE_DEPTH + 1):
         for k, vv in v.items():
             if _safe(k, _KEY_RE):
                 yield from _leaf_paths(vv, f"{prefix}.{k}", depth - 1)
-    elif not isinstance(v, dict):
+    elif isinstance(v, dict):
+        yield prefix, "object"
+    else:
         yield prefix, next(n for t, n in _JSON_TYPES if isinstance(v, t))
 
 
@@ -585,7 +606,7 @@ def _is_bool(v) -> bool:
 def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
     if not re.match(r"^[a-z][a-z0-9_-]*$", name):
         raise ValueError(f"name {name!r} must match [a-z][a-z0-9_-]*")
-    all_recs, _ = _load_records(log)
+    all_recs, _, _ = _load_records(log)
     sel, _ = _select(all_recs, include, events)
     recs = [r for _, r in sel]
     total = len(recs)
@@ -764,7 +785,7 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
 # ---- summary ----------------------------------------------------------------
 
 def summarize(log: str | Path, include=(), events=()) -> str:
-    all_recs, other = _load_records(log)
+    all_recs, other, broken = _load_records(log)
     sel, hidden = _select(all_recs, include, events)
     recs = [r for _, r in sel]
     by_event: dict[str, dict] = {}
@@ -800,8 +821,10 @@ def summarize(log: str | Path, include=(), events=()) -> str:
     for r in all_recs:
         m = str(r["schema"]) if isinstance(r.get("schema"), int) else "unmarked"
         marks[m] = marks.get(m, 0) + 1
-    out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}",
-           "log line schema: " + ", ".join(f"{m} ({n})" for m, n in sorted(marks.items()))]
+    out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}"]
+    if broken:
+        out.append(f"unparseable lines: {broken} (truncated or corrupt; not counted as payloads)")
+    out.append("log line schema: " + ", ".join(f"{m} ({n})" for m, n in sorted(marks.items())))
     if hidden:
         out.append("hidden: " + ", ".join(f"{k} {n}" for k, n in
                                           sorted(hidden.items(), key=lambda kv: (-kv[1], kv[0])))

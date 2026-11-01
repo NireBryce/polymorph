@@ -18,7 +18,13 @@ class ExtractorError(ValueError):
 
 
 def apply_patch_paths(native: dict) -> dict[str, Any]:
-    """Pull file paths out of an apply_patch envelope into tool_input.file_path(s)."""
+    """Pull file paths out of an apply_patch envelope into tool_input.file_path(s).
+
+    Tolerant by design: a payload with no patch text, or with the marker but no valid
+    file headers, yields no fields at all. Raising here would fail the whole
+    translation open (NOT checked) for every tool call that merely mentions "*** " --
+    the guard must still run on whatever fields exist.
+    """
     for field in _PATCH_FIELDS:
         text = lookup(native, field, None)
         if isinstance(text, list):
@@ -26,9 +32,9 @@ def apply_patch_paths(native: dict) -> dict[str, Any]:
         if isinstance(text, str) and "*** " in text:
             paths = list(dict.fromkeys(_PATCH_FILE.findall(text)))
             if not paths:
-                raise ExtractorError("apply_patch_paths: patch text has no file headers")
+                return {}
             return {"tool_input.file_path": paths[0], "tool_input.file_paths": paths}
-    raise ExtractorError("apply_patch_paths: no patch text found in tool_input")
+    return {}
 
 
 REGISTRY: dict[str, Callable[[dict], dict[str, Any]]] = {
