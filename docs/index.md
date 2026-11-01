@@ -13,6 +13,7 @@ polymorph is experimental and unvetted; read [Limits](limits.md) before relying 
 | Know what is unverified and what "verified" means | [Limits](limits.md) |
 | Read the contract the code follows | [SPEC](SPEC.md) |
 | See what a real harness sent | [Observed: t3code](observed-t3code.md), [Observed: OpenCode](observed-opencode.md) (with an [example plugin](examples/opencode-discovery-plugin.js)) |
+| See where the scope goes next | [Workshop pivot plan](plan-workshop-pivot.md) |
 | Contribute or report a harness | [CONTRIBUTING](../CONTRIBUTING.md) |
 | See what changed | [CHANGELOG](../CHANGELOG.md) |
 

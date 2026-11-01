@@ -65,6 +65,8 @@ What the tool does today, measured against that goal:
 - **Checks** statically, with stable finding codes and text, JSON, and SARIF 2.1.0
   output.
 
+The implementation plan for the first move: [docs/plan-workshop-pivot.md](docs/plan-workshop-pivot.md).
+
 The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`,
 `.claude/` — is intent, not coverage: nothing reads those yet.
 
