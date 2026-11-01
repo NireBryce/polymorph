@@ -14,7 +14,7 @@ from .validate import DELIVERIES, validate_mapping
 
 SCHEMA = 1
 BUILTIN_DIR = MAPPINGS_DIR
-REPO_DIR = ".agents/polymorph/mappings"
+REPO_DIR = ".polymorph/basecamp/mappings"
 
 TOP_KEYS = {
     "schema", "name", "verified", "config_path", "format", "template",
@@ -110,7 +110,7 @@ def load_mapping(
     warn=None,
 ) -> Mapping:
     """Find NAME.toml. Order: explicit mappings_dir (must be trusted), else
-    repo .agents/polymorph/mappings (overrides built-in, with a warning), else built-in."""
+    repo .polymorph/basecamp/mappings (overrides built-in, with a warning), else built-in."""
     warn = warn or (lambda msg: print(f"warning: {msg}", file=sys.stderr))
     if not _NAME.match(name):
         raise MappingError(f"invalid harness name {name!r}")

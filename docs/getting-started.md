@@ -56,8 +56,8 @@ an error, because arguments and interpreters do not carry across harnesses.
 ## 2. Choose targets
 
 ```sh
-mkdir -p .agents/polymorph
-printf 'enabled = ["zcode"]\n' > .agents/polymorph/config.toml
+mkdir -p .polymorph/basecamp
+printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 ```
 
 `enabled` is the list of harnesses `generate` and `check` act on when you do not pass

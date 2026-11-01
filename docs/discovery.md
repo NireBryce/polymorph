@@ -25,7 +25,7 @@ command; write, read and delete a file; a search; a background `sleep 2; echo do
 the harness's headless mode, and writes `summary.txt`, `draft.toml`, `report.md` and
 `log.jsonl` to `polymorph-capture-NAME/`. `report.md` lists the tool calls taken from the
 redacted log, and the steps that produced no log line; it never contains the agent's own
-account. The draft is unverified: review it by hand ([new-mapping skill](../.agents/skills/new-mapping/SKILL.md)).
+account. The draft is unverified: review it by hand ([new-mapping skill](../.polymorph/basecamp/skills/new-mapping/SKILL.md)).
 Flags are in the [CLI reference](cli.md#capture). `capture` has not been run against any real
 harness yet; its tests use a stub harness.
 
@@ -242,7 +242,7 @@ Guard rails, whoever does it:
 - The logger is read by a person before it runs. Prompt 2 never runs it.
 - The log stays redacted (no `--full`). Nothing from the log or from the harness's own
   account is pasted back into a prompt, a command or a mapping; the draft is hand-reviewed
-  against prompt 1's quotations ([the new-mapping skill](../.agents/skills/new-mapping/SKILL.md)).
+  against prompt 1's quotations ([the new-mapping skill](../.polymorph/basecamp/skills/new-mapping/SKILL.md)).
 - The harness's reply is a lead, not evidence. The log is.
 - Do not print or open the harness's authentication configuration.
 - This spends model credits and may auto-approve tool calls; keep the prompts exactly as
@@ -285,7 +285,7 @@ Say what the harness does; that is enough.
 If you cannot run a logger, an agent inside the harness can fill in the form from what it
 can see about itself. That route is cheaper and often wrong, so the report is marked
 unverified. The instructions an agent follows are in
-[`.agents/skills/report-harness/SKILL.md`](../.agents/skills/report-harness/SKILL.md);
+[`.polymorph/basecamp/skills/report-harness/SKILL.md`](../.polymorph/basecamp/skills/report-harness/SKILL.md);
 they require the agent to show you the exact text and get a yes before filing.
 
 An example of what a completed capture looks like for a real harness is

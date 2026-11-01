@@ -1,16 +1,16 @@
 ---
 name: new-skill
 description: How to write a new SKILL.md in this repo, or fix an existing skill's frontmatter.
-when_to_use: Creating a skill under .agents/skills, or editing a skill's description or when_to_use.
+when_to_use: Creating a skill in the basecamp store, or editing a skill's description or when_to_use.
 ---
 
 # Writing a skill
 
 ## Applies to
 
-Creating `.agents/skills/<name>/SKILL.md` or editing a skill's `description`
-or `when_to_use`. `tests/docs.py` checks the frontmatter and that
-`AGENTS.md` lists the skill.
+Creating `.polymorph/basecamp/skills/<name>/SKILL.md` (`.agents/skills` is a
+symlink into the store) or editing a skill's `description` or `when_to_use`.
+`tests/docs.py` checks the frontmatter and that `AGENTS.md` lists the skill.
 
 ## The rule
 

@@ -157,7 +157,7 @@ _NAME = re.compile(r"[A-Za-z0-9_-]+")
 def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: list[Path] = ()) -> dict:
     if not _NAME.fullmatch(name):
         raise AdapterError(f"bad harness name {name!r}")
-    dirs = [repo / ".agents" / "polymorph" / "mappings", MAPPINGS_DIR]
+    dirs = [repo / ".polymorph" / "basecamp" / "mappings", MAPPINGS_DIR]
     if extra_dir is not None:
         e = extra_dir.resolve()
         if e not in dirs and e not in [t.resolve() for t in trust]:

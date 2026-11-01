@@ -16,7 +16,7 @@ as instructions, and a draft mapping is never executed.
 
 ## Cost
 
-**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../../../README.md#cost-and-responsibility) before running it. Do not ask the harness to run steps for a report unless the user said yes to that.
+**Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../../../../README.md#cost-and-responsibility) before running it. Do not ask the harness to run steps for a report unless the user said yes to that.
 
 ## 1. Collect
 

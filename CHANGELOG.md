@@ -7,6 +7,11 @@ changed and, from the first release that has users, how it breaks them.
 
 First state of the project. Python 3.11+, standard library only.
 
+- **Directory:** the repo-side basecamp lives at `.polymorph/basecamp/` (`config.toml`,
+  `mappings/` overrides, `decisions/`) — outside `.agents/`, so harnesses and inventory
+  tools do not read a manager's storage as repo-provided agent config. The directory is
+  named for the basecamp concept, not the tool: polymorph is one basecamp manager among
+  potential others.
 - **Reader:** reads `.agents/settings.json` and hook scripts under `.agents/hooks/` into a
   canonical config (three events, five tool classes). Settings with no cross-harness
   meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
@@ -16,11 +21,11 @@ First state of the project. Python 3.11+, standard library only.
   no `verified`.
 - **`generate`:** writes JSON hook configs using the `claude-settings` and `claude-like`
   templates, with `--check` for drift. Lookup of mappings from the repo's
-  `.agents/polymorph/mappings/` overrides the built-in ones with a warning.
+  `.polymorph/basecamp/mappings/` overrides the built-in ones with a warning.
 - **`check`:** static analysis with stable finding codes; text, JSON and SARIF 2.1.0 output;
   `--strict`.
 - **Decisions:** a hook that needs an event, tool class or payload field the target lacks is
-  an undecided item until `.agents/polymorph/decisions/NAME.toml` answers it. `generate`
+  an undecided item until `.polymorph/basecamp/decisions/NAME.toml` answers it. `generate`
   writes nothing for that target and exits 3 (it used to skip and report, exit 0); `check`
   gains `decision-undecided`, `decision-weakens-guard`, `decision-stale`, `decision-invalid`
   and drops `hook-no-equivalent`.

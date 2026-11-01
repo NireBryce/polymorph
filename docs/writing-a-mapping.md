@@ -1,6 +1,6 @@
 # Writing a mapping
 
-A mapping describes one harness. Put it at `.agents/polymorph/mappings/NAME.toml` in your
+A mapping describes one harness. Put it at `.polymorph/basecamp/mappings/NAME.toml` in your
 repo to use it there, or in `src/polymorph/mappings/NAME.toml` of a polymorph checkout to ship it (see
 [CONTRIBUTING](../CONTRIBUTING.md)). The filename, without `.toml`, must equal the `name`
 field, and `name` must match `[a-z][a-z0-9_-]*`.
@@ -12,10 +12,10 @@ claim that a wrong answer can turn into a hook that never fires.
 Validate as you go:
 
 ```sh
-python -m polymorph validate .agents/polymorph/mappings/mytool.toml
+python -m polymorph validate .polymorph/basecamp/mappings/mytool.toml
 ```
 ```
-.agents/polymorph/mappings/mytool.toml: ok
+.polymorph/basecamp/mappings/mytool.toml: ok
 ```
 (`validate` on the shipped `zcode.toml` was run; the path above is illustrative.)
 

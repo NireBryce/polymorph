@@ -99,7 +99,7 @@ class MappingTests(Base):
             mapping.parse_mapping({"schema": 2, "name": "x"}, "x")
 
     def test_override_warns(self):
-        (self.nobuiltin / "zcode.toml").write_text((self.repo / ".agents/polymorph/mappings/zcode.toml").read_text())
+        (self.nobuiltin / "zcode.toml").write_text((self.repo / ".polymorph/basecamp/mappings/zcode.toml").read_text())
         msgs = []
         load_mapping("zcode", self.repo, warn=msgs.append)
         self.assertTrue(any("overrides" in m for m in msgs))
@@ -117,7 +117,7 @@ class MappingTests(Base):
     def test_trust_dir_rule(self):
         outside = self.tmp / "outside"
         outside.mkdir()
-        shutil.copy(self.repo / ".agents/polymorph/mappings/zcode.toml", outside)
+        shutil.copy(self.repo / ".polymorph/basecamp/mappings/zcode.toml", outside)
         with self.assertRaises(MappingError):
             load_mapping("zcode", self.repo, mappings_dir=outside)
         self.assertEqual(load_mapping("zcode", self.repo, outside, (outside,)).name, "zcode")
@@ -229,7 +229,7 @@ class DirectDeliveryTests(Base):
         self.assertIn("python -m polymorph adapter", out)
 
     def test_direct_emits_bare_quoted_script(self):
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         text = (d / "zcode.toml").read_text().replace('template =', 'delivery = "direct"\ntemplate =', 1)
         (d / "zcode.toml").write_text(text)
         out = generate(self.repo, ["zcode"], check=True)[0].content
@@ -265,7 +265,7 @@ class DirectDeliveryTests(Base):
 
     def test_check_reports_error(self):
         from polymorph import check
-        d = self.repo / ".agents/polymorph/mappings"
+        d = self.repo / ".polymorph/basecamp/mappings"
         (d / "zcode.toml").write_text(
             (d / "zcode.toml").read_text().replace('template =', 'delivery = "direct"\ntemplate =', 1)
             + '\n[payload_out.deny]\nexit = 2\n')

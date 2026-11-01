@@ -61,11 +61,11 @@ What the tool does today, measured against that goal:
   stating what its mapping rests on, and a `gemini` draft with none.
 - **Generates** per-harness JSON hook configs from the `claude-settings` and
   `claude-like` templates, with `--check` for drift; repo-local mappings under
-  `.agents/polymorph/mappings/` override the built-ins, with a warning.
+  `.polymorph/basecamp/mappings/` override the built-ins, with a warning.
 - **Checks** statically, with stable finding codes and text, JSON, and SARIF 2.1.0
   output.
 
-The implementation plan for the first move: [docs/plan-workshop-pivot.md](docs/plan-workshop-pivot.md).
+The implementation plan for the first move: [docs/plan-loadout-pivot.md](docs/plan-loadout-pivot.md). The words used for it across the docs, issues and PRs are fixed in [docs/vocabulary.md](docs/vocabulary.md).
 
 The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`,
 `.claude/` — is intent, not coverage: nothing reads those yet.
@@ -82,6 +82,13 @@ The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`
   field what it actually rests on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
+- **Not tested on harnesses with built-in memory.** polymorph's output, and the loadouts
+  described in the [loadout pivot plan](docs/plan-loadout-pivot.md) — sets of initial
+  conditions meant to be loaded at every agent launch — are as-yet untested on agents
+  whose harness keeps memory across launches, and probably never will be tested.
+  Re-loading the same conditions at every launch can accumulate, duplicate or contradict
+  what such a memory already holds, so the combination may cause adverse effects.
+  See [Limits](docs/limits.md#built-in-memory).
 
 ## Install
 
@@ -102,8 +109,8 @@ you want ZCode to run the same hooks.
 
 ```sh
 # 1. Say which harnesses to generate for.
-mkdir -p .agents/polymorph
-printf 'enabled = ["zcode"]\n' > .agents/polymorph/config.toml
+mkdir -p .polymorph/basecamp
+printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 
 # 2. See what would be written, and what has no equivalent. Writes nothing.
 python -m polymorph generate --check
