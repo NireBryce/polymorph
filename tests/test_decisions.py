@@ -62,7 +62,7 @@ class Base(unittest.TestCase):
         return rc, out.getvalue(), err.getvalue()
 
     def gen(self, *extra):
-        return self.cli("generate", "--repo", str(self.repo), *extra)
+        return self.cli("manage", "generate", "--repo", str(self.repo), *extra)
 
     def codes(self):
         return {(f.code, f.severity) for f in check.run_check(self.repo)}
@@ -98,7 +98,7 @@ class UndecidedTests(Base):
 
     def test_check_reports_undecided_as_error(self):
         self.assertIn(("decision-undecided", "error"), self.codes())
-        self.assertEqual(self.cli("check", "--repo", str(self.repo))[0], 1)
+        self.assertEqual(self.cli("manage", "check", "--repo", str(self.repo))[0], 1)
 
     def test_check_flag_with_undecided_is_3_not_drift(self):
         self.assertEqual(self.gen("--check")[0], 3)
@@ -128,7 +128,7 @@ class DecidedTests(Base):
         codes = self.codes()
         self.assertIn(("decision-weakens-guard", "warning"), codes)
         self.assertFalse({c for c, _ in codes} & {"decision-undecided", "decision-stale", "decision-invalid"})
-        self.assertEqual(self.cli("check", "--repo", str(self.repo), "--strict")[0], 1)
+        self.assertEqual(self.cli("manage", "check", "--repo", str(self.repo), "--strict")[0], 1)
 
     def test_skip_missing_field_drops_the_hook(self):
         self.decide(**{M.replace(":", "__"): ("skip", []), R.replace(":", "__"): ("skip", [])})

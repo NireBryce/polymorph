@@ -3,13 +3,21 @@
 Run as `python -m polymorph ...` or, after an install, `polymorph ...`. Exit codes: `0`
 success; `1` the command ran and found a problem (drift, findings, failed fixtures, an
 invalid mapping); `2` usage or internal error (`polymorph: error: ...` on stderr);
-`3` (`generate` only) a hook needs something the target lacks and no decision answers it. The
+`3` (`manage generate` only) a hook needs something the target lacks and no decision answers it. The
 adapter and `discover log` have their own rules, below.
 
-## `generate`
+## `manage`
+
+The maintainer half: commands that write the basecamp and generate the harness
+configs it issues -- `manage generate`, `manage check`, `manage validate`,
+`manage conformance` and `manage adopt`, each documented below. The contributor half is
+`equip`; `adapter` and `env` are launch-time; `discover` and `capture` serve harness
+mappers.
+
+## `manage generate`
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]
+polymorph manage generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]
 ```
 
 Writes each target's config file from `.agents/settings.json`.
@@ -43,10 +51,10 @@ Other top-level keys already in the target file are kept; the whole `hooks` key 
 rewritten. Hooks you added to that file by hand are lost. Invalid JSON in the existing
 file is an error.
 
-## `check`
+## `manage check`
 
 ```
-polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
 ```
 
 Static analysis. Runs no hook, harness or network, writes no file. Exit 0 when there are
@@ -55,7 +63,7 @@ internal errors.
 
 | Flag | Meaning |
 |---|---|
-| `--repo`, `--harness` | As for `generate`. No targets gives the `no-targets` error. |
+| `--repo`, `--harness` | As for `manage generate`. No targets gives the `no-targets` error. |
 | `--format` | `text` (default), `json` or `sarif` (SARIF 2.1.0, one result per finding, a location when the finding has a file). |
 | `--strict` | Warnings fail the run too. |
 
@@ -86,6 +94,38 @@ If a hook command is rejected, checks derived from the config (decisions, unmapp
 skipped for that run. `mapping-untested-live` is a note, so even `--strict` never makes it
 fail: it is a standing reminder, not a result.
 
+## `equip`
+
+```
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore]
+```
+
+The onboarding run: one command that equips a harness and prints what it got. It
+composes the finished parts -- `manage generate`'s config files, the inventory's gap
+report, and the env contract -- then records provenance.
+
+Output, per harness:
+
+- `wrote|would write|unchanged .zcode/config.json` -- the generated config (`--dry-run`
+  writes nothing). An undecided mismatch prints `NOT WRITTEN` with a count;
+  `manage generate` prints the questions.
+- `honoured surface:` the discover-and-report kinds the coverage table says the harness
+  honours. With no coverage table: `coverage: no coverage table; nothing is known` --
+  nothing is claimed.
+- `gaps (will be silently ignored):` the provided paths the harness will not honour.
+- `env contract:` the exports from env.toml (`no env.toml; no env contract emitted`
+  when there are none). Emit-only: applying them is the caller's job (`polymorph env
+  --exec` runs a command under them).
+- `manifest: .polymorph/basecamp/loadout.toml` -- the provenance manifest: per issued
+  artifact, its sha256 and what generated it, so edits and staleness are checkable
+  later.
+- `posture:` `maintainer` when the basecamp config is committed (issued artifacts are
+  committed with it); `contributor` when it is not -- the artifacts are regenerable,
+  and equip prints the `.gitignore` lines. `--gitignore` appends a marked, idempotent
+  section; polymorph never touches `.gitignore` any other way.
+
+Exit 0; 2 on usage errors.
+
 ## `inventory`
 
 ```
@@ -113,10 +153,10 @@ table prints `no coverage table; nothing is known` — absence is unknown, never
 symlinked path reports its resolved target, so a basecamp store shows through. Gap lines
 do not fail the run: the report is information, not a check.
 
-## `adopt`
+## `manage adopt`
 
 ```
-polymorph adopt [--repo .] [--dry-run]
+polymorph manage adopt [--repo .] [--dry-run]
 ```
 
 Moves a repo's agent files at rest into the basecamp store and replaces each original path
@@ -194,20 +234,20 @@ its exit code. The `--` is required. Details and failure behaviour:
 `polymorph adapter: this tool call was NOT checked by the guard hook (...)` and does not
 deny.
 
-## `validate`
+## `manage validate`
 
 ```
-polymorph validate FILE.toml
+polymorph manage validate FILE.toml
 ```
 
 Checks one mapping file against schema 1 and prints `FILE: ok` (exit 0), or one
 `error: ...` line per problem on stderr (exit 1). It checks the file alone: it does not
 compare `name` to the filename or check that `generate` can use the `format`/`template`.
 
-## `conformance`
+## `manage conformance`
 
 ```
-polymorph conformance [--harness NAME]
+polymorph manage conformance [--harness NAME]
 ```
 
 Replays `src/polymorph/fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's

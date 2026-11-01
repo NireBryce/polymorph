@@ -1,6 +1,6 @@
 # Using polymorph in CI
 
-`polymorph check` is built for this: it is static, writes nothing, needs no network, and
+`polymorph manage check` is built for this: it is static, writes nothing, needs no network, and
 exits non-zero on errors. What it catches is drift and inconsistency (a settings edit with
 no regenerated file, a hook script that lost its execute bit, a hook the target cannot run).
 It does not show that the guards work; see [Limits](limits.md).
@@ -18,13 +18,13 @@ git clone https://github.com/NireBryce/polymorph /tmp/polymorph     # not run
 pip install /tmp/polymorph                                          # not run (a local editable install was run; a plain install into a fresh venv was run)
 ```
 
-Pin a commit (`git -C /tmp/polymorph checkout <sha>`) so a change in polymorph cannot
+Pin a commit (`git -C /tmp/polymorph manage checkout <sha>`) so a change in polymorph cannot
 change your CI result. polymorph is experimental and its interfaces may change.
 
 ## Which flags
 
-- `polymorph check` fails the job on errors only.
-- `polymorph check --strict` fails on warnings too: an unverified mapping
+- `polymorph manage check` fails the job on errors only.
+- `polymorph manage check --strict` fails on warnings too: an unverified mapping
   (`mapping-unverified`), a decision that weakens a guard (`decision-weakens-guard`), a stale decision, missing
   fixtures. An undecided mismatch (`decision-undecided`) is an error even without `--strict`. With the shipped `gemini` draft enabled, `--strict` always fails; that is the
   point of the warning.
@@ -41,8 +41,8 @@ repos:
   - repo: local
     hooks:
       - id: polymorph-check
-        name: polymorph check
-        entry: python -m polymorph check --strict
+        name: polymorph manage check
+        entry: python -m polymorph manage check --strict
         language: system
         pass_filenames: false
         files: ^\.(agents|zcode|claude)/
@@ -68,16 +68,16 @@ jobs:
         with: {python-version: "3.12"}
       - run: git clone https://github.com/NireBryce/polymorph "$RUNNER_TEMP/polymorph"
       - run: pip install -e "$RUNNER_TEMP/polymorph"
-      - run: python -m polymorph check --format sarif > polymorph.sarif
+      - run: python -m polymorph manage check --format sarif > polymorph.sarif
         continue-on-error: true
       - uses: github/codeql-action/upload-sarif@v3
         with: {sarif_file: polymorph.sarif}
-      - run: python -m polymorph check --strict
+      - run: python -m polymorph manage check --strict
 ```
 
 Notes:
 
-- The SARIF step uses `continue-on-error` so the upload still happens when `check` finds
+- The SARIF step uses `continue-on-error` so the upload still happens when `manage check` finds
   errors; the last step is what fails the job.
 - Uploading SARIF needs `security-events: write` and, for private repositories, GitHub
   code scanning to be available for the repo.
@@ -90,7 +90,7 @@ Notes:
 ## Keeping generated files in sync
 
 Commit the generated files (`.zcode/config.json` and so on). CI then catches the case where
-`.agents/settings.json` changed and nobody re-ran `generate`: `check` reports
-`generated-drift` and names the file. The fix is `python -m polymorph generate` and a commit.
-`python -m polymorph generate --check` does the drift test alone, with exit 1, if you want a
+`.agents/settings.json` changed and nobody re-ran `generate`: `manage check` reports
+`generated-drift` and names the file. The fix is `python -m polymorph manage generate` and a commit.
+`python -m polymorph manage generate --check` does the drift test alone, with exit 1, if you want a
 smaller job.

@@ -143,14 +143,14 @@ class AdoptCliTests(unittest.TestCase):
         return rc, out.getvalue(), err.getvalue()
 
     def test_cli_adopt_exit_0_and_table(self):
-        rc, out, err = self.run_cli("adopt", "--repo", str(self.repo))
+        rc, out, err = self.run_cli("manage", "adopt", "--repo", str(self.repo))
         self.assertEqual(rc, 0, (out, err))
         self.assertIn("moved [memory] AGENTS.md -> .polymorph/basecamp/AGENTS.md", out)
         self.assertIn("4 moved, 0 already adopted, 1 absent, 0 refused", out)
 
     def test_cli_adopt_refusal_exits_1(self):
         (self.repo / "AGENTS.md").write_text("changed\n")
-        rc, out, _ = self.run_cli("adopt", "--repo", str(self.repo))
+        rc, out, _ = self.run_cli("manage", "adopt", "--repo", str(self.repo))
         self.assertEqual(rc, 1)
         self.assertIn("refused [memory] AGENTS.md: uncommitted changes", out)
 

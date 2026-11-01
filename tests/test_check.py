@@ -28,7 +28,7 @@ def tree_hash(root: Path) -> str:
 def run(*argv) -> tuple[int, str]:
     buf = io.StringIO()
     with redirect_stdout(buf):
-        rc = main(["check", *argv])
+        rc = main(["manage", "check", *argv])
     return rc, buf.getvalue()
 
 
