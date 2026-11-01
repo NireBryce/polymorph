@@ -20,6 +20,7 @@ patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
 | Mappings are data | nothing in a mapping is executed; hook scripts live under `.agents/hooks/` | [SPEC](../docs/SPEC.md) trust model |
 | Redact by allowlist | keep only named structural values; everything else becomes `{type, length}` | [SPEC](../docs/SPEC.md) privacy |
 | Port, don't copy | tooling from other repos is judged at the mechanism level, then ported with rewritten nouns and re-earned evidence | skill [port-agent-tooling](../.polymorph/basecamp/skills/port-agent-tooling/SKILL.md) (lineage: nixos-configs `extract-agent-tooling`, launchpad PR #1) |
+| Whole-repo review by read-only subagent sweeps | two agents sweep disjoint module groups against the review checklist; every finding is verified with a failing test before a fix, and design-level items become issues | skill [review](../.polymorph/basecamp/skills/review/SKILL.md) (whole-repo sweeps) |
 | The banner stays honest | the project is experimental and unvetted; cost is stated, not implied | [README](../README.md) notice and [cost and responsibility](../README.md#cost-and-responsibility) |
 
 The meta-pattern: when something you did worked and looks likely to recur,
