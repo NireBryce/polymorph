@@ -99,7 +99,7 @@ fail: it is a standing reminder, not a result.
 ## `equip`
 
 ```
-polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore]
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore] [--no-links]
 ```
 
 The onboarding run: one command that equips a harness and prints what it got. It
@@ -114,6 +114,12 @@ Output, per harness:
 - `honoured surface:` the discover-and-report kinds the coverage table says the harness
   honours. With no coverage table: `coverage: no coverage table; nothing is known` --
   nothing is claimed.
+- `linked|would link PATH -> TARGET` -- a symlink made for a `no-link` gap, so the harness reads
+  what the repo provides (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`).
+  Only `no-link` is acted on; a real file or directory, or a symlink to somewhere else, is
+  left as it is and stays in the gap list. `link refused PATH: reason` names a link not made.
+  Links come only from built-in coverage tables. Each is recorded in the manifest.
+  `--no-links` makes none and reports the gap.
 - `gaps (will be silently ignored):` the provided paths the harness does not read, each with a
   reason (`unsupported`, `no-link`, `unlinked-copy`, `points-elsewhere`) and a fix. See `inventory`.
 - `env contract:` the exports from env.toml (`no env.toml; no env contract emitted`
@@ -121,7 +127,7 @@ Output, per harness:
   --exec` runs a command under them).
 - `manifest: .polymorph/basecamp/loadout.toml` -- the provenance manifest: per issued
   artifact, its sha256 and what generated it, so edits and staleness are checkable
-  later.
+  later; per symlink made, its target (`[links.NAME]`).
 - `posture:` `maintainer` when the basecamp config is committed (issued artifacts are
   committed with it); `contributor` when it is not -- the artifacts are regenerable,
   and equip prints the `.gitignore` lines. `--gitignore` appends a marked, idempotent
@@ -158,8 +164,9 @@ them resolves to it, directly or through a symlink; otherwise it is a gap with a
 | `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
 | `points-elsewhere` | the harness reads a symlink that leads somewhere else |
 
-The `fix` text names the link that would reach the path (`link CLAUDE.md -> AGENTS.md`);
-polymorph makes no link itself.
+For `no-link` the `fix` text is the command that makes the link
+(`polymorph equip --harness claude links CLAUDE.md -> AGENTS.md`); `equip` and `manage adopt`
+create it. For the other reasons the `fix` text says what to do by hand.
 
 What a harness honours comes from its **coverage table**, `coverage/NAME.toml` — shipped
 beside the mappings, overridable at `.polymorph/basecamp/coverage/NAME.toml` (with a
@@ -172,7 +179,7 @@ do not fail the run: the report is information, not a check.
 ## `manage adopt`
 
 ```
-polymorph manage adopt [--repo .] [--dry-run]
+polymorph manage adopt [--repo .] [--dry-run] [--no-links]
 ```
 
 Moves a repo's agent files at rest into the basecamp store and replaces each original path
@@ -187,7 +194,13 @@ line. Refusals (per path; exit 1 when any): a path that is already a symlink is 
 and reported with where it points; a path with uncommitted changes, or one git ignores (`git status
 --porcelain --ignored`), is refused — no clean tree and no committed copy, no safety net; a store copy that already exists
 beside a real file at rest is refused rather than overwritten. A second run on an adopted
-repo is a no-op. `--dry-run` reports without writing. adopt writes nothing outside the
+repo is a no-op. `--dry-run` reports without writing.
+
+After the move, adopt closes every `no-link` gap of every harness that has a coverage table:
+`linked [HARNESS] PATH -> TARGET` per link (`would link` under `--dry-run`), `link refused
+[HARNESS] PATH: reason` per link it will not make (exit 1). It links only where nothing exists;
+a real file or directory at the path a harness reads is left alone and stays a gap.
+`--no-links` skips this step. The links are recorded in `loadout.toml`. adopt writes nothing outside the
 repository and never edits a file through a symlink: the store copy is the only one
 written.
 

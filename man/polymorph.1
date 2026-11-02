@@ -12,9 +12,9 @@ polymorph manage validate file
 .br
 polymorph manage conformance [\-\-harness HARNESS]
 .br
-polymorph manage adopt [\-\-repo REPO] [\-\-dry\-run]
+polymorph manage adopt [\-\-repo REPO] [\-\-dry\-run] [\-\-no\-links]
 .br
-polymorph equip [\-\-repo REPO] \-\-harness HARNESS [\-\-dry\-run] [\-\-gitignore]
+polymorph equip [\-\-repo REPO] \-\-harness HARNESS [\-\-dry\-run] [\-\-no\-links] [\-\-gitignore]
 .br
 polymorph adapter \-\-harness HARNESS [\-\-mappings MAPPINGS] [\-\-trust\-dir TRUST_DIR ...] [\-\-repo REPO] [\-\-timeout TIMEOUT] script...
 .br
@@ -105,19 +105,22 @@ replay only this harness's fixtures (default: all)
 Move agent files at rest into the basecamp store and symlink them back.
 .PP
 .nf
-polymorph manage adopt [\-\-repo REPO] [\-\-dry\-run]
+polymorph manage adopt [\-\-repo REPO] [\-\-dry\-run] [\-\-no\-links]
 .fi
 .TP
 .B \-\-repo REPO
 repository root (default .)
 .TP
 .B \-\-dry\-run
-report what would move; write nothing
+report what would move and link; write nothing
+.TP
+.B \-\-no\-links
+do not create the symlinks harnesses need (CLAUDE.md, .claude/skills, .claude/rules)
 .SS polymorph equip
 The onboarding run: write the loadout and report honoured surface, gaps and the env contract.
 .PP
 .nf
-polymorph equip [\-\-repo REPO] \-\-harness HARNESS [\-\-dry\-run] [\-\-gitignore]
+polymorph equip [\-\-repo REPO] \-\-harness HARNESS [\-\-dry\-run] [\-\-no\-links] [\-\-gitignore]
 .fi
 .TP
 .B \-\-repo REPO
@@ -128,6 +131,9 @@ harness to equip
 .TP
 .B \-\-dry\-run
 write nothing; report what equip would do
+.TP
+.B \-\-no\-links
+report gaps only; do not create the symlinks this harness needs
 .TP
 .B \-\-gitignore
 contributor posture: append the marked regenerable\-artifacts section to .gitignore

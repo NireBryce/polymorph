@@ -74,20 +74,21 @@ polymorph manage conformance [--harness HARNESS]
 Move agent files at rest into the basecamp store and symlink them back.
 
 ```
-polymorph manage adopt [--repo REPO] [--dry-run]
+polymorph manage adopt [--repo REPO] [--dry-run] [--no-links]
 ```
 
 | Argument | Meaning |
 |---|---|
 | `--repo REPO` | repository root (default .) |
-| `--dry-run` | report what would move; write nothing |
+| `--dry-run` | report what would move and link; write nothing |
+| `--no-links` | do not create the symlinks harnesses need (CLAUDE.md, .claude/skills, .claude/rules) |
 
 ## polymorph equip
 
 The onboarding run: write the loadout and report honoured surface, gaps and the env contract.
 
 ```
-polymorph equip [--repo REPO] --harness HARNESS [--dry-run] [--gitignore]
+polymorph equip [--repo REPO] --harness HARNESS [--dry-run] [--no-links] [--gitignore]
 ```
 
 | Argument | Meaning |
@@ -95,6 +96,7 @@ polymorph equip [--repo REPO] --harness HARNESS [--dry-run] [--gitignore]
 | `--repo REPO` | repository root (default .) |
 | `--harness HARNESS` | harness to equip |
 | `--dry-run` | write nothing; report what equip would do |
+| `--no-links` | report gaps only; do not create the symlinks this harness needs |
 | `--gitignore` | contributor posture: append the marked regenerable-artifacts section to .gitignore |
 
 ## polymorph adapter

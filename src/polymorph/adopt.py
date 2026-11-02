@@ -15,6 +15,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import links as linkmod
+
 STORE = ".polymorph/basecamp"
 
 # (kind, at-rest path, store path). Hook scripts and settings.json are
@@ -45,10 +47,12 @@ class AdoptResult:
     already: list[tuple[str, str, str]] = field(default_factory=list)  # kind, path, points-to
     absent: list[tuple[str, str]] = field(default_factory=list)        # kind, path
     refused: list[tuple[str, str, str]] = field(default_factory=list)  # kind, path, reason
+    linked: list[linkmod.Link] = field(default_factory=list)           # made (dry run: would be made)
+    link_refused: list[tuple[str, str, str]] = field(default_factory=list)  # harness, path, reason
     dry_run: bool = False
 
     def ok(self) -> bool:
-        return not self.refused
+        return not self.refused and not self.link_refused
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -72,7 +76,24 @@ def _rel_symlink(repo: Path, link: Path, store_rel: str) -> str:
     return os.path.relpath(target_abs, link.parent)
 
 
-def adopt(repo: str | Path = ".", dry_run: bool = False) -> AdoptResult:
+def _link_harnesses(repo: Path, result: AdoptResult, dry_run: bool) -> None:
+    """Close every `no-link` gap of every harness that has a coverage table (issue #39)."""
+    from .equip import record_links
+    from .inventory import available_tables, load_coverage, read_inventory
+
+    caps = [c for n in available_tables(repo) if (c := load_coverage(n, repo)) is not None]
+    lp = linkmod.plan(repo, caps, read_inventory(repo))
+    result.link_refused = list(lp.refused)
+    if dry_run:
+        result.linked = lp.create
+        return
+    result.linked, failed = linkmod.apply(repo, lp.create)
+    result.link_refused += failed
+    if result.linked:
+        record_links(repo, result.linked)
+
+
+def adopt(repo: str | Path = ".", dry_run: bool = False, make_links: bool = True) -> AdoptResult:
     repo = Path(repo).resolve()
     if not repo.is_dir():
         raise AdoptError(f"no such directory: {repo}")
@@ -102,4 +123,6 @@ def adopt(repo: str | Path = ".", dry_run: bool = False) -> AdoptResult:
         link = os.path.relpath(dst, src.parent)
         os.symlink(link, src)
         result.moved.append(Action(kind=kind, path=at_rest, store=f"{STORE}/{store_rel}"))
+    if make_links:
+        _link_harnesses(repo, result, dry_run)
     return result

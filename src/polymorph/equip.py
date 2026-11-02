@@ -15,8 +15,10 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import links as linkmod
 from .generate import generate
 from .inventory import Coverage, Gap, load_coverage, read_inventory
+from .links import Link
 
 MANIFEST = ".polymorph/basecamp/loadout.toml"
 GITIGNORE_MARK = "# polymorph equip: issued artifacts below are regenerable (do not edit)"
@@ -48,6 +50,8 @@ class EquipResult:
     coverage_known: bool = True
     env_lines: list[str] | None = None                     # None: no env.toml, or an invalid one
     env_error: str = ""                                    # why env.toml could not be used, if it exists
+    linked: list[Link] = field(default_factory=list)       # symlinks made (dry run: that would be made)
+    link_refused: list[tuple[str, str, str]] = field(default_factory=list)   # harness, path, reason
     manifest_written: bool = False
     posture: str = "unknown"                               # maintainer | contributor | unknown
     gitignore_suggested: list[str] = field(default_factory=list)
@@ -78,7 +82,23 @@ def _read_manifest(repo: Path) -> list[Artifact]:
     return manifest_entries(repo)
 
 
-def _loadout_lines(artifacts: list[Artifact]) -> str:
+def write_manifest(repo: Path, artifacts: list[Artifact], links: list[Link]) -> None:
+    """Replace the manifest with `artifacts` and `links` (the caller merges with what was there)."""
+    manifest = repo / MANIFEST
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = manifest.with_name(manifest.name + ".polymorph-tmp")
+    tmp.write_text(_loadout_lines(artifacts, links))
+    tmp.replace(manifest)
+
+
+def record_links(repo: Path, made: list[Link]) -> None:
+    """Add `made` to the manifest, keeping every artifact and every other link."""
+    keys = {(l.harness, l.path) for l in made}
+    kept = [l for l in manifest_links(repo) if (l.harness, l.path) not in keys]
+    write_manifest(repo, _read_manifest(repo), [*kept, *made])
+
+
+def _loadout_lines(artifacts: list[Artifact], links: list[Link] = ()) -> str:
     out = ["# Written by polymorph equip: provenance of the issued loadout.", "schema = 1", ""]
     by_harness: dict[str, list[Artifact]] = {}
     for a in artifacts:
@@ -88,11 +108,19 @@ def _loadout_lines(artifacts: list[Artifact]) -> str:
         for a in sorted(by_harness[harness], key=lambda x: x.path):
             out.append(f'{json.dumps(a.path)} = {{hash = {json.dumps(a.hash)}, source = {json.dumps(a.source)}}}')
         out.append("")
+    by_link: dict[str, list[Link]] = {}
+    for l in links:
+        by_link.setdefault(l.harness, []).append(l)
+    for harness in sorted(by_link):
+        out.append(f"[links.{harness}]")
+        for l in sorted(by_link[harness], key=lambda x: x.path):
+            out.append(f'{json.dumps(l.path)} = {{target = {json.dumps(l.target)}, kind = {json.dumps(l.kind)}}}')
+        out.append("")
     return "\n".join(out)
 
 
 def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
-          gitignore: bool = False) -> EquipResult:
+          gitignore: bool = False, make_links: bool = True) -> EquipResult:
     if not harness:
         raise EquipError("equip needs --harness NAME")
     repo = Path(repo).resolve()
@@ -115,19 +143,27 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
             if dest.is_file():
                 artifact = Artifact(harness=harness, path=r.path, hash=_sha256(dest),
                                     source=f"generated from .agents/settings.json via mapping {harness}")
-                manifest = repo / MANIFEST
-                manifest.parent.mkdir(parents=True, exist_ok=True)
                 # every harness's entries stay; this run replaces only its own artifact's
                 kept = [a for a in _read_manifest(repo)
                         if (a.harness, a.path) != (artifact.harness, artifact.path)]
-                tmp = manifest.with_name(manifest.name + ".polymorph-tmp")
-                tmp.write_text(_loadout_lines([*kept, artifact]))
-                tmp.replace(manifest)
+                write_manifest(repo, [*kept, artifact], manifest_links(repo))
                 result.manifest_written = True
 
     inv = read_inventory(repo)
     cap: Coverage | None = load_coverage(harness, repo)
     result.coverage_known = cap is not None
+    if cap is not None and make_links:
+        lp = linkmod.plan(repo, [cap], inv)
+        result.link_refused = list(lp.refused)
+        if dry_run:
+            result.linked = lp.create
+        else:
+            result.linked, failed = linkmod.apply(repo, lp.create)
+            result.link_refused += failed
+            if result.linked:
+                record_links(repo, result.linked)
+                result.manifest_written = True
+                inv = read_inventory(repo)
     if cap is not None:
         from .inventory import KINDS, gaps as compute_gaps
 
@@ -159,6 +195,22 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
                 gi.write_text(current + ("\n" if current and not current.endswith("\n") else "") + block)
                 result.gitignore_appended = True
     return result
+
+
+def manifest_links(repo: str | Path = ".", harness: str | None = None) -> list[Link]:
+    """The symlinks equip or adopt made, as the manifest records them."""
+    import tomllib
+
+    path = Path(repo) / MANIFEST
+    if not path.is_file():
+        return []
+    out: list[Link] = []
+    for name, entries in tomllib.loads(path.read_text()).get("links", {}).items():
+        if harness is not None and name != harness:
+            continue
+        for p, v in sorted(entries.items()):
+            out.append(Link(harness=name, path=p, target=v["target"], kind=v.get("kind", "")))
+    return out
 
 
 def manifest_entries(repo: str | Path = ".", harness: str | None = None) -> list[Artifact]:
