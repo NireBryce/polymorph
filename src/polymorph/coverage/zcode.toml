@@ -1,7 +1,10 @@
 # What ZCode honours of the discover-and-report inventory kinds.
 # Basis: skills_dir and context_file as recorded in zcode.toml's mapping, plus a
 # live session observation (docs/observed-zcode-session.md): AGENTS.md is read by
-# the harness and .agents/skills is read through a basecamp-store symlink. rules
+# the harness and .agents/skills is read through a basecamp-store symlink. ZCode's own
+# docs (zai-org/ZCode docs/external-agent-skills-import.md) say it reads .agents/skills and
+# .zcode/skills and that .claude/skills takes no part in discovery, so ZCode needs no
+# link for what the repo provides. rules
 # and .claude/ are left out because nothing records ZCode honouring them; the gap
 # report will name them as ignored until a coverage entry is observed.
 schema = 1

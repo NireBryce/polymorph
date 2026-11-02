@@ -55,5 +55,18 @@ same pointer pattern — `CLAUDE.md` is a symlink to `AGENTS.md`, and `.claude/s
 symlink to `.agents/skills`. The gap report counts each provided *path* the harness does
 not honour, so zcode is reported as ignoring `CLAUDE.md` while honouring the very bytes
 it points at via `AGENTS.md`. Derived: the gap report should deduplicate by resolved
-content — a symlink to honoured content is a pointer, not a gap. Not yet implemented;
-tracked on the tracker.
+content — a symlink to honoured content is a pointer, not a gap. Implemented: a provided path
+is reached when a read path resolves to it (see [`inventory`](cli.md#inventory)).
+
+## Which harness needs the links
+
+Read from the harnesses' own documentation (2026-11-02), not observed in a session. Claude
+Code loads project skills from `.claude/skills`, rules from `.claude/rules` and instructions
+from `CLAUDE.md`; it loads nothing under `.agents/`, and reads `AGENTS.md` itself only from
+v2.1.277 and only when no `CLAUDE.md` exists in or above the working directory. ZCode's
+repository documents `.agents/skills` and `.zcode/skills` as its skill roots, `AGENTS.md` as
+its instruction file, and `.claude/skills` as not part of discovery. Derived: Claude Code is
+the harness that needs `CLAUDE.md`, `.claude/skills` and `.claude/rules` links to what the
+repo keeps under `AGENTS.md` and `.agents/`; ZCode needs none. A third-party review that has
+ZCode reading `.claude/skills` disagrees with ZCode's own documentation. This page's session
+observation of `.agents/skills` agrees with the documentation.

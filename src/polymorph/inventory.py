@@ -82,7 +82,9 @@ class Gap:
     """A provided path the harness will not read, and why.
 
     reads: the path(s) the harness looks at for this kind (empty when unsupported);
-    fix: what would make it reach the provided path, as text -- polymorph does not make the link.
+    fix: what would make it reach the provided path, as text;
+    link_to: for `no-link`, the relative target of the symlink at reads[0] that closes the gap
+    (what `equip` and `adopt` create); empty for every other reason.
     """
 
     harness: str
@@ -91,6 +93,7 @@ class Gap:
     reason: str = UNSUPPORTED
     reads: tuple[str, ...] = ()
     fix: str = ""
+    link_to: str = ""
 
 
 def _rel(repo: Path, p: Path) -> str:
@@ -257,13 +260,12 @@ def _reached(repo: Path, kind: str, item: Item, read: str) -> bool:
     return _same(target.parent, read_path)
 
 
-def _link_fix(repo: Path, kind: str, item: Item, read: str) -> str:
-    """Text only: the link that would make `read` reach the item."""
+def _link_target(repo: Path, kind: str, item: Item, read: str) -> str:
+    """The relative target of a symlink at `read` that makes it reach the item."""
     source = repo / item.path
     if kind != "memory":
         source = source.parent
-    target = os.path.relpath(source, (repo / read).parent)
-    return f"link {read} -> {target}"
+    return os.path.relpath(source, (repo / read).parent)
 
 
 def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
@@ -295,11 +297,13 @@ def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
             links = [r for r in present if (repo / r).is_symlink()]
             read = (links or present or list(reads))[0]
             here = item.path if kind == "memory" else PurePosixPath(item.path).parent.as_posix()
+            link_to = ""
             if reason == NO_LINK:
-                fix = _link_fix(repo, kind, item, read)
+                link_to = _link_target(repo, kind, item, read)
+                fix = f"polymorph equip --harness {cap.name} links {read} -> {link_to}"
             elif reason == UNLINKED_COPY:
                 fix = f"{read} and {here} are separate copies: merge them into one and link the other to it"
             else:
                 fix = f"{read} is a symlink to {os.readlink(repo / read)}, not to {here}"
-            out.append(Gap(cap.name, kind, item.path, reason, reads=reads, fix=fix))
+            out.append(Gap(cap.name, kind, item.path, reason, reads=reads, fix=fix, link_to=link_to))
     return out

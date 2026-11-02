@@ -121,7 +121,8 @@ class GapTests(TempRepoTest):
         self.inv = inventory.read_inventory(self.repo)
         g = next(g for g in inventory.gaps(self.inv, inventory.load_coverage("claude", self.repo), self.repo)
                  if g.path == "AGENTS.md")
-        self.assertEqual(g.fix, "link CLAUDE.md -> AGENTS.md")
+        self.assertEqual(g.fix, "polymorph equip --harness claude links CLAUDE.md -> AGENTS.md")
+        self.assertEqual(g.link_to, "AGENTS.md")
 
     def test_builtin_zcode_gaps_on_a_full_repo(self):
         self.assertEqual(self.gaps_for("zcode"),

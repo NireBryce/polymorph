@@ -13,7 +13,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
 | conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
 | inventory | `src/polymorph/inventory.py`, `src/polymorph/coverage/*.toml` | `read_inventory`, `load_coverage`, `gaps` |
-| adopt | `src/polymorph/adopt.py` | `adopt` |
+| adopt | `src/polymorph/adopt.py`, `links.py` | `adopt`, `plan`, `apply` |
 | report | `.polymorph/basecamp/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
@@ -121,7 +121,7 @@ the adapter.
   mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
   decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
-  loadout.toml           # equip's provenance manifest: per issued artifact, its sha256 and source
+  loadout.toml           # equip's provenance manifest: per issued artifact its sha256 and source; per made symlink its target
   generated/NAME/        # generated shims and plugin files (planned)
 ```
 
@@ -155,6 +155,19 @@ Hook scripts and `.agents/settings.json` are never moved: they stay where the ha
 reads them. adopt never edits a file through a symlink -- the store copy is the only one
 written -- and writes nothing outside the repository. Owner: `adopt.py`.
 
+Links (`links.py`, issue #39). `equip` (for its harness) and `adopt` (for every harness with a
+coverage table) create the symlink that closes each `no-link` gap: the path the harness reads
+is made a relative link to the provided file or directory (`CLAUDE.md -> AGENTS.md`,
+`.claude/skills -> ../.agents/skills`, `.claude/rules -> ../.agents/rules`). Only `no-link`
+is acted on. A real file or directory at the read path (`unlinked-copy`) and a symlink to
+somewhere else (`points-elsewhere`) are never replaced or rewritten; the gap report names
+them. Links are made only from built-in coverage tables: a repo-local table is data the
+repository ships, and it does not get to choose where polymorph creates a symlink. A link
+path under `.git` or `.polymorph`, or below a symlink that leaves the repository, is refused,
+and so is a path two harnesses want linked to different targets. Each link made is recorded
+in `loadout.toml` as `[links.NAME]` `"PATH" = {target, kind}`, so a link polymorph made can be
+told from one the user made. `--no-links` on both commands skips this.
+
 ## The env contract
 
 `.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path
@@ -184,12 +197,12 @@ polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIP
 polymorph manage validate FILE.toml
 polymorph manage conformance [--harness NAME]
 polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
-polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore]
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore] [--no-links]
                         # the onboarding run: writes the loadout, reports honoured surface, gaps, env; records provenance
 polymorph inventory [--repo .] [--harness NAME ...] [--json]
                         # discover-and-report kinds and per-harness gaps; reads paths and symlink targets, never file contents
-polymorph manage adopt [--repo .] [--dry-run]
-                        # moves agent files at rest into the basecamp store and symlinks back; refuses dirty trees and symlinks
+polymorph manage adopt [--repo .] [--dry-run] [--no-links]
+                        # moves agent files at rest into the basecamp store and symlinks back, then links what harnesses read; refuses dirty trees and symlinks
 polymorph env [--repo .] [--harness NAME] [--exec CMD]
                         # emits the env contract from host facts (.polymorph/basecamp/env.toml) as shell exports, or runs CMD under it; emit-only
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]

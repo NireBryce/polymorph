@@ -99,6 +99,7 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `decisions.py` | `.polymorph/basecamp/decisions/NAME.toml`: validate, `Mismatch`/`Decision`, the question format |
 | `check.py` | static analysis of a repo's agent config (`polymorph check`); runs nothing |
 | `capture.py`, `capture_drivers.py`, `data/` | `polymorph capture`: scratch dir, fixed steps, confirmation, report; shipped drivers (`opencode`, `claude`) and the plugin template |
+| `inventory.py`, `links.py`, `adopt.py`, `equip.py` | the gap report (coverage tables say what a harness reads); the symlinks `equip` and `adopt` make for `no-link` gaps (built-in tables only); the move into the basecamp store; the onboarding run |
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
 | `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |

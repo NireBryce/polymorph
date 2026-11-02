@@ -37,12 +37,16 @@ def _parser() -> argparse.ArgumentParser:
 
     md = ms.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
     md.add_argument("--repo", default=".", help="repository root (default .)")
-    md.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
+    md.add_argument("--dry-run", action="store_true", help="report what would move and link; write nothing")
+    md.add_argument("--no-links", action="store_true",
+                    help="do not create the symlinks harnesses need (CLAUDE.md, .claude/skills, .claude/rules)")
 
     q = sub.add_parser("equip", help="the onboarding run: write the loadout and report honoured surface, gaps and the env contract")
     q.add_argument("--repo", default=".", help="repository root (default .)")
     q.add_argument("--harness", required=True, help="harness to equip")
     q.add_argument("--dry-run", action="store_true", help="write nothing; report what equip would do")
+    q.add_argument("--no-links", action="store_true",
+                   help="report gaps only; do not create the symlinks this harness needs")
     q.add_argument("--gitignore", action="store_true",
                    help="contributor posture: append the marked regenerable-artifacts section to .gitignore")
 
@@ -238,7 +242,7 @@ def _cmd_inventory(args) -> int:
 def _cmd_adopt(args) -> int:
     from .adopt import adopt
 
-    r = adopt(args.repo, args.dry_run)
+    r = adopt(args.repo, args.dry_run, not args.no_links)
     verb = "would move" if args.dry_run else "moved"
     for a in r.moved:
         print(f"{verb} [{a.kind}] {a.path} -> {a.store}")
@@ -248,9 +252,15 @@ def _cmd_adopt(args) -> int:
         print(f"absent [{kind}] {path}")
     for kind, path, reason in r.refused:
         print(f"refused [{kind}] {path}: {reason}")
+    lverb = "would link" if args.dry_run else "linked"
+    for l in r.linked:
+        print(f"{lverb} [{l.harness}] {l.path} -> {l.target}")
+    for harness, path, reason in r.link_refused:
+        print(f"link refused [{harness}] {path}: {reason}")
     n = len(r.moved)
-    print(f"{n} moved, {len(r.already)} already adopted, {len(r.absent)} absent, {len(r.refused)} refused")
-    return 1 if r.refused else 0
+    print(f"{n} moved, {len(r.already)} already adopted, {len(r.absent)} absent, {len(r.refused)} refused, "
+          f"{len(r.linked)} linked, {len(r.link_refused)} link(s) refused")
+    return 0 if r.ok() else 1
 
 
 def _cmd_env(args) -> int:
@@ -271,7 +281,7 @@ def _cmd_env(args) -> int:
 def _cmd_equip(args) -> int:
     from .equip import equip
 
-    r = equip(args.repo, args.harness, args.dry_run, args.gitignore)
+    r = equip(args.repo, args.harness, args.dry_run, args.gitignore, not args.no_links)
     verb = "would write" if args.dry_run else "wrote"
     for p in r.written:
         print(f"[{r.harness}] {verb} {p}")
@@ -279,6 +289,11 @@ def _cmd_equip(args) -> int:
         print(f"[{r.harness}] unchanged {p}")
     for p in r.not_written:
         print(f"[{r.harness}] NOT WRITTEN {p}: {r.undecided} undecided (polymorph manage generate prints the questions)")
+    lverb = "would link" if r.dry_run else "linked"
+    for l in r.linked:
+        print(f"[{r.harness}] {lverb} {l.path} -> {l.target}")
+    for harness, path, reason in r.link_refused:
+        print(f"[{r.harness}] link refused {path}: {reason}")
     if r.coverage_known:
         print(f"[{r.harness}] honoured surface:")
         for kind, path in r.honoured:

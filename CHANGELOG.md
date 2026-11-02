@@ -52,6 +52,14 @@ First state of the project. Python 3.11+, standard library only.
   logger whose name ends with its own. `generate` refuses an existing config that is not a JSON
   object; the reader refuses a hook `timeout` that is not above 0; `env.toml` `exports` must be
   a list; `adopt` refuses a gitignored file.
+- **Links:** `equip` and `manage adopt` create the symlinks that close `no-link` gaps
+  (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`, `.claude/rules ->
+  ../.agents/rules`), as relative links, only where nothing exists at the path the harness
+  reads. A real file or directory and a symlink to somewhere else are left alone. Only
+  built-in coverage tables create links. Each link is recorded in `loadout.toml` under
+  `[links.NAME]`. `--no-links` on both commands skips this. The `fix` text of a `no-link` gap is
+  now the command (`polymorph equip --harness claude links CLAUDE.md -> AGENTS.md`). Claude Code
+  is the harness that needs them; ZCode reads `AGENTS.md` and `.agents/skills` itself.
 - **Gap report (breaking, experimental):** the report now compares the path a harness reads
   with where the repo keeps the file. Each gap carries a `reason`: `unsupported`, `no-link`
   (Claude Code reads `CLAUDE.md`, `.claude/skills` and `.claude/rules`, and the repo has
