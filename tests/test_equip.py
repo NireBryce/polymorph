@@ -113,7 +113,6 @@ class EquipTests(unittest.TestCase):
         rc, out, _ = self.run_cli("equip", "--repo", str(self.repo), "--harness", "fake")
         self.assertEqual(rc, 0, out)
         self.assertIn("coverage: no coverage table; nothing is known", out)
-        self.assertNotIn("honoured surface:\n  -", out)
         self.assertFalse([l for l in out.splitlines() if l.strip().startswith("- ")])
 
 
@@ -161,10 +160,6 @@ class PostureTests(unittest.TestCase):
         self.assertNotIn("gitignore", out)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PosturePathTests(unittest.TestCase):
     """The gitignore suggestion names the mapping's real config path, not a hardcoded one."""
 
@@ -192,3 +187,7 @@ class PosturePathTests(unittest.TestCase):
         self.assertIn("posture: contributor", out)
         self.assertIn(".fake/config.json", out)
         self.assertNotIn("pass --gitignore to append:\n  .zcode/config.json", out)
+
+
+if __name__ == "__main__":
+    unittest.main()

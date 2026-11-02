@@ -5,13 +5,13 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "src" / "polymorph"
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from polymorph import conformance  # noqa: E402
 from polymorph.validate import validate_mapping  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1] / "src" / "polymorph"
 
 MAPPINGS = sorted((ROOT / "mappings").glob("*.toml"))
 
@@ -102,10 +102,6 @@ class RunFixturesTests(unittest.TestCase):
         self.assertEqual(failures, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SyntheticFixtureTests(unittest.TestCase):
     """stderr comparison and null-answer verification, pinned with a synthetic fixture."""
 
@@ -171,3 +167,7 @@ deny = { exit = 2, stderr = "{reason}" }
         fixture["native_out"] = {"exit": 1, "stdout": ""}
         _, failures = conformance.run_fixtures(harness="synth", root=self.write_root(fixture))
         self.assertTrue(any("exit" in f for f in failures), failures)
+
+
+if __name__ == "__main__":
+    unittest.main()

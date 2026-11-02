@@ -4,9 +4,13 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from polymorph import adopt, cli, equip, inventory, links
 from polymorph.resources import COVERAGE_DIR

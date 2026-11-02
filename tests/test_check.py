@@ -155,18 +155,32 @@ class CheckTest(unittest.TestCase):
         self.assertIn("generated-drift", self.codes())
         self.assertEqual(run("--repo", str(self.repo))[0], 1)
 
+    def test_mapping_override_note(self):
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir()
+        shutil.copy(Path(check.BUILTIN_DIR) / "zcode.toml", d / "zcode.toml")
+        fs = [f for f in check.run_check(self.repo) if f.code == "mapping-override"]
+        self.assertTrue(fs)
+        self.assertTrue(all(f.severity == "note" and f.target == "zcode" for f in fs))
+
     def test_fixtures_missing_and_failed(self):
         # a built-in mapping with no fixtures dir -> warning
         self.assertNotIn("fixtures-missing", self.codes())
         self.assertIn("fixtures-missing", self.codes(harnesses=["gemini"]))
-        # a failing fixture -> error (restore afterwards)
-        fx = check.BUILTIN_DIR.parent / "fixtures/zcode/deny.json"
-        orig = fx.read_text()
-        self.addCleanup(fx.write_text, orig)
-        data = json.loads(orig)
-        data["native_out"]["exit"] = 99
-        fx.write_text(json.dumps(data))
-        fs = [f for f in check.run_check(self.repo) if f.code == "fixture-failed"]
+        # a failing fixture -> error: replayed from a temp copy, never the shipped one
+        from unittest import mock
+
+        from polymorph import conformance
+        orig = conformance.fixture_files
+        with tempfile.TemporaryDirectory() as d:
+            fxdir = Path(d) / "fixtures" / "zcode"
+            fxdir.mkdir(parents=True)
+            data = json.loads((conformance.DATA_ROOT / "fixtures/zcode/deny.json").read_text())
+            data["native_out"]["exit"] = 99
+            (fxdir / "deny.json").write_text(json.dumps(data))
+            with mock.patch.object(conformance, "fixture_files",
+                                   lambda harness=None, root=None: orig(harness, Path(d))):
+                fs = [f for f in check.run_check(self.repo) if f.code == "fixture-failed"]
         self.assertTrue(fs and fs[0].severity == "error")
 
     def test_local_mapping_fixtures_skipped_with_note(self):

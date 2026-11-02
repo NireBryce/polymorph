@@ -115,6 +115,14 @@ class DiscoverTests(unittest.TestCase):
         self.assertIn("mcp__x__y (1 calls): mcp tool", text)
         self.assertIn('"shell.command" = "tool_input.command"', text)
         self.assertIn('pre_tool = "PreToolUse"', text)
+        # the payload whose tool name fails the pattern is counted, not dropped silently
+        self.assertIn("1 payload(s) with a tool name that fails the name pattern: ignored", text)
+        # capabilities are never guessed from payloads: conservative until a live check
+        caps = text.split("[capabilities]")[1].split("[payload_in]")[0]
+        for cap in ("ask = false", "post_event = false", "exit_2_blocks = false",
+                    "rewrites_input = false", "json_answers = false"):
+            self.assertIn(cap, caps)
+        self.assertIn("all false (conservative) until checked live", caps)
 
     def test_draft_empty_log_still_valid(self):
         f = self.d / "e.jsonl"
@@ -263,6 +271,30 @@ class RedactTest(unittest.TestCase):
             self.assertEqual(r["tool_input_keys"], ["command"])
             self.assertEqual(r["tool_name"], "Bash")
             self.assertTrue(r["redacted"])
+
+    def test_structural_values_survive_only_when_id_shaped(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                         "permission_mode": "default", "effort": "high; rm -rf /",
+                         "duration_ms": 42, "source": "x" * 200}])
+            text = f.read_text()
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["permission_mode"], "default")
+            self.assertEqual(r["raw"]["duration_ms"], 42)
+            self.assertEqual(r["raw"]["effort"], {"type": "string", "length": len("high; rm -rf /")})
+            self.assertEqual(r["raw"]["source"], {"type": "string", "length": 200})
+            self.assertNotIn("rm -rf", text)
+
+    def test_non_ascii_secret_is_reduced_not_kept(self):
+        with tempfile.TemporaryDirectory() as d:
+            secret = "пароль-🔑"
+            f = _mk(d, [{"tool_name": "Bash", "cwd": "/home/اليوزر/proj",
+                         "tool_input": {"command": secret}}])
+            text = f.read_text()
+            self.assertNotIn(secret, text)
+            self.assertNotIn("/home/اليوزر/proj", text)
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["cwd"], {"type": "string", "length": len("/home/اليوزر/proj")})
 
     def test_full_keeps_raw_and_init_bakes_it(self):
         with tempfile.TemporaryDirectory() as d:
@@ -694,6 +726,16 @@ class OutputKeyPathsTest(unittest.TestCase):
             m = Path(d) / "m.toml"
             m.write_text(text)
             self.assertEqual(validate_mapping(m), [])
+
+    def test_output_like_aliases_get_the_same_shape(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                         "result": {"exit": 0}, "tool_result": {"text": "hi"},
+                         "toolResult": {"text": "ho"}}])
+            r = json.loads(f.read_text().splitlines()[0])
+            self.assertEqual(r["raw"]["result"]["exit"], {"type": "number", "length": 1})
+            self.assertEqual(r["raw"]["tool_result"]["text"], {"type": "string", "length": 2})
+            self.assertEqual(r["raw"]["toolResult"]["text"], {"type": "string", "length": 2})
 
     def test_depth_is_limited_and_odd_keys_dropped(self):
         deep = {"a": {"b": {"c": {"d": {"e": "x"}}}}, "/etc/passwd": 1, "ok_key": 2}

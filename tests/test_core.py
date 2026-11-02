@@ -267,6 +267,44 @@ class DirectDeliveryTests(Base):
         for n in ("zcode", "claude"):
             self.assertEqual(load_mapping(n, self.repo.parent).delivery, "direct")
 
+    def test_direct_delivery_never_asks_missing_field_questions(self):
+        # a direct mapping hands the hook the Claude payload unchanged, so a
+        # partially-mapped payload_in is not a missing-field mismatch there --
+        # while the same trimmed payload_in under adapter delivery is one
+        import tomllib
+        raw = tomllib.loads(
+            (Path(__file__).resolve().parents[1] / "src" / "polymorph" / "mappings" / "zcode.toml").read_text())
+        trimmed = dict(raw, payload_in={"tool_name": "tool_name", "cwd": "cwd"})
+        d = self.repo / ".polymorph/basecamp/mappings"
+
+        def toml(src: dict) -> str:
+            import io
+
+            def quote(v):
+                if isinstance(v, bool):
+                    return "true" if v else "false"
+                if isinstance(v, list):
+                    return "[" + ", ".join(quote(x) for x in v) + "]"
+                return json.dumps(v)
+            buf = io.StringIO()
+            for k, v in src.items():
+                if isinstance(v, dict):
+                    buf.write(f"\n[{k}]\n")
+                    for kk, vv in v.items():
+                        key = json.dumps(kk) if "." in kk or "-" in kk else kk
+                        buf.write(f"{key} = {quote(vv)}\n")
+                else:
+                    buf.write(f"{k} = {quote(v)}\n")
+            return buf.getvalue()
+
+        (d / "pdirect.toml").write_text(toml(dict(trimmed, name="pdirect", delivery="direct")))
+        (d / "padapter.toml").write_text(toml(dict(trimmed, name="padapter", delivery="adapter")))
+        (self.repo / ".polymorph/basecamp/config.toml").write_text(
+            'enabled = ["pdirect", "padapter"]\n')
+        rs = {r.harness: r for r in generate(self.repo)}
+        self.assertEqual([u.kind for u in rs["pdirect"].undecided], [])
+        self.assertIn("missing-field", {u.kind for u in rs["padapter"].undecided})
+
     def test_validate_rejects_non_identity(self):
         from polymorph.validate import validate_mapping
         base = self._write()
@@ -333,10 +371,6 @@ class ValidateOutTests(unittest.TestCase):
             self.assertEqual(validate_mapping(self._base(**{kind: {"exit": 0}})), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class HookCommandTimeoutTests(unittest.TestCase):
     def test_adapter_command_carries_the_hook_timeout(self):
         from polymorph import generate, mapping as mapping_mod
@@ -346,3 +380,7 @@ class HookCommandTimeoutTests(unittest.TestCase):
         self.assertNotIn("--timeout", generate.hook_command(m, "s.sh"))
         direct = mapping_mod.load_mapping("zcode")   # direct delivery: the harness owns the timeout
         self.assertNotIn("--timeout", generate.hook_command(direct, "s.sh", 300))
+
+
+if __name__ == "__main__":
+    unittest.main()

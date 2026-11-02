@@ -65,6 +65,32 @@ class InventoryTests(TempRepoTest):
         self.assertEqual(inv.skills, ())
         self.assertEqual(inv.memory, ())
 
+    def test_inventory_never_opens_file_contents(self):
+        # SPEC: paths and symlink targets only. Any read of a file's contents
+        # (which a hostile repo could hold against the reporter) fails the test.
+        from unittest import mock
+
+        with mock.patch.object(Path, "read_text",
+                               side_effect=AssertionError("inventory read a file")):
+            inv = inventory.read_inventory(self.repo)
+        self.assertEqual([i.path for i in inv.skills],
+                         [".agents/skills/alpha", ".agents/skills/beta"])
+        self.assertEqual([i.path for i in inv.memory], ["AGENTS.md", "CLAUDE.md"])
+
+    def test_unreadable_and_odd_markers_are_still_reported(self):
+        # SKILL.md as a directory: opening it would raise; inventory never does
+        (self.repo / ".agents/skills/alpha/SKILL.md").unlink()
+        (self.repo / ".agents/skills/alpha/SKILL.md").mkdir()
+        (self.repo / ".claude/rules/keep.md").chmod(0o000)
+        try:
+            inv = inventory.read_inventory(self.repo)
+        finally:
+            (self.repo / ".claude/rules/keep.md").chmod(0o644)
+        self.assertEqual([i.path for i in inv.skills],
+                         [".agents/skills/alpha", ".agents/skills/beta"])
+        self.assertEqual([i.path for i in inv.rules],
+                         [".claude/rules/keep.md", ".agents/rules/extra.md"])
+
 
 class GapTests(TempRepoTest):
     def gaps_for(self, name):
