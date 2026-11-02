@@ -81,7 +81,7 @@ deny = { exit = 2, stderr = "{reason}" }
 ```
 
 `delivery` (optional, default `"adapter"`): how `generate` writes the hook command.
-`"adapter"` emits `python -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
+`"adapter"` emits `python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
 `"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the
 canonical protocol. It is only valid for an identity translation: `payload_out` empty and every
 `payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`,
@@ -89,7 +89,10 @@ canonical protocol. It is only valid for an identity translation: `payload_out` 
 `read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
 `tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
 a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
-reports `mapping-invalid`).
+reports `mapping-invalid`). A direct mapping's `[tools]` names are matchers the harness
+evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edit`, `Write`,
+`MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match.
+`other` is unconstrained.
 
 Required: `schema`, `name`, `config_path`, `format`, `template` and the tables `[tools]`,
 `[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
@@ -108,7 +111,7 @@ Canonical = Claude Code hook protocol: stdin JSON with `tool_name`, `tool_input`
 (`allow|ask|deny`) + `permissionDecisionReason`, `additionalContext`, `systemMessage`,
 post-call `decision:"block"`, or exit 2 with stderr.
 
-Adapter invocation: `python -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
+Adapter invocation: `python3 -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
 Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the
 answer to native form. Translation failure => visible message (stderr + exit code the
 harness shows to the model) and NEVER a deny; never fail open silently. A hook answer
@@ -125,7 +128,7 @@ the adapter.
   mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
   decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
-  loadout.toml           # equip's provenance manifest: per issued artifact its sha256 and source; per made symlink its target
+  loadout.toml           # equip's provenance manifest: per issued artifact its sha256, source, and the mapping-path + mapping-hash it was generated from; per made symlink its target
   generated/NAME/        # generated shims and plugin files (planned)
 ```
 
@@ -178,7 +181,11 @@ told from one the user made. `--no-links` on both commands skips this.
 `.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path
 (and optional scope), the environment variable names a harness session must not inherit
 (`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1,
-closed-world like everything else. `polymorph env` emits the contract as shell exports
+closed-world like everything else. The key path is embedded in `GIT_SSH_COMMAND`, which
+git runs through a shell, so it may contain only plain path characters; exports are
+NAME=value with a plain variable name, and loader, interpreter and shell variables
+(`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `GIT_SSH_COMMAND`, ...)
+are refused. `polymorph env` emits the contract as shell exports
 (a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's
 exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the contract
 applied and exits with its status. A `--harness` name must appear in the host facts or
@@ -229,7 +236,7 @@ polymorph capture --print-prompts        # prints the manual prompt kit, runs no
 
 Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
-By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads.
+By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
 The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.
 The log is untrusted data: draft copies back only values matching strict name patterns,
@@ -333,6 +340,8 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `decision-invalid` | error | the decision file or an entry fails validation |
 | `setting-unmapped` | note | `canon.unmapped` entries |
 | `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
+| `loadout-drift` | warning | a loadout entry's pinned mapping hash no longer matches that mapping file, or the file is gone (the adapter re-reads mappings at run time) |
+| `loadout-invalid` | error | loadout.toml fails validation |
 | `fixtures-missing` | warning | built-in mapping has no `src/polymorph/fixtures/<name>/*.json` |
 | `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
 | `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |

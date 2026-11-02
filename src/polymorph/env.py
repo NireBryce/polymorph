@@ -22,6 +22,16 @@ from pathlib import Path
 ENV_FILE = ".polymorph/basecamp/env.toml"
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _HARNESS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+# The key path is embedded in GIT_SSH_COMMAND, which git executes through a
+# shell: nothing a shell would interpret may appear in it.
+_KEY_PATH = re.compile(r"[/A-Za-z0-9._~+-]+")
+# Exports reach a child process's environment verbatim; polymorph does not set
+# loader, interpreter or shell variables on anyone's behalf.
+_UNSAFE_EXPORT_NAMES = frozenset({
+    "PATH", "IFS", "GIT_SSH_COMMAND", "NODE_OPTIONS", "PYTHONPATH", "PYTHONHOME",
+    "PYTHONSTARTUP", "BASH_ENV", "ENV", "GCONV_PATH", "LD_PRELOAD",
+})
+_UNSAFE_EXPORT_PREFIXES = ("LD_", "DYLD_")
 
 
 class EnvError(ValueError):
@@ -56,6 +66,19 @@ def _one_line(value: str, what: str, source: str) -> str:
     return value
 
 
+def _key_path(value: str, source: str) -> str:
+    _one_line(value, "[key] path", source)
+    if not _KEY_PATH.fullmatch(value):
+        raise EnvError(f"{source}: [key] path must contain only plain path characters "
+                       "(no whitespace, quotes, $ or shell metacharacters); it is embedded "
+                       "in GIT_SSH_COMMAND, which git runs through a shell")
+    return value
+
+
+def _ssh_command(path: str) -> str:
+    return f"ssh -i {path} -o IdentitiesOnly=yes"
+
+
 def parse_env(raw: dict, source: str = "") -> EnvFacts:
     """Validate a parsed env.toml (closed-world) into EnvFacts."""
     if not isinstance(raw, dict):
@@ -76,7 +99,7 @@ def parse_env(raw: dict, source: str = "") -> EnvFacts:
             raise EnvError(f"{source}: unknown [key] entry(ies) {', '.join(bad)}")
         if "path" not in t:
             raise EnvError(f"{source}: [key] needs path")
-        key = KeyFacts(path=_one_line(t["path"], "[key] path", source),
+        key = KeyFacts(path=_key_path(t["path"], source),
                        scope=_one_line(t["scope"], "[key] scope", source) if "scope" in t else None)
 
     unset: tuple[str, ...] = ()
@@ -111,8 +134,12 @@ def parse_env(raw: dict, source: str = "") -> EnvFacts:
             for e in exports:
                 if not isinstance(e, str) or "=" not in e or not _ENV_NAME.match(e.split("=", 1)[0]):
                     raise EnvError(f"{source}: [harness.{name}] export {e!r} is not NAME=value")
+                var = e.split("=", 1)[0]
                 if "\n" in e:
-                    raise EnvError(f"{source}: [harness.{name}] export {e.split('=', 1)[0]} must be one line")
+                    raise EnvError(f"{source}: [harness.{name}] export {var} must be one line")
+                if var in _UNSAFE_EXPORT_NAMES or var.startswith(_UNSAFE_EXPORT_PREFIXES):
+                    raise EnvError(f"{source}: [harness.{name}] refuses to export {var}: "
+                                   "polymorph does not set loader, interpreter or shell variables")
             harness[name] = tuple(exports)
 
     return EnvFacts(key=key, unset=unset, harness=harness)
@@ -136,7 +163,7 @@ def contract_lines(facts: EnvFacts, harness: str | None = None) -> list[str]:
     if facts.unset:
         lines.append("unset " + " ".join(sorted(facts.unset)))
     if facts.key:
-        cmd = f"ssh -i {facts.key.path} -o IdentitiesOnly=yes"
+        cmd = _ssh_command(facts.key.path)
         lines.append(f"export GIT_SSH_COMMAND={shlex.quote(cmd)}")
     for e in sorted(facts.exports_for(harness)):
         name, value = e.split("=", 1)
@@ -166,7 +193,7 @@ def run_exec(repo: str | Path, harness: str | None, cmd: str) -> int:
     for name in facts.unset:
         env.pop(name, None)
     if facts.key:
-        env["GIT_SSH_COMMAND"] = f"ssh -i {facts.key.path} -o IdentitiesOnly=yes"
+        env["GIT_SSH_COMMAND"] = _ssh_command(facts.key.path)
     for e in facts.exports_for(harness):
         name, value = e.split("=", 1)
         env[name] = value

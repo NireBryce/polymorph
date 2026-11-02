@@ -71,6 +71,26 @@ class EquipTests(unittest.TestCase):
         self.assertIn("generated from .agents/settings.json via mapping zcode",
                       (self.repo / ".polymorph/basecamp/loadout.toml").read_text())
 
+    def test_equip_pins_the_mapping_bytes_it_consumed(self):
+        self.run_cli("equip", "--repo", str(self.repo), "--harness", "zcode")
+        text = (self.repo / ".polymorph/basecamp/loadout.toml").read_text()
+        self.assertIn("mapping-path", text)
+        self.assertIn("mapping-hash", text)
+        entries = equip.manifest_entries(self.repo, "zcode")
+        self.assertTrue(entries and entries[0].mapping_hash)
+        src = Path(entries[0].mapping_path)
+        self.assertTrue(src.as_posix().endswith(".polymorph/basecamp/mappings/zcode.toml"))
+        self.assertEqual("sha256:" + hashlib.sha256(src.read_bytes()).hexdigest(),
+                         entries[0].mapping_hash)
+
+    def test_malformed_loadout_is_a_clean_error_not_a_traceback(self):
+        self.run_cli("equip", "--repo", str(self.repo), "--harness", "zcode")
+        mf = self.repo / ".polymorph/basecamp/loadout.toml"
+        mf.write_text('schema = 1\n[harness.zcode]\n".zcode/config.json" = {source = "s"}\n')
+        with self.assertRaises(equip.EquipError) as ctx:
+            equip.equip(self.repo, "zcode")
+        self.assertIn("hash", str(ctx.exception))
+
     def test_equip_report_gaps_for_provided_but_uncovered(self):
         (self.repo / "CLAUDE.md").write_text("instructions\n")
         rc, out, _ = self.run_cli("equip", "--repo", str(self.repo), "--harness", "zcode")

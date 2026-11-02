@@ -36,6 +36,8 @@ CODES = {
     "decision-invalid": ("error", "A decision file or entry fails validation."),
     "setting-unmapped": ("note", "A setting has no cross-harness meaning."),
     "generated-drift": ("error", "A target's generated file differs from what generate would write."),
+    "loadout-drift": ("warning", "The mapping bytes equip consumed have changed since it ran (or the file is gone); the adapter re-reads mappings at run time."),
+    "loadout-invalid": ("error", "loadout.toml fails validation."),
     "fixtures-missing": ("warning", "A built-in mapping has no conformance fixtures."),
     "fixtures-skipped": ("note", "Fixtures are not checked for a repo-local mapping."),
     "fixture-failed": ("error", "A conformance fixture does not pass."),
@@ -123,6 +125,34 @@ def check_fixtures(repo: Path, name: str, m: Mapping) -> list[Finding]:
     return [_f("fixture-failed", name, msg) for msg in failures]
 
 
+def check_loadout(repo: Path, name: str) -> list[Finding]:
+    """Provenance: the mapping bytes equip consumed still match the file it pinned.
+
+    The adapter re-reads the mapping at run time, so a swap after equip weakens
+    the guard with no other trace; the pin in loadout.toml makes it visible.
+    """
+    import hashlib
+
+    from .equip import EquipError, manifest_entries
+
+    try:
+        entries = manifest_entries(repo, name)
+    except EquipError as e:
+        return [_f("loadout-invalid", name, str(e))]
+    out: list[Finding] = []
+    for a in entries:
+        if not (a.mapping_path and a.mapping_hash):
+            continue
+        p = Path(a.mapping_path)
+        if not p.is_file():
+            out.append(_f("loadout-drift", name,
+                          f"the mapping equip consumed is gone: {a.mapping_path}"))
+        elif "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() != a.mapping_hash:
+            out.append(_f("loadout-drift", name,
+                          f"the mapping bytes equip consumed have changed: {a.mapping_path}"))
+    return out
+
+
 # --- driver -----------------------------------------------------------------
 
 def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> list[Finding]:
@@ -151,6 +181,7 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
             continue
         findings += check_mapping(repo, name, m)
         findings += check_fixtures(repo, name, m)
+        findings += check_loadout(repo, name)
         if canon is None:
             continue
         dfile = f"{DECISIONS_DIR}/{name}.toml"

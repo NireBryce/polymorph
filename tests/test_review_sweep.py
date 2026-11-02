@@ -41,7 +41,7 @@ class TmpTest(unittest.TestCase):
 
 
 class CliAdapterTests(TmpTest):
-    """`python -m polymorph adapter` is the command `generate` writes into harness configs."""
+    """`python3 -m polymorph adapter` is the command `generate` writes into harness configs."""
 
     def setUp(self):
         super().setUp()

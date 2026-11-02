@@ -255,6 +255,26 @@ class SummaryTest(unittest.TestCase):
 
 
 class RedactTest(unittest.TestCase):
+    def test_credential_shaped_ids_are_reduced(self):
+        # a credential matches the id shape class too; it must not survive as an "id".
+        # the fakes carry the real token *prefixes* with flat suffixes: enough to
+        # match the credential patterns, too dull for secret scanners to report
+        with tempfile.TemporaryDirectory() as d:
+            token = "ghp_aaaaaaaaaaaa"
+            jwt = "eyJzzzzzzzzzz.sGpb"
+            sk = "sk-proj-aaaa"
+            f = _mk(d, [{"tool_use_id": token, "session_id": jwt,
+                         "prompt_id": sk, "id": "toolu_01ABCdef"}])
+            text = f.read_text()
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["tool_use_id"], {"type": "string", "length": len(token)})
+            self.assertEqual(r["raw"]["session_id"]["type"], "string")
+            self.assertEqual(r["raw"]["prompt_id"]["type"], "string")
+            self.assertEqual(r["session_id"], discover.INVALID)   # the top-level field is shape-gated too
+            self.assertEqual(r["raw"]["id"], "toolu_01ABCdef")   # a real id shape still pairs
+            for leak in (token, jwt, sk):
+                self.assertNotIn(leak, text)
+
     def test_default_keeps_keys_and_drops_values(self):
         with tempfile.TemporaryDirectory() as d:
             payloads = [dict(p, cwd="/home/someone/proj", transcript_path="/home/someone/.t/x.jsonl")

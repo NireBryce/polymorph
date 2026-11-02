@@ -155,7 +155,7 @@ class GenerateTests(Base):
         cmd = pre[0]["hooks"][0]["command"]
         self.assertEqual(
             cmd,
-            'python -m polymorph adapter --harness zcode -- '
+            'python3 -m polymorph adapter --harness zcode -- '
             '"$CLAUDE_PROJECT_DIR/.agents/hooks/secrets-guard-pretooluse.sh"',
         )
         ss = doc["hooks"]["events"]["SessionStart"][0]
@@ -252,7 +252,7 @@ class DirectDeliveryTests(Base):
 
     def test_default_is_adapter(self):
         out = generate(self.repo, ["zcode"], check=True)[0].content
-        self.assertIn("python -m polymorph adapter", out)
+        self.assertIn("python3 -m polymorph adapter", out)
 
     def test_direct_emits_bare_quoted_script(self):
         d = self.repo / ".polymorph/basecamp/mappings"
@@ -321,6 +321,18 @@ class DirectDeliveryTests(Base):
         # the same non-identity mapping is fine under the adapter
         adapter = self._write(delivery="adapter", payload_out={"deny": {"exit": 2}})
         self.assertEqual(validate_mapping(adapter), [])
+
+    def test_direct_delivery_requires_canonical_tool_names(self):
+        # the harness evaluates the matchers itself: a renamed tool would
+        # silently never fire the hook
+        from polymorph.validate import validate_mapping
+        bad = self._write()
+        bad["tools"] = dict(bad["tools"], shell="run_shell")
+        errs = validate_mapping(bad)
+        self.assertTrue(any("tools.shell" in e for e in errs), errs)
+        errs = validate_mapping(self._write(tools={"mcp": "evil__x"}))
+        self.assertTrue(any("tools.mcp" in e for e in errs), errs)
+        self.assertEqual(validate_mapping(self._write(tools={"mcp": "mcp__x"})), [])
 
     def test_parse_rejects_direct_non_identity(self):
         raw = self._write(payload_out={"deny": {"exit": 2}})

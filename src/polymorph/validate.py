@@ -42,6 +42,13 @@ def _unknown(errs: list[str], where: str, d: dict, allowed) -> None:
             errs.append(f"{where}: unknown key {k!r}")
 
 
+# A direct mapping's matchers are the harness's own tool names, and the harness
+# speaks the canonical protocol: a renamed tool would silently never match, so
+# the four classed kinds must use their canonical names (`other` is unconstrained).
+CANONICAL_TOOLS = {"shell": {"Bash"}, "edit": {"Edit", "Write", "MultiEdit"},
+                   "read": {"Read", "Grep", "Glob"}}
+
+
 def direct_errors(m: dict) -> list[str]:
     """Why delivery = "direct" is not allowed for this mapping (empty = allowed)."""
     errs: list[str] = []
@@ -55,6 +62,19 @@ def direct_errors(m: dict) -> list[str]:
             elif v != IDENTITY_PAYLOAD_IN[k]:
                 errs.append(f'delivery "direct" requires payload_in.{k} = '
                             f'{IDENTITY_PAYLOAD_IN[k]!r}, got {v!r}')
+    t = m.get("tools")
+    if isinstance(t, dict):
+        for cls, v in t.items():
+            names = [v] if isinstance(v, str) else (v if isinstance(v, list) else [])
+            for n in names:
+                if not isinstance(n, str):
+                    continue
+                if cls == "mcp" and not n.startswith("mcp__"):
+                    errs.append(f'delivery "direct" requires tools.mcp names to start with '
+                                f'mcp__, got {n!r}')
+                elif cls in CANONICAL_TOOLS and n not in CANONICAL_TOOLS[cls]:
+                    errs.append(f'delivery "direct" requires tools.{cls} to be '
+                                f'{", ".join(sorted(CANONICAL_TOOLS[cls]))}, got {n!r}')
     return errs
 
 

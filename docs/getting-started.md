@@ -134,13 +134,13 @@ passes).
 ## 5. Try the adapter by hand
 
 For a harness with `delivery = "adapter"` (the default) the generated command is
-`python -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed
+`python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed
 it a payload yourself. Using the unverified `gemini` mapping, whose shell tool is called
 `run_shell_command`:
 
 ```sh
 echo '{"tool_name":"run_shell_command","tool_input":{"command":"rm -rf /"}}' \
-  | python -m polymorph adapter --harness gemini -- .agents/hooks/block-rm.sh
+  | python3 -m polymorph adapter --harness gemini -- .agents/hooks/block-rm.sh
 echo $?
 ```
 ```
