@@ -107,6 +107,11 @@ def _classify(answer: dict | None) -> tuple[str, dict[str, Any]]:
 def translate_out(mapping: dict, answer: dict | None) -> dict:
     kind, vals = _classify(answer)
     if kind == "none":
+        if answer is not None:
+            # the hook spoke, and nothing in its answer maps to a native form:
+            # a silent allow here would discard the guard's verdict
+            raise AdapterError(
+                f"hook answer has no decision polymorph can translate: {json.dumps(answer)[:200]}")
         return {"stdout": "", "exit": 0, "stderr": ""}
     spec = (mapping.get("payload_out") or {}).get(kind)
     caps = mapping.get("capabilities") or {}

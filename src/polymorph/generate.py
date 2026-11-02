@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -213,6 +214,12 @@ def generate_target(repo: Path, canon: Canon, m: Mapping,
         if errs:
             raise DecisionError(f"{DECISIONS_FILE_FMT.format(m.name)}: " + "; ".join(errs))
     out = repo / m.config_path
+    # config_path comes from mapping data: refuse a target that leaves the repo
+    # through a symlinked component, for the read here and the write in generate()
+    real = Path(os.path.realpath(out))
+    if not real.is_relative_to(Path(os.path.realpath(repo))):
+        raise ValueError(f"{m.config_path!r} resolves outside the repository ({real}); "
+                         "refusing to read or write it")
     existing: dict = {}
     old = None
     if out.is_file():

@@ -52,6 +52,17 @@ First state of the project. Python 3.11+, standard library only.
   logger whose name ends with its own. `generate` refuses an existing config that is not a JSON
   object; the reader refuses a hook `timeout` that is not above 0; `env.toml` `exports` must be
   a list; `adopt` refuses a gitignored file.
+- **Trusted-output refusals:** polymorph refuses to emit what it cannot guarantee. A hook
+  script whose resolved repo-relative path contains a quote, whitespace, `$`, a backtick or
+  another shell metacharacter is refused by the reader (the path is embedded in generated
+  command lines, where such a name could smuggle a second command). A mapping's `config_path`
+  that resolves outside the repository -- through a symlinked component -- is refused for the
+  generated-config read and the write alike (`equip` included; a repo that kept `.claude` as
+  a symlink out of the repo now fails loudly instead of writing the config outside). A hook
+  answer polymorph cannot translate (e.g. a `decision` verb it does not know) is a visible
+  NOT-checked fault, never a silent allow. `validate_mapping` rejects a `payload_out` string
+  referencing an unknown placeholder (a typo used to fail open at runtime) and a `deny` or
+  `ask` route with `exit = 0`.
 - **Links:** `equip` and `manage adopt` create the symlinks that close `no-link` gaps
   (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`, `.claude/rules ->
   ../.agents/rules`), as relative links, only where nothing exists at the path the harness

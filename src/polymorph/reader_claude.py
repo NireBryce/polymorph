@@ -27,6 +27,10 @@ _CLASS_RULES = (
 )
 _CLASS_ORDER = ("shell", "edit", "read", "mcp", "other")
 
+# The resolved script path is embedded in generated shell command lines, so it
+# may contain nothing a shell would interpret (quotes, $, backticks, whitespace).
+_SCRIPT_CHARS = re.compile(r"[A-Za-z0-9._+/-]+")
+
 
 class ReaderError(Exception):
     pass
@@ -70,7 +74,13 @@ def resolve_script(command: str, repo: Path) -> str:
     hooks_dir = Path(os.path.realpath(repo / HOOKS_DIR))
     if not real.is_relative_to(hooks_dir):
         raise ReaderError(f"hook script {command!r} resolves outside {HOOKS_DIR}/")
-    return str(real.relative_to(Path(os.path.realpath(repo))))
+    script = str(real.relative_to(Path(os.path.realpath(repo))))
+    if not _SCRIPT_CHARS.fullmatch(script):
+        raise ReaderError(
+            f"hook script {command!r}: script paths may contain only plain path characters "
+            "(no quotes, whitespace, $, backticks or shell metacharacters)"
+        )
+    return script
 
 
 def read_claude(repo: str | Path) -> Canon:

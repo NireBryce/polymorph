@@ -118,6 +118,12 @@ class PureTests(unittest.TestCase):
         self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, warn))
         self.assertEqual(adapter.translate_out(MAPPING, None)["exit"], 0)
 
+    def test_translate_out_unrecognized_answer_is_never_an_allow(self):
+        for ans in ({"decision": "deny", "reason": "old style"}, {}, {"weird": True}):
+            with self.assertRaises(adapter.AdapterError, msg=ans):
+                adapter.translate_out(MAPPING, ans)
+        self.assertEqual(adapter.translate_out(MAPPING, None), {"stdout": "", "exit": 0, "stderr": ""})
+
 
 class RunAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -159,6 +165,16 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
         script = self.hook("e2.sh", "#!/bin/sh\ncat >/dev/null\necho blocked >&2\nexit 2\n")
         code, _, err = self.run_it(script, self.NATIVE)
         self.assertEqual((code, err.strip()), (2, "blocked"))
+
+    def test_unrecognized_answer_is_not_checked_never_a_silent_allow(self):
+        script = self.hook(
+            "old.sh",
+            '#!/bin/sh\ncat >/dev/null\necho \'{"decision": "deny", "reason": "old style"}\'\n')
+        code, out, err = self.run_it(script, self.NATIVE)
+        joined = out + err
+        self.assertNotEqual(code, 2, joined)
+        self.assertIn("NOT checked", joined)
+        self.assertNotEqual((code, out, err), (0, "", ""))
 
     def test_translation_failure_is_visible_not_deny(self):
         script = self.hook("ok.sh", "#!/bin/sh\nexit 0\n")

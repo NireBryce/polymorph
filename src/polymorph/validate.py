@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import CANON_PATHS
+from .exprs import placeholder_names
 
 EXTRACTORS = ["apply_patch_paths"]  # shipped registry; names only, code lives elsewhere
 CLASSES = ("shell", "edit", "read", "mcp", "other")
@@ -14,6 +15,7 @@ EVENTS = ("session_start", "pre_tool", "post_tool")
 CAPS = ("ask", "post_event", "exit_2_blocks", "rewrites_input", "json_answers")
 OUT_KINDS = ("allow", "deny", "ask", "warn", "remind")
 OUT_FIELDS = {"exit": int, "stdout": str, "stderr": str}
+KNOWN_PLACEHOLDERS = {"reason", "context", "message"}
 
 REQUIRED = ("schema", "name", "config_path", "format", "template",
             "tools", "events", "capabilities", "payload_in", "payload_out")
@@ -166,6 +168,14 @@ def validate_mapping(src: Any) -> list[str]:
                         continue
                     if not isinstance(v, want) or (want is int and isinstance(v, bool)):
                         errs.append(f"payload_out.{kind}.{f} must be {want.__name__}")
-                    elif isinstance(v, str) and _codey(v):
-                        errs.append(f"payload_out.{kind}.{f}: code-like value {v!r}")
+                    elif f == "exit" and v == 0 and kind in ("deny", "ask"):
+                        errs.append(f"payload_out.{kind}.exit must be nonzero "
+                                    f"(exit 0 would turn the {kind} into an allow)")
+                    elif isinstance(v, str):
+                        bad = sorted(placeholder_names(v) - KNOWN_PLACEHOLDERS)
+                        if bad:
+                            errs.append(f"payload_out.{kind}.{f}: unknown placeholder(s) {bad} "
+                                        f"(known: {', '.join(sorted(KNOWN_PLACEHOLDERS))})")
+                        elif _codey(v):
+                            errs.append(f"payload_out.{kind}.{f}: code-like value {v!r}")
     return errs

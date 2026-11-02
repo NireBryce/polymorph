@@ -128,10 +128,14 @@ class EquipLinks(TmpRepo):
         outside = self.root / "outside"
         outside.mkdir()
         os.symlink(outside, self.repo / ".claude")
-        r = equip.equip(self.repo, "claude")
-        self.assertEqual([p.name for p in outside.iterdir() if p.is_symlink()], [],
-                         "a link was made outside the repository")
-        self.assertIn(".claude/skills", [p for _, p, _ in r.link_refused])
+        # the config_path of the claude mapping is .claude/settings.json: writing it
+        # would land outside the repository, so equip refuses before anything runs
+        with self.assertRaises(ValueError):
+            equip.equip(self.repo, "claude")
+        self.assertEqual(list(outside.iterdir()), [],
+                         "nothing was made or written outside the repository")
+        # link creation through the same parent is refused at the link layer too
+        self.assertIn("leaves the repository", links._unsafe(self.repo, ".claude/skills"))
 
     def test_the_cli_prints_the_links_and_exits_0(self):
         code, out, _ = run_cli("equip", "--repo", str(self.repo), "--harness", "claude")

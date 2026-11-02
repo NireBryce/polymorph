@@ -79,6 +79,23 @@ class ReaderTests(Base):
         with self.assertRaises(ReaderError):
             read_claude(self.repo)
 
+    def test_script_name_metacharacters_refused(self):
+        # each command parses to a single shlex token, so the bare-script rule
+        # alone would pass it; the characters reach generated command lines
+        p = self.repo / ".agents/settings.json"
+        d = json.loads(p.read_text())
+        for bad in (
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/x\\"; id; : \\""',
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/$(touch${IFS}/tmp/pwned).sh"',
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/`id`.sh"',
+            '".agents/hooks/my hook.sh"',
+            '".agents/hooks/$HOME/x.sh"',
+        ):
+            d["hooks"]["SessionStart"][0]["hooks"][0]["command"] = bad
+            p.write_text(json.dumps(d))
+            with self.assertRaises(ReaderError, msg=bad):
+                read_claude(self.repo)
+
 
 class MappingTests(Base):
     def test_loads_repo_mapping(self):
@@ -171,6 +188,18 @@ class GenerateTests(Base):
 
     def test_verified_no_warning(self):
         self.assertEqual(generate(self.repo, ["zcode"])[0].warnings, [])
+
+    def test_config_path_symlink_escape_refused(self):
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        os.symlink(outside, self.repo / "escape")
+        d = self.repo / ".polymorph/basecamp/mappings"
+        text = (d / "zcode.toml").read_text()
+        (d / "zcode.toml").write_text(
+            text.replace('config_path = ".zcode/config.json"', 'config_path = "escape/evil.json"'))
+        with self.assertRaises(ValueError):
+            generate(self.repo)
+        self.assertFalse((outside / "evil.json").exists())
 
 
 class CliTests(Base):
@@ -268,6 +297,40 @@ class DirectDeliveryTests(Base):
             + '\n[payload_out.deny]\nexit = 2\n')
         findings = check.run_check(self.repo, ["zcode"])
         self.assertTrue(any(f.severity == "error" and f.code == "mapping-invalid" for f in findings))
+
+
+class ValidateOutTests(unittest.TestCase):
+    """payload_out placeholders and exit values are checked at validation time,
+    so a typo or a zero exit cannot reach the adapter and turn a deny into an allow."""
+
+    @staticmethod
+    def _base(**payload_out):
+        return {
+            "schema": 1, "name": "x", "config_path": "a.json", "format": "json",
+            "template": "t", "tools": {}, "events": {}, "payload_in": {},
+            "payload_out": payload_out,
+            "capabilities": {"ask": False, "post_event": False, "exit_2_blocks": False,
+                             "rewrites_input": False, "json_answers": False},
+        }
+
+    def test_known_placeholders_valid(self):
+        from polymorph.validate import validate_mapping
+        m = self._base(deny={"exit": 2, "stderr": "{reason}"},
+                       warn={"exit": 0, "stdout": "{context}"})
+        self.assertEqual(validate_mapping(m), [])
+
+    def test_unknown_placeholder_is_an_error(self):
+        from polymorph.validate import validate_mapping
+        errs = validate_mapping(self._base(deny={"exit": 2, "stderr": "{reson}"}))
+        self.assertTrue(any("reson" in e for e in errs), errs)
+
+    def test_deny_or_ask_exit_zero_is_an_error(self):
+        from polymorph.validate import validate_mapping
+        for kind in ("deny", "ask"):
+            errs = validate_mapping(self._base(**{kind: {"exit": 0}}))
+            self.assertTrue(any(f"{kind}.exit" in e for e in errs), errs)
+        for kind in ("allow", "warn", "remind"):
+            self.assertEqual(validate_mapping(self._base(**{kind: {"exit": 0}})), [])
 
 
 if __name__ == "__main__":
