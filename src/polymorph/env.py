@@ -106,6 +106,8 @@ def parse_env(raw: dict, source: str = "") -> EnvFacts:
             if bad:
                 raise EnvError(f"{source}: unknown [harness.{name}] entry(ies) {', '.join(bad)}")
             exports = table.get("exports", [])
+            if not isinstance(exports, list):
+                raise EnvError(f"{source}: [harness.{name}] exports must be a list of NAME=value strings")
             for e in exports:
                 if not isinstance(e, str) or "=" not in e or not _ENV_NAME.match(e.split("=", 1)[0]):
                     raise EnvError(f"{source}: [harness.{name}] export {e!r} is not NAME=value")

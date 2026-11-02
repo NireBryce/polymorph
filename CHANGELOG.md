@@ -37,6 +37,39 @@ First state of the project. Python 3.11+, standard library only.
 - **`discover`:** `init`, `log`, `summary`, `draft`, `reload-check`. Logs are redacted by
   default; `--full` and `--env-be-very-careful` are opt-ins. Drafts are unverified and
   built only from observed names.
+- **Review sweep, second pass:** `polymorph adapter` (the command `generate` writes into harness
+  configs) now accepts `--timeout` and `--repo`, and hands its whole command line to the adapter,
+  so a usage error is a visible NOT-checked message and not argparse's exit 2 (a deny on some
+  harnesses; before, a hook with a `timeout` in the settings was written with a flag the CLI
+  rejected). A deny the mapping cannot express (no `payload_out.deny`, `exit_2_blocks` and
+  `json_answers` false) is NOT checked instead of exit 0. `apply_patch_paths` raises again on a
+  `*** Begin Patch` envelope with no file header (it still returns nothing for text that only
+  mentions `*** `). `check` reports malformed hook groups as `settings-invalid` instead of
+  crashing. `equip` keeps other harnesses' entries in `loadout.toml` and reports an invalid
+  `env.toml` instead of printing "no env.toml". Redacted discovery logs no longer keep raw
+  `event`, `tool_name` or `session_id` text under the alias keys; a value that is not a plain
+  name or id is logged as `<invalid>`. `discover init` no longer removes another harness's
+  logger whose name ends with its own. `generate` refuses an existing config that is not a JSON
+  object; the reader refuses a hook `timeout` that is not above 0; `env.toml` `exports` must be
+  a list; `adopt` refuses a gitignored file.
+- **Gap report (breaking, experimental):** the report now compares the path a harness reads
+  with where the repo keeps the file. Each gap carries a `reason`: `unsupported`, `no-link`
+  (Claude Code reads `CLAUDE.md`, `.claude/skills` and `.claude/rules`, and the repo has
+  `AGENTS.md`, `.agents/skills`, `.agents/rules` with no link), `unlinked-copy` (both exist as
+  separate real files or directories: drift) or `points-elsewhere`, and a `fix` text naming the
+  link. `inventory --json` gains `reason`, `reads`, `fix`; `inventory.gaps()` takes the repo as
+  a third argument. The built-in `claude` coverage table no longer lists `AGENTS.md` as read.
+  polymorph does not make the links yet.
+- **Discovery logs live in `.polymorph/discovery/`** (was `.polymorph-discovery/`). `--full` on
+  `discover init` and `capture` now needs an explicit `--log-dir` / `--out` (else a loud
+  refusal), the long `--i-really-want-this-in-the-repo-raw` flag (also spelled
+  `--i-really-want-this-in-the-repo`), and then a typed `yes`; with no terminal it is refused.
+  The log stays plain text: no encryption, so secret scanners can still see a leak.
+- **Command reference:** `docs/usage.md` and `man/polymorph.1` are written from the argparse
+  parser by `scripts/gen_reference.py` (`just reference`); `just docs` and the unit tests fail
+  when they are stale. Every flag now has help text. Skill `promote-to-main` covers bringing
+  `experimental` to `main`. The man page text is checked against the parser; it has not been
+  rendered by `man` here.
 - **`capture`:** `polymorph capture --harness NAME` runs the discovery procedure itself:
   scratch directory, logger installed by a shipped driver (`opencode`; `claude`, blocked until confirmed live),
   fixed steps through the harness's headless mode, then `summary.txt`, `draft.toml`,

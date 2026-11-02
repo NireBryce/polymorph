@@ -23,6 +23,72 @@ import sys
 import time
 from pathlib import Path
 
+DISCOVERY_DIR = ".polymorph/discovery"   # default log directory, under the current directory
+RAW_IN_REPO_FLAG = "--i-really-want-this-in-the-repo-raw"
+RAW_IN_REPO_ALIAS = "--i-really-want-this-in-the-repo"   # same flag, shorter spelling
+_RULE = "=" * 72
+
+
+def require_out_for_full(full: bool, out_given: bool, flag: str) -> None:
+    """--full logs raw commands, file contents and paths. With no location the user chose it would
+    land in the current directory, which is normally a repo: refuse, loudly, whatever else is passed."""
+    if full and not out_given:
+        raise ValueError("\n".join([
+            _RULE,
+            "REFUSED: --full without " + flag,
+            _RULE,
+            "--full records raw commands, file contents and paths, possibly secrets.",
+            f"With no {flag} the log would go to a default location under the current directory",
+            f"({DISCOVERY_DIR}/ or ./polymorph-capture-NAME), which is normally inside a git repo",
+            "where `git add -A` commits it and a push publishes it.",
+            f"Pass {flag} DIR to say where the raw log goes, and {RAW_IN_REPO_FLAG}",
+            "to accept a plain-text log; you will then be asked to type yes.",
+            _RULE]))
+
+
+def containing_repo(path: str | Path) -> Path | None:
+    """The git worktree root that contains `path` (which need not exist yet), or None."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+def confirm_full(path: str | Path, flag_given: bool, flag: str, stdin=None, stdout=None) -> None:
+    """The gate in front of every --full: the long flag, then a typed `yes`. Raises ValueError for no.
+
+    The flag is required whatever the location, and a typed answer is required after it even
+    when the flag was given: the flag alone is a habit, the word is a decision. No terminal means
+    no answer, so it is refused. Nothing here encrypts or hides the log."""
+    if not flag_given:
+        raise ValueError("\n".join([
+            _RULE,
+            "REFUSED: --full needs " + RAW_IN_REPO_FLAG,
+            _RULE,
+            "--full records raw commands, file contents and paths, possibly secrets, in plain text.",
+            "Nothing hides or encrypts the log, and secret scanners will not be told it is there.",
+            f"To accept that, add {RAW_IN_REPO_FLAG} (or {RAW_IN_REPO_ALIAS}); you will then be",
+            "asked to type yes.",
+            _RULE]))
+    stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
+    repo = containing_repo(path)
+    where = f"inside the git repo {repo}" if repo else "outside any git repo"
+    banner = "\n".join([
+        _RULE,
+        "WARNING: A RAW LOG, IN PLAIN TEXT",
+        _RULE,
+        f"{flag} {path} is {where}.",
+        "A --full log holds raw commands, file contents and paths, possibly secrets.",
+        "It is not encrypted or hidden. `git add -A` would stage it; a push would publish it.",
+        _RULE])
+    if not getattr(stdin, "isatty", lambda: False)():
+        raise ValueError(f"{banner}\nNot a terminal, so there is nobody to type yes: refused.")
+    stdout.write(banner + '\nType "yes" to write the raw log: ')
+    stdout.flush()
+    if stdin.readline().strip().lower() != "yes":
+        raise ValueError("cancelled: nothing was written.")
+
 
 _TOOL_RE = re.compile(r"^[A-Za-z_][\w.*-]*$")
 _KEY_RE = re.compile(r"^[A-Za-z_][\w-]*$")
@@ -69,7 +135,7 @@ def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = 
     pythonpath: prefix the command with `env PYTHONPATH=...`, for a polymorph that is run from a
     source tree rather than installed (`capture` sets it; `discover init` does not)."""
     if out is None:
-        out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
+        out = Path(log_dir or Path.cwd() / DISCOVERY_DIR).resolve() / f"{harness}.jsonl"
     flag = ("" if redact else " --full") + (" --env-be-very-careful" if env else "")
     pre = f"env PYTHONPATH={shlex.quote(str(pythonpath))} " if pythonpath else ""
     return (f"{pre}{shlex.quote(sys.executable)} -m polymorph discover log{flag} "
@@ -171,9 +237,8 @@ def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
         shape = _detect_shape(doc)   # installing where the harness never fires logs nothing
     entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env, pythonpath=pythonpath)}
     # the logger's own entry is recognised by its --out file; the user's hooks stay
-    out = Path(log_dir or Path.cwd() / ".polymorph-discovery").resolve() / f"{harness}.jsonl"
     _merge_hook(doc, shape, event_name, matcher, entry,
-                marker=("-m polymorph discover log", f"{harness}.jsonl"))
+                marker=("-m polymorph discover log", f"/{harness}.jsonl"))
     _write_doc(p, doc)
     return p
 
@@ -354,13 +419,29 @@ def _shape(v, depth: int = _SHAPE_DEPTH):
     return out
 
 
+INVALID = "<invalid>"   # stands in for a name or id that failed its pattern in a redacted log
+
+
+def _safe_text(key: str, value: str) -> bool:
+    """A string under a _SAFE_VALUES key survives redaction only when it looks like a name or id."""
+    if key in ("session_id", "sessionId"):
+        return bool(_ID_VALUE.match(value))
+    if key in ("hook_event_name", "hookEventName", "event"):
+        return _safe(value, _EVENT_RE) is not None
+    if key in ("tool_name", "toolName"):
+        return _safe(value) is not None
+    return bool(_ID_VALUE.match(value))   # permission_mode, effort, source
+
+
 def _redact_payload(raw):
     """Keys kept; only _SAFE_VALUES survive verbatim, the rest become {type, length}."""
     if not isinstance(raw, dict):
         return _descriptor(raw)
     out = {}
     for k, v in raw.items():
-        if k in _SAFE_VALUES and isinstance(v, (str, int, float, bool)) and not isinstance(v, dict):
+        if k in _SAFE_VALUES and isinstance(v, (int, float, bool)):
+            out[k] = v
+        elif k in _SAFE_VALUES and isinstance(v, str) and _safe_text(k, v):
             out[k] = v
         elif (k in (*_CALL_ID_KEYS, *_MESSAGE_ID_KEYS) and isinstance(v, str)
               and _ID_VALUE.match(v)):
@@ -400,6 +481,11 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
         event = _first_str(raw, _EVENT_KEYS)
         tool_name = _first_str(raw, _TOOL_NAME_KEYS)
         session_id = _first_str(raw, _SESSION_KEYS)
+        if redact:   # a name is kept only when it looks like a name: the key aliases are not all safe
+            # an odd value is replaced by a marker, so "a payload with a bad name" is still countable
+            event = None if event is None else (_safe(event, _EVENT_RE) or INVALID)
+            tool_name = None if tool_name is None else (_safe(tool_name) or INVALID)
+            session_id = None if session_id is None else (session_id if _ID_VALUE.match(session_id) else INVALID)
     return {
         "schema": LOG_SCHEMA,
         "ts": time.time(),

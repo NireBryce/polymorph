@@ -67,32 +67,74 @@ class InventoryTests(TempRepoTest):
 
 
 class GapTests(TempRepoTest):
+    def gaps_for(self, name):
+        return [(g.kind, g.path, g.reason) for g in
+                inventory.gaps(self.inv, inventory.load_coverage(name, self.repo), self.repo)]
+
     def test_phase1_gap_names_exactly_the_ignored_kind(self):
-        """Slice 1's verification: a coverage table that ignores one kind,
-        and a gap report that names exactly that kind's paths."""
+        """A coverage table that reads no rules: the gap report names exactly the rules."""
         table = self.repo / ".polymorph/basecamp/coverage"
         table.mkdir(parents=True)
         (table / "picker.toml").write_text(
             'schema = 1\nname = "picker"\n\n[inventory]\n'
             'skills = ".agents/skills"\nmemory = ["AGENTS.md", "CLAUDE.md"]\n'
             'claude_dir = ".claude"\n')
-        cap = inventory.load_coverage("picker", self.repo)
-        found = inventory.gaps(self.inv, cap)
-        self.assertEqual([(g.kind, g.path) for g in found],
-                         [("rules", ".claude/rules/keep.md"),
-                          ("rules", ".agents/rules/extra.md")])
+        self.assertEqual(self.gaps_for("picker"),
+                         [("rules", ".claude/rules/keep.md", "unsupported"),
+                          ("rules", ".agents/rules/extra.md", "unsupported")])
+
+    def test_claude_on_a_repo_that_keeps_everything_under_agents_and_does_not_link(self):
+        """AGENTS.md and .agents/* exist, nothing is linked for Claude Code: all reported."""
+        (self.repo / "CLAUDE.md").unlink()
+        shutil.rmtree(self.repo / ".claude/rules")
+        self.inv = inventory.read_inventory(self.repo)
+        got = self.gaps_for("claude")
+        self.assertIn(("memory", "AGENTS.md", "no-link"), got)
+        self.assertIn(("skills", ".agents/skills/alpha", "no-link"), got)
+        self.assertIn(("rules", ".agents/rules/extra.md", "no-link"), got)
+
+    def test_claude_with_both_copies_present_and_unlinked_is_drift(self):
+        got = self.gaps_for("claude")
+        self.assertIn(("memory", "AGENTS.md", "unlinked-copy"), got)      # CLAUDE.md is a real second file
+        self.assertIn(("rules", ".agents/rules/extra.md", "unlinked-copy"), got)
+        self.assertIn(("skills", ".agents/skills/alpha", "no-link"), got)  # .claude/skills is absent
+        self.assertNotIn("CLAUDE.md", [p for _, p, _ in got])
+
+    def test_symlinks_make_claude_reach_everything(self):
+        (self.repo / "CLAUDE.md").unlink()
+        (self.repo / "CLAUDE.md").symlink_to("AGENTS.md")
+        shutil.rmtree(self.repo / ".claude/rules")
+        (self.repo / ".claude/rules").symlink_to("../.agents/rules")
+        (self.repo / ".claude/skills").symlink_to("../.agents/skills")
+        self.inv = inventory.read_inventory(self.repo)
+        self.assertEqual(self.gaps_for("claude"), [])
+
+    def test_a_symlink_to_something_else_is_named(self):
+        (self.repo / "CLAUDE.md").unlink()
+        (self.repo / "other.md").write_text("x\n")
+        (self.repo / "CLAUDE.md").symlink_to("other.md")
+        self.inv = inventory.read_inventory(self.repo)
+        self.assertIn(("memory", "AGENTS.md", "points-elsewhere"), self.gaps_for("claude"))
+
+    def test_fix_text_names_the_link(self):
+        (self.repo / "CLAUDE.md").unlink()
+        self.inv = inventory.read_inventory(self.repo)
+        g = next(g for g in inventory.gaps(self.inv, inventory.load_coverage("claude", self.repo), self.repo)
+                 if g.path == "AGENTS.md")
+        self.assertEqual(g.fix, "link CLAUDE.md -> AGENTS.md")
 
     def test_builtin_zcode_gaps_on_a_full_repo(self):
-        found = inventory.gaps(self.inv, inventory.load_coverage("zcode", self.repo))
-        self.assertEqual([(g.kind, g.path) for g in found],
-                         [("rules", ".claude/rules/keep.md"),
-                          ("rules", ".agents/rules/extra.md"),
-                          ("memory", "CLAUDE.md"),
-                          ("claude_dir", ".claude/rules"),
-                          ("claude_dir", ".claude/settings.json")])
+        self.assertEqual(self.gaps_for("zcode"),
+                         [("rules", ".claude/rules/keep.md", "unsupported"),
+                          ("rules", ".agents/rules/extra.md", "unsupported"),
+                          ("memory", "CLAUDE.md", "unlinked-copy"),
+                          ("claude_dir", ".claude/rules", "unsupported"),
+                          ("claude_dir", ".claude/settings.json", "unsupported")])
 
-    def test_builtin_claude_gaps_nothing_on_a_full_repo(self):
-        self.assertEqual(inventory.gaps(self.inv, inventory.load_coverage("claude", self.repo)), [])
+    def test_zcode_reaches_skills_and_agents_md_at_rest(self):
+        got = self.gaps_for("zcode")
+        self.assertNotIn("AGENTS.md", [p for _, p, _ in got])
+        self.assertNotIn(".agents/skills/alpha", [p for _, p, _ in got])
 
     def test_missing_table_is_none_and_unlisted(self):
         self.assertIsNone(inventory.load_coverage("gemini", self.repo))
@@ -173,15 +215,18 @@ class CliTests(TempRepoTest):
         self.assertEqual(rc, 0)
         self.assertIn("skills: 2", out)
         self.assertIn("gaps for zcode: 5", out)
-        self.assertIn("- rules .claude/rules/keep.md", out)
-        self.assertIn("gaps for claude: 0", out)
+        self.assertIn("- rules .claude/rules/keep.md: unsupported", out)
+        self.assertIn("gaps for claude: 4", out)
+        self.assertIn("- memory AGENTS.md: unlinked-copy", out)
 
     def test_inventory_json_is_structured(self):
         rc, out = self.run_cli("inventory", "--repo", str(self.repo), "--json")
         self.assertEqual(rc, 0)
         data = json.loads(out)
         self.assertEqual(data["inventory"]["memory"][0]["path"], "AGENTS.md")
-        self.assertEqual(len(data["gaps"]), 5)  # zcode 5 + claude 0
+        self.assertEqual(len(data["gaps"]), 9)  # zcode 5 + claude 4
+        self.assertEqual({g["reason"] for g in data["gaps"] if g["harness"] == "claude"},
+                         {"no-link", "unlinked-copy"})
 
     def test_inventory_named_harness_without_table_says_unknown(self):
         rc, out = self.run_cli("inventory", "--repo", str(self.repo), "--harness", "gemini")

@@ -57,9 +57,11 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _dirty(repo: Path, rel: str) -> str | None:
     """A reason string when git shows uncommitted changes for rel, else None."""
-    p = _git(repo, "status", "--porcelain", "--", rel)
+    p = _git(repo, "status", "--porcelain", "--ignored", "--", rel)
     if p.returncode != 0:
         return f"git status failed ({p.stderr.strip() or 'not a git repository'}); refusing without a safety net"
+    if any(line.startswith("!!") for line in p.stdout.splitlines()):
+        return "ignored by git (no committed copy to fall back on)"
     if p.stdout.strip():
         return "uncommitted changes"
     return None

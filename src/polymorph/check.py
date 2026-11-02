@@ -76,8 +76,17 @@ def check_hook_scripts(repo: Path) -> list[Finding]:
         return [_f("settings-invalid", None, f"{SETTINGS} not found", SETTINGS)]
     except ValueError as e:
         return [_f("settings-invalid", None, f"{SETTINGS}: {e}", SETTINGS)]
-    for event, groups in (data.get("hooks") or {}).items():
-        for group in groups or []:
+    hooks = data.get("hooks") or {}
+    if not isinstance(hooks, dict):
+        return [_f("settings-invalid", None, f"{SETTINGS}: hooks must be an object", SETTINGS)]
+    for event, groups in hooks.items():
+        if not isinstance(groups, list) or not all(
+                isinstance(g, dict) and isinstance(g.get("hooks", []), list)
+                and all(isinstance(h, dict) for h in g.get("hooks", [])) for g in groups):
+            return out + [_f("settings-invalid", None,
+                             f"{SETTINGS}: hooks.{event} must be a list of matcher groups, each with a list of hook objects",
+                             SETTINGS)]
+        for group in groups:
             for h in group.get("hooks", []):
                 if h.get("type", "command") != "command":
                     continue

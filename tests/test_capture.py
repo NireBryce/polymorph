@@ -45,10 +45,10 @@ if mode == "late":
              "p = {{'hook_event_name': 'execute.before', 'tool_name': 'bash', 'session_id': 's1', 'input': {{'command': 'x'}}}}\\n"
              "subprocess.run([sys.executable, '-m', 'polymorph', 'discover', 'log', '--out', sys.argv[1]],"
              " input=json.dumps(p), text=True, env={{'PYTHONPATH': sys.argv[2]}})\\n")
-    subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl"), src])
+    subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl"), src])
     sys.exit(0)
 silent = os.path.exists(os.path.join(ctrl, "silent")) and "sleep" in prompt
-log = os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl")
+log = os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl")
 tools = [("bash", {{"command": "echo hello"}})]
 if "scratch.txt" in prompt:
     tools = [("write", {{"filePath": "scratch.txt", "content": "hello"}}), ("read", {{"filePath": "scratch.txt"}})]
@@ -181,6 +181,35 @@ class Confirmation(CaptureCase):
         self.assertIn("NOTICE", out)
         self.assertIn("spends tokens", out)
         self.assertNotIn("Continue?", out)
+
+    def test_full_without_out_is_refused_before_anything_runs(self):
+        rc, o, err = capture_main(["--harness", "opencode", "--yes", "--full"])
+        self.assertEqual(rc, 2, err)
+        self.assertIn("raw commands, file contents and paths", err)
+        self.assertIn("--out", err)
+        self.assertIn("--i-really-want-this-in-the-repo-raw", err)
+        self.assertEqual(o, "")
+
+    def test_full_needs_the_long_flag_even_with_yes_and_a_good_out(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc, o, err = capture_main(["--harness", "opencode", "--yes", "--full",
+                                       "--out", str(Path(d) / "results")])
+            self.assertEqual(rc, 2, err)
+            self.assertIn("--full needs --i-really-want-this-in-the-repo-raw", err)
+            self.assertFalse((Path(d) / "results").exists())
+
+    def test_full_with_the_long_flag_still_needs_a_typed_yes(self):
+        with tempfile.TemporaryDirectory() as d:
+            argv = ["--harness", "opencode", "--full", "--i-really-want-this-in-the-repo-raw",
+                    "--out", str(Path(d) / "results")]
+            rc, o, err = capture_main([*argv, "--yes"])          # --yes is the cost answer, not this one
+            self.assertEqual(rc, 2, err)
+            self.assertIn("nobody to type yes", err)
+            out, errs = io.StringIO(), io.StringIO()
+            rc = capture.main(argv, stdin=Tty("no\n"), stdout=out, stderr=errs)
+            self.assertEqual(rc, 2, errs.getvalue())
+            self.assertIn("cancelled", errs.getvalue())
+            self.assertFalse((Path(d) / "results").exists())
 
     def test_non_tty_without_yes_refuses_with_2(self):
         rc, out, err = self.run_cap()
@@ -495,7 +524,7 @@ class Drivers(unittest.TestCase):
         d = capture_drivers.DRIVERS["opencode"]
         d.install(scratch, full=False)
         js = (scratch / ".opencode/plugins/polymorph-discovery/index.js").read_text()
-        self.assertIn(json.dumps(str(scratch / ".polymorph-discovery/opencode.jsonl")), js)
+        self.assertIn(json.dumps(str(scratch / ".polymorph/discovery/opencode.jsonl")), js)
         self.assertIn(json.dumps(sys.executable), js)
         self.assertNotIn("@@CONSTANTS@@", js)
         self.assertNotIn("--full", js)
@@ -532,7 +561,7 @@ class Drivers(unittest.TestCase):
         d.install(scratch, full=False)
         hooks = json.loads((scratch / ".claude/settings.json").read_text())["hooks"]
         self.assertEqual(sorted(hooks), ["PostToolUse", "PreToolUse"])
-        self.assertIn(str(scratch / ".polymorph-discovery/claude.jsonl"), json.dumps(hooks))
+        self.assertIn(str(scratch / ".polymorph/discovery/claude.jsonl"), json.dumps(hooks))
         self.assertTrue(d.untested)
         self.assertEqual(d.step_argv("P")[:2], ["claude", "-p"])
         d.remove(scratch)

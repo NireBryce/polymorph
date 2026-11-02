@@ -19,6 +19,14 @@ lint:
     python3 -m compileall -q src tests scripts
     python3 tests/lint.py
 
+# Rewrite docs/usage.md and man/polymorph.1 from the real argparse parser
+reference:
+    python3 scripts/gen_reference.py
+
+# Fail if docs/usage.md or man/polymorph.1 differ from the parser
+reference-check:
+    python3 scripts/gen_reference.py --check
+
 # Everything CI runs
 preflight: test docs lint check
 

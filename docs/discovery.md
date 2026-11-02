@@ -47,7 +47,7 @@ wrote .mytool/config.json
 ```
 
 That file now has one catch-all hook, `PreToolUse` with matcher `*`, whose command is
-`<python> -m polymorph discover log --out <abs path>/.polymorph-discovery/mytool.jsonl`.
+`<python> -m polymorph discover log --out <abs path>/.polymorph/discovery/mytool.jsonl`.
 Change the event or matcher with `--event-name` and `--matcher` if the harness uses
 different names; use `--shape claude-like` if its file wraps hooks in
 `hooks.enabled` / `hooks.events` as ZCode's does. To capture more than one event, run
@@ -74,7 +74,7 @@ Only the events you ran `init` for are logged. Run `init` again with
 ## 3. Look at what you got
 
 ```sh
-python -m polymorph discover summary .polymorph-discovery/mytool.jsonl
+python -m polymorph discover summary .polymorph/discovery/mytool.jsonl
 ```
 ```
 payloads: 3   non-object lines: 0   sessions: 1
@@ -104,7 +104,7 @@ If you suspect the harness needs a restart to see a changed hook file, test it:
 ## 4. Draft a mapping
 
 ```sh
-python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name mytool > mytool.toml
+python -m polymorph discover draft .polymorph/discovery/mytool.jsonl --name mytool > mytool.toml
 python -m polymorph validate mytool.toml
 ```
 
@@ -185,7 +185,11 @@ Rules:
 - Leave `--env-be-very-careful` off unless you need to find out which variables the
   harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE` or
   `HARNESS`. See [CLI reference](cli.md#the-redaction-default-and---env-be-very-careful).
-- Add `.polymorph-discovery/` to your `.gitignore`. polymorph does not do that for you.
+- `--full` needs an explicit `--log-dir` (or `--out`), the long
+  `--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. The log is plain text, so a
+  secret scanner would flag it if it were committed. Put it outside the repo, on tmpfs if you can
+  (`$XDG_RUNTIME_DIR`), and delete it when you are done.
+- Add `.polymorph/discovery/` to your `.gitignore`. polymorph does not do that for you.
   Check `git status` before `git add -A`.
 - "Redacted" is not "anonymous". Tool names, key names and lengths can still identify what
   you were doing. Look at the log before sharing it.

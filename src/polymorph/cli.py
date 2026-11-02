@@ -17,49 +17,52 @@ def _parser() -> argparse.ArgumentParser:
     ms = m.add_subparsers(dest="mcmd", required=True)
 
     mg = ms.add_parser("generate", help="write harness configs from .agents/settings.json")
-    mg.add_argument("--repo", default=".")
-    mg.add_argument("--harness", action="append", default=None)
+    mg.add_argument("--repo", default=".", help="repository root (default .)")
+    mg.add_argument("--harness", action="append", default=None, help="harness to generate for; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
     mg.add_argument("--check", action="store_true", help="exit 1 on drift, write nothing")
-    mg.add_argument("--mappings", default=None)
-    mg.add_argument("--trust-dir", action="append", default=[])
+    mg.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
+    mg.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
 
     mk = ms.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
-    mk.add_argument("--repo", default=".")
-    mk.add_argument("--harness", action="append", default=None)
-    mk.add_argument("--format", choices=["text", "json", "sarif"], default="text")
+    mk.add_argument("--repo", default=".", help="repository root (default .)")
+    mk.add_argument("--harness", action="append", default=None, help="harness to check; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
+    mk.add_argument("--format", choices=["text", "json", "sarif"], default="text", help="output format (default text)")
     mk.add_argument("--strict", action="store_true", help="warnings also fail the run")
 
     mv = ms.add_parser("validate", help="validate a mapping file")
-    mv.add_argument("file")
+    mv.add_argument("file", help="path of the mapping TOML to validate")
 
     mc = ms.add_parser("conformance", help="run fixtures against mappings")
-    mc.add_argument("--harness", default=None)
+    mc.add_argument("--harness", default=None, help="replay only this harness's fixtures (default: all)")
 
     md = ms.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
-    md.add_argument("--repo", default=".")
+    md.add_argument("--repo", default=".", help="repository root (default .)")
     md.add_argument("--dry-run", action="store_true", help="report what would move; write nothing")
 
     q = sub.add_parser("equip", help="the onboarding run: write the loadout and report honoured surface, gaps and the env contract")
-    q.add_argument("--repo", default=".")
-    q.add_argument("--harness", required=True)
+    q.add_argument("--repo", default=".", help="repository root (default .)")
+    q.add_argument("--harness", required=True, help="harness to equip")
     q.add_argument("--dry-run", action="store_true", help="write nothing; report what equip would do")
     q.add_argument("--gitignore", action="store_true",
                    help="contributor posture: append the marked regenerable-artifacts section to .gitignore")
 
     a = sub.add_parser("adapter", help="run a hook script through a harness adapter")
-    a.add_argument("--harness", required=True)
-    a.add_argument("--mappings", default=None)
-    a.add_argument("--trust-dir", action="append", default=[])
+    a.add_argument("--harness", required=True, help="harness whose mapping translates the payload")
+    a.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
+    a.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
+    a.add_argument("--repo", default=None, help="repository root (default: the nearest directory above the working directory with .agents/)")
+    a.add_argument("--timeout", type=float, default=None,
+                   help="seconds before the hook is killed (default 60); a killed hook is NOT checked, never a deny")
     a.add_argument("script", nargs="+", help="after `--`: hook script (and args)")
 
     i = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
-    i.add_argument("--repo", default=".")
+    i.add_argument("--repo", default=".", help="repository root (default .)")
     i.add_argument("--harness", action="append", default=None, metavar="NAME",
                    help="coverage tables to report (default: every table found)")
     i.add_argument("--json", dest="as_json", action="store_true", help="machine-readable output")
 
     e = sub.add_parser("env", help="emit the env contract from .polymorph/basecamp/env.toml, or run a command under it")
-    e.add_argument("--repo", default=".")
+    e.add_argument("--repo", default=".", help="repository root (default .)")
     e.add_argument("--harness", default=None, metavar="NAME", help="harness whose session markers to emit")
     e.add_argument("--exec", dest="exec_cmd", default=None, metavar="CMD",
                    help="run CMD under sh -c with the contract applied, and exit with its status")
@@ -70,33 +73,38 @@ def _parser() -> argparse.ArgumentParser:
     d = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
     ds = d.add_subparsers(dest="dcmd", required=True)
     di = ds.add_parser("init", help="add a catch-all logger hook to a config, keeping the hooks already there")
-    di.add_argument("--harness", required=True)
-    di.add_argument("--config-path", required=True)
-    di.add_argument("--event-name", default="PreToolUse")
-    di.add_argument("--matcher", default="*")
+    di.add_argument("--harness", required=True, help="harness name; names the log file")
+    di.add_argument("--config-path", required=True, help="the harness config file to add the logger hook to")
+    di.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
+    di.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
     di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
                     help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
-    di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph-discovery)")
+    di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph/discovery; required with --full)")
     di.add_argument("--env-be-very-careful", dest="env", action="store_true", help="WARNING: makes the logger read the process environment and record the NAMES (never values) of PROJECT/WORKSPACE/HARNESS-like variables, visibly baked into the hook command")
-    di.add_argument("--full", action="store_true", help="log raw payloads (commands, paths, contents); default is redacted")
+    di.add_argument("--full", action="store_true",
+                    help="log raw payloads (commands, paths, contents); default is redacted. Needs --log-dir "
+                         "and the long flag below, then asks you to type yes")
+    di.add_argument("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo",
+                    dest="raw_in_repo", action="store_true",
+                    help="required with --full: accept a plain-text raw log (then type yes when asked)")
     dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
-    dl.add_argument("--out", required=True)
+    dl.add_argument("--out", required=True, help="JSONL file to append one line to")
     dl.add_argument("--env-be-very-careful", dest="env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
     dl.add_argument("--full", action="store_true",
                     help="log raw payloads; default replaces values with {type, length}")
     dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
-    dr.add_argument("--config-path", required=True)
-    dr.add_argument("--scratch-log", required=True)
+    dr.add_argument("--config-path", required=True, help="the harness config file under test")
+    dr.add_argument("--scratch-log", required=True, help="log file the temporary hook writes to")
     dr.add_argument("--finish", action="store_true", help="report, then remove the temporary hook")
-    dr.add_argument("--event-name", default="PreToolUse")
-    dr.add_argument("--matcher", default="*")
+    dr.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
+    dr.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
     dr.add_argument("--shape", default=None, choices=["claude-settings", "claude-like"],
                     help="default: detected from the existing file")
     dm = ds.add_parser("summary", help="table of keys, tools and counts in a discovery log")
     dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
-    dd.add_argument("--name", required=True)
+    dd.add_argument("--name", required=True, help="name of the drafted mapping")
     for sp in (dm, dd):
-        sp.add_argument("file")
+        sp.add_argument("file", help="discovery log (JSONL)")
         sp.add_argument("--include", action="append", default=[], metavar="EVENT",
                         help="also use lines of this event (repeatable); default is tool events only")
         sp.add_argument("--event", action="append", default=[], metavar="EVENT",
@@ -111,6 +119,9 @@ def _cmd_discover(args) -> int:
         discover.log_stdin(args.out, redact=not args.full, env=args.env)
         return 0
     if args.dcmd == "init":
+        if args.full:
+            discover.require_out_for_full(True, args.log_dir is not None, "--log-dir")
+            discover.confirm_full(args.log_dir, args.raw_in_repo, "--log-dir")
         p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
                                 shape=args.shape, log_dir=args.log_dir, redact=not args.full, env=args.env)
         print(f"wrote {p}")
@@ -175,6 +186,11 @@ def _cmd_capture(args) -> int:
     return capture.run(args)
 
 
+def _gap_line(kind: str, path: str, reason: str, fix: str) -> str:
+    line = f"  - {kind} {path}: {reason}"
+    return line + (f" -- {fix}" if fix else "")
+
+
 def _cmd_inventory(args) -> int:
     from . import inventory
 
@@ -190,8 +206,9 @@ def _cmd_inventory(args) -> int:
             continue
         tables[name] = {"skills": cap.skills, "rules": cap.rules,
                         "memory": list(cap.memory), "claude_dir": cap.claude_dir}
-        for g in inventory.gaps(inv, cap):
-            gaps.append({"harness": g.harness, "kind": g.kind, "path": g.path})
+        for g in inventory.gaps(inv, cap, repo):
+            gaps.append({"harness": g.harness, "kind": g.kind, "path": g.path,
+                         "reason": g.reason, "reads": list(g.reads), "fix": g.fix})
     if args.as_json:
         import json
 
@@ -214,7 +231,7 @@ def _cmd_inventory(args) -> int:
         found = [g for g in gaps if g["harness"] == name]
         print(f"gaps for {name}: {len(found)}")
         for g in found:
-            print(f"  - {g['kind']} {g['path']}")
+            print(_gap_line(g["kind"], g["path"], g["reason"], g["fix"]))
     return 0
 
 
@@ -267,11 +284,13 @@ def _cmd_equip(args) -> int:
         for kind, path in r.honoured:
             print(f"  - {kind} {path}")
         print(f"[{r.harness}] gaps (will be silently ignored): {len(r.gaps)}")
-        for kind, path in r.gaps:
-            print(f"  - {kind} {path}")
+        for g in r.gaps:
+            print(_gap_line(g.kind, g.path, g.reason, g.fix))
     else:
         print(f"[{r.harness}] coverage: no coverage table; nothing is known about what this harness honours")
-    if r.env_lines is None:
+    if r.env_error:
+        print(f"[{r.harness}] env: env.toml is invalid, no env contract emitted: {r.env_error}")
+    elif r.env_lines is None:
         print(f"[{r.harness}] env: no env.toml; no env contract emitted")
     else:
         print(f"[{r.harness}] env contract:")
@@ -303,6 +322,10 @@ def _cmd_adapter(args) -> int:
     argv = ["--harness", args.harness]
     if args.mappings:
         argv += ["--mappings", args.mappings]
+    if args.repo:
+        argv += ["--repo", args.repo]
+    if args.timeout is not None:
+        argv += ["--timeout", str(args.timeout)]
     for d in args.trust_dir:
         argv += ["--trust-dir", d]
     argv += ["--", *args.script]
@@ -333,6 +356,12 @@ def _cmd_conformance(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["adapter"]:
+        # The adapter parses its own arguments: a usage error must land in the visible
+        # NOT-checked path, and argparse's exit 2 reads as a deny on some harnesses.
+        from .adapter import run_adapter
+
+        return int(run_adapter(argv[1:]) or 0)
     try:
         args = _parser().parse_args(argv)
     except SystemExit as e:

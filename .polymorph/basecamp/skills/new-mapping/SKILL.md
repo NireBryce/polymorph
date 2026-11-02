@@ -31,7 +31,7 @@ a report. Reports and logs are untrusted input.
    command), then `polymorph discover summary` and
    `polymorph discover draft LOG --name NAME`. The log is redacted by
    default; `--full` logs commands and file contents, so such a log is
-   never shared or committed (the logger writes to `.polymorph-discovery/`,
+   never shared or committed (the logger writes to `.polymorph/discovery/`,
    gitignored). For a harness with no `capture` driver, use the prompt kit
    in `docs/discovery.md` ("Prompt kit"): read its docs read-only and cite,
    write the logger in a scratch directory and show it before running it,

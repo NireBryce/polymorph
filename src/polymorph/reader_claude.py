@@ -111,6 +111,8 @@ def read_claude(repo: str | Path) -> Canon:
                         continue
                     script = resolve_script(h.get("command", ""), repo)
                     t = h.get("timeout")
+                    if t is not None and (isinstance(t, bool) or int(t) <= 0):
+                        raise ReaderError(f"hook {script}: timeout must be a positive number of seconds, got {t!r}")
                     hooks.append(Hook(canon_event, classes, script, int(t) if t is not None else None))
     except (AttributeError, TypeError, ValueError) as e:
         # a malformed entry is a settings problem, not a crash: check reports

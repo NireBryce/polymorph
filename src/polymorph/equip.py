@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .generate import generate
-from .inventory import Coverage, load_coverage, read_inventory
+from .inventory import Coverage, Gap, load_coverage, read_inventory
 
 MANIFEST = ".polymorph/basecamp/loadout.toml"
 GITIGNORE_MARK = "# polymorph equip: issued artifacts below are regenerable (do not edit)"
@@ -44,9 +44,10 @@ class EquipResult:
     not_written: list[str] = field(default_factory=list)   # undecided decisions
     undecided: int = 0
     honoured: list[tuple[str, str]] = field(default_factory=list)  # kind, where
-    gaps: list[tuple[str, str]] = field(default_factory=list)      # kind, path
+    gaps: list[Gap] = field(default_factory=list)
     coverage_known: bool = True
-    env_lines: list[str] | None = None                     # None: no env.toml
+    env_lines: list[str] | None = None                     # None: no env.toml, or an invalid one
+    env_error: str = ""                                    # why env.toml could not be used, if it exists
     manifest_written: bool = False
     posture: str = "unknown"                               # maintainer | contributor | unknown
     gitignore_suggested: list[str] = field(default_factory=list)
@@ -71,6 +72,10 @@ def _posture(repo: Path) -> str:
     if p.returncode != 0:
         return "unknown"
     return "maintainer" if p.stdout.strip() else "contributor"
+
+
+def _read_manifest(repo: Path) -> list[Artifact]:
+    return manifest_entries(repo)
 
 
 def _loadout_lines(artifacts: list[Artifact]) -> str:
@@ -112,16 +117,12 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
                                     source=f"generated from .agents/settings.json via mapping {harness}")
                 manifest = repo / MANIFEST
                 manifest.parent.mkdir(parents=True, exist_ok=True)
-                existing: dict[str, dict] = {}
-                if manifest.is_file():
-                    import tomllib
-
-                    doc = tomllib.loads(manifest.read_text())
-                    existing = doc.get("harness", {}).get(harness, {})
-                existing[artifact.path] = {"hash": artifact.hash, "source": artifact.source}
-                manifest.write_text(_loadout_lines(
-                    [Artifact(harness=harness, path=k, hash=v["hash"], source=v["source"])
-                     for k, v in existing.items()]))
+                # every harness's entries stay; this run replaces only its own artifact's
+                kept = [a for a in _read_manifest(repo)
+                        if (a.harness, a.path) != (artifact.harness, artifact.path)]
+                tmp = manifest.with_name(manifest.name + ".polymorph-tmp")
+                tmp.write_text(_loadout_lines([*kept, artifact]))
+                tmp.replace(manifest)
                 result.manifest_written = True
 
     inv = read_inventory(repo)
@@ -130,22 +131,22 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
     if cap is not None:
         from .inventory import KINDS, gaps as compute_gaps
 
-        found = {(g.kind, g.path) for g in compute_gaps(inv, cap)}
+        found = {(g.kind, g.path): g for g in compute_gaps(inv, cap, repo)}
         for kind in KINDS:
             for item in inv.kind(kind):
                 if (kind, item.path) in found:
-                    result.gaps.append((kind, item.path))
+                    result.gaps.append(found[(kind, item.path)])
                 else:
                     result.honoured.append((kind, item.path))
     # coverage unknown: nothing is claimed; the summary says so
 
-    from .env import ENV_FILE, contract_lines, load_env
+    from .env import ENV_FILE, EnvError, contract_lines, load_env
 
-    try:
-        facts = load_env(repo)
-        result.env_lines = contract_lines(facts, harness)
-    except Exception:
-        result.env_lines = None
+    if (repo / ENV_FILE).is_file():
+        try:
+            result.env_lines = contract_lines(load_env(repo), harness)
+        except (EnvError, ValueError, OSError) as e:   # EnvError and TOML errors are ValueErrors
+            result.env_error = str(e)
 
     result.posture = _posture(repo)
     if result.posture == "contributor" and (result.written or result.unchanged):

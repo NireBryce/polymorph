@@ -124,6 +124,10 @@ def translate_out(mapping: dict, answer: dict | None) -> dict:
         return {"stdout": json.dumps(answer), "exit": 0, "stderr": ""}
     if kind == "deny" and caps.get("exit_2_blocks"):
         return {"stdout": "", "exit": 2, "stderr": text}
+    if kind == "deny":
+        # no payload_out.deny and no way to block: exit 0 here would turn the guard's deny into an allow
+        raise AdapterError(f"the mapping has no way to express a deny (no payload_out.deny, "
+                           f"exit_2_blocks and json_answers false): {text or 'no reason given'}")
     return {"stdout": "", "exit": 0, "stderr": text}
 
 

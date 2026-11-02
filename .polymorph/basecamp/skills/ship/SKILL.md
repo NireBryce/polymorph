@@ -33,7 +33,8 @@ Work lands on `experimental` by default: open the PR with
 experimental`. `main` takes stabilized updates from it once stable: open a
 PR `experimental` → `main` and merge it directly with `gh pr merge` --
 `ship-land` refuses a PR whose head is `experimental` on purpose, so that
-update stays a deliberate step rather than the per-task flow.
+update stays a deliberate step rather than the per-task flow. Before opening that PR,
+follow skill `promote-to-main`.
 
 ## 0. Is it green locally?
 

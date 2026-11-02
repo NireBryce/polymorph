@@ -218,6 +218,8 @@ def generate_target(repo: Path, canon: Canon, m: Mapping,
     if out.is_file():
         old = out.read_text()
         existing = json.loads(old)
+        if not isinstance(existing, dict):
+            raise ValueError(f"{out}: existing config is not a JSON object; refusing to overwrite it")
     content, res = TEMPLATES[m.template](canon, m, existing, decisions)
     warnings = []
     if not m.verified:

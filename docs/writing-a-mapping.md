@@ -159,7 +159,7 @@ with no `payload_out` entry falls back to pass-through (JSON harness), exit 2 pl
 Start from the draft:
 
 ```sh
-python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name mytool > mytool.toml
+python -m polymorph discover draft .polymorph/discovery/mytool.jsonl --name mytool > mytool.toml
 ```
 
 then fix what its comments say to confirm (`config_path`, `template`, classes marked

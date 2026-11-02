@@ -17,6 +17,8 @@ tests/test_docs.py runs every check on a bad tree to show it can fail.
 - cost:    README.md has the "Cost and responsibility" heading and docs/cli.md and
            docs/discovery.md link to it.
 - paths:   no text file holds a real home directory path.
+- generated: docs/usage.md and man/polymorph.1 equal what scripts/gen_reference.py writes
+           from the real argparse parser (a flag added without `just reference` fails here).
 """
 import pathlib
 import re
@@ -24,7 +26,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SKIP_DIRS = {'.git', '.venv', '__pycache__', 'result', '.polymorph-discovery'}
+SKIP_DIRS = {'.git', '.venv', '__pycache__', 'result'}
+SKIP_PREFIXES = ('.polymorph/discovery/',)
 BANNER = 'Experimental and unvetted'
 PLACEHOLDER_USERS = {'USER', 'user', 'you', 'name', 'NAME', 'me', 'example', 'username', 'runner', 'x', 'someone'}
 
@@ -35,7 +38,8 @@ def files(root):
         out = subprocess.run(['git', 'ls-files'], cwd=root, capture_output=True, text=True, check=True).stdout
         paths = [root / line for line in out.splitlines()]
     except (OSError, subprocess.CalledProcessError):
-        paths = [p for p in root.rglob('*') if p.is_file() and not SKIP_DIRS & set(p.relative_to(root).parts)]
+        paths = [p for p in root.rglob('*') if p.is_file() and not SKIP_DIRS & set(p.relative_to(root).parts)
+                 and not p.relative_to(root).as_posix().startswith(SKIP_PREFIXES)]
     return [p for p in paths if p.is_file() and not p.is_symlink()]
 
 
@@ -183,7 +187,18 @@ def check_paths(root):
     return problems
 
 
-CHECKS = [check_skills, check_links, check_cli, check_banner, check_cost, check_paths]
+def check_generated(root):
+    """docs/usage.md and man/polymorph.1 are written from the real parser: they must match it."""
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    try:
+        import gen_reference
+    finally:
+        sys.path.pop(0)
+    return [f'{rel_path}: differs from what scripts/gen_reference.py writes; run `just reference`'
+            for rel_path in gen_reference.stale(root)]
+
+
+CHECKS = [check_skills, check_links, check_cli, check_banner, check_cost, check_paths, check_generated]
 
 
 def main():
