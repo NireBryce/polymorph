@@ -103,6 +103,20 @@ class EmitTests(unittest.TestCase):
         with self.assertRaises(env.EnvError):
             env.parse_env({"schema": 1, "key": {"path": "one\ntwo"}})
 
+    def test_key_path_must_be_plain_path_characters(self):
+        # the path is embedded in GIT_SSH_COMMAND, which git runs through a shell
+        for bad in ("/k; rm -rf ~", "my keys/id", "$(touch x)", "/k`id`", '/k"'):
+            with self.subTest(bad=bad), self.assertRaises(env.EnvError):
+                env.parse_env({"schema": 1, "key": {"path": bad}})
+        facts = env.parse_env({"schema": 1, "key": {"path": "~/.ssh/agents/durandal.key"}})
+        self.assertEqual(facts.key.path, "~/.ssh/agents/durandal.key")
+
+    def test_loader_and_interpreter_exports_are_refused(self):
+        for var in ("PATH", "LD_PRELOAD", "DYLD_LIBRARY_PATH", "NODE_OPTIONS",
+                    "PYTHONPATH", "BASH_ENV", "IFS", "GIT_SSH_COMMAND"):
+            with self.subTest(var=var), self.assertRaises(env.EnvError):
+                env.parse_env({"schema": 1, "harness": {"x": {"exports": [f"{var}=/x"]}}})
+
     def test_unset_names_must_be_env_names(self):
         with self.assertRaises(env.EnvError):
             env.parse_env({"schema": 1, "vault": {"unset": ["not a name"]}})

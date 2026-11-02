@@ -163,6 +163,28 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(fs)
         self.assertTrue(all(f.severity == "note" and f.target == "zcode" for f in fs))
 
+    def test_loadout_drift_and_invalid(self):
+        # equip pins the mapping bytes it consumed; the adapter re-reads the
+        # mapping at run time, so a swap after equip must be visible to check
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir()
+        shutil.copy(Path(check.BUILTIN_DIR) / "zcode.toml", d / "zcode.toml")
+        mf = self.repo / ".polymorph/basecamp/loadout.toml"
+        good = "sha256:" + hashlib.sha256((d / "zcode.toml").read_bytes()).hexdigest()
+        mp = json.dumps(str(d / "zcode.toml"))
+        mf.write_text(f'schema = 1\n[harness.zcode]\n".zcode/config.json" = '
+                      f'{{hash = "sha256:x", source = "s", mapping-path = {mp}, '
+                      f'mapping-hash = "{good}"}}\n')
+        self.assertNotIn("loadout-drift", self.codes())
+        (d / "zcode.toml").write_text((d / "zcode.toml").read_text() + "\n# changed\n")
+        self.assertIn("loadout-drift", self.codes())
+        fs = [f for f in check.run_check(self.repo) if f.code == "loadout-drift"]
+        self.assertTrue(all(f.severity == "warning" for f in fs))
+        mf.write_text(f'schema = 1\n[harness.zcode]\n".zcode/config.json" = '
+                      f'{{hash = "sha256:x", source = "s", mapping-path = {mp}}}\n')
+        fs = [f for f in check.run_check(self.repo) if f.code == "loadout-invalid"]
+        self.assertTrue(fs and fs[0].severity == "error")
+
     def test_fixtures_missing_and_failed(self):
         # a built-in mapping with no fixtures dir -> warning
         self.assertNotIn("fixtures-missing", self.codes())

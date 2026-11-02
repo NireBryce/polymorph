@@ -449,7 +449,9 @@ survive verbatim: event name, tool name, session and tool-use ids, permission mo
 Two kinds of value are kept for structure. Call and message ids (`id`, `tool_use_id`,
 `call_id`, `messageID` and similar) stay verbatim, but only when they look like ids
 (letters, digits, `_ . : -`, at most 128 characters); anything else under those names is
-reduced like any other value. Output-like objects (`tool_response`, `output`, `result`)
+reduced like any other value -- and so is a value that matches the id shape but looks like
+a credential (GitHub, OpenAI, AWS, Slack and GitLab token formats; JWTs). Output-like
+objects (`tool_response`, `output`, `result`)
 keep their nested key names to three levels and the key count is capped, with each leaf
 reduced to `{type, length}`; a key name that is not a plain identifier is replaced by
 `<invalid key>`. Each log line also carries `schema: 1`; older lines without it still read.

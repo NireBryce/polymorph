@@ -30,12 +30,20 @@ class EquipError(ValueError):
 
 @dataclass(frozen=True)
 class Artifact:
-    """One file the loadout issued, with its provenance."""
+    """One file the loadout issued, with its provenance.
+
+    mapping_path/mapping_hash pin the bytes of the mapping the artifact was
+    generated from: the adapter re-reads the mapping at run time, so a swap
+    after equip would otherwise be invisible. Entries written before the pin
+    (and links) have neither.
+    """
 
     harness: str
     path: str
     hash: str
     source: str
+    mapping_path: str | None = None
+    mapping_hash: str | None = None
 
 
 @dataclass
@@ -106,7 +114,11 @@ def _loadout_lines(artifacts: list[Artifact], links: list[Link] = ()) -> str:
     for harness in sorted(by_harness):
         out.append(f"[harness.{harness}]")
         for a in sorted(by_harness[harness], key=lambda x: x.path):
-            out.append(f'{json.dumps(a.path)} = {{hash = {json.dumps(a.hash)}, source = {json.dumps(a.source)}}}')
+            entry = f'hash = {json.dumps(a.hash)}, source = {json.dumps(a.source)}'
+            if a.mapping_path and a.mapping_hash:
+                entry += (f', mapping-path = {json.dumps(a.mapping_path)}'
+                          f', mapping-hash = {json.dumps(a.mapping_hash)}')
+            out.append(f'{json.dumps(a.path)} = {{{entry}}}')
         out.append("")
     by_link: dict[str, list[Link]] = {}
     for l in links:
@@ -141,8 +153,13 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
         if not dry_run and r.path:
             dest = repo / r.path
             if dest.is_file():
+                from .mapping import load_mapping
+
+                m = load_mapping(harness, repo)
+                msrc = Path(m.source)
                 artifact = Artifact(harness=harness, path=r.path, hash=_sha256(dest),
-                                    source=f"generated from .agents/settings.json via mapping {harness}")
+                                    source=f"generated from .agents/settings.json via mapping {harness}",
+                                    mapping_path=str(msrc), mapping_hash=_sha256(msrc))
                 # every harness's entries stay; this run replaces only its own artifact's
                 kept = [a for a in _read_manifest(repo)
                         if (a.harness, a.path) != (artifact.harness, artifact.path)]
@@ -214,7 +231,7 @@ def manifest_links(repo: str | Path = ".", harness: str | None = None) -> list[L
 
 
 def manifest_entries(repo: str | Path = ".", harness: str | None = None) -> list[Artifact]:
-    """Read the provenance manifest back (for check-side staleness work later)."""
+    """Read the provenance manifest back (check-side staleness work reads this too)."""
     import tomllib
 
     path = Path(repo) / MANIFEST
@@ -225,6 +242,20 @@ def manifest_entries(repo: str | Path = ".", harness: str | None = None) -> list
     for name, entries in doc.get("harness", {}).items():
         if harness is not None and name != harness:
             continue
+        if not isinstance(entries, dict):
+            raise EquipError(f"{MANIFEST}: [harness.{name}] must be a table of artifact entries")
         for p, v in sorted(entries.items()):
-            out.append(Artifact(harness=name, path=p, hash=v["hash"], source=v["source"]))
+            if not isinstance(v, dict) or not isinstance(v.get("hash"), str) \
+                    or not isinstance(v.get("source"), str):
+                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(p)} must be a table '
+                                 "with string `hash` and `source`")
+            mp, mh = v.get("mapping-path"), v.get("mapping-hash")
+            if mp is None and mh is None:
+                out.append(Artifact(harness=name, path=p, hash=v["hash"], source=v["source"]))
+            elif isinstance(mp, str) and isinstance(mh, str):
+                out.append(Artifact(harness=name, path=p, hash=v["hash"], source=v["source"],
+                                    mapping_path=mp, mapping_hash=mh))
+            else:
+                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(p)}: mapping-path and '
+                                 "mapping-hash must be strings together")
     return out

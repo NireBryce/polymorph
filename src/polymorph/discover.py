@@ -401,6 +401,15 @@ def _descriptor(v) -> dict:
 _CALL_ID_KEYS = ("tool_use_id", "id", "call_id", "callID", "toolCallID", "prompt_id")
 _MESSAGE_ID_KEYS = ("messageID", "message_id")
 _ID_VALUE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+# The id shape class also matches common credential formats (they are word/dot/dash
+# soup too); a value under an id-named key that looks like one is reduced instead.
+_CRED_VALUE = re.compile(
+    r"(?:gh[pousr]_[A-Za-z0-9]|github_pat_|sk-[A-Za-z0-9]|xox[baprs]-|glpat-"
+    r"|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.)")
+
+
+def _id_shaped(value: str) -> bool:
+    return _CRED_VALUE.search(value) is None and bool(_ID_VALUE.match(value))
 
 # Output-like objects keep their nested key paths (depth-limited), values become descriptors.
 _OUTPUT_KEYS = (*_RESPONSE_KEYS, "output", "result", "tool_result", "toolResult")
@@ -425,12 +434,12 @@ INVALID = "<invalid>"   # stands in for a name or id that failed its pattern in 
 def _safe_text(key: str, value: str) -> bool:
     """A string under a _SAFE_VALUES key survives redaction only when it looks like a name or id."""
     if key in ("session_id", "sessionId"):
-        return bool(_ID_VALUE.match(value))
+        return _id_shaped(value)
     if key in ("hook_event_name", "hookEventName", "event"):
         return _safe(value, _EVENT_RE) is not None
     if key in ("tool_name", "toolName"):
         return _safe(value) is not None
-    return bool(_ID_VALUE.match(value))   # permission_mode, effort, source
+    return _id_shaped(value)   # permission_mode, effort, source
 
 
 def _redact_payload(raw):
@@ -444,7 +453,7 @@ def _redact_payload(raw):
         elif k in _SAFE_VALUES and isinstance(v, str) and _safe_text(k, v):
             out[k] = v
         elif (k in (*_CALL_ID_KEYS, *_MESSAGE_ID_KEYS) and isinstance(v, str)
-              and _ID_VALUE.match(v)):
+              and _id_shaped(v)):
             out[k] = v
         elif k in _OUTPUT_KEYS and isinstance(v, dict):
             out[k] = _shape(v)
@@ -485,7 +494,7 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
             # an odd value is replaced by a marker, so "a payload with a bad name" is still countable
             event = None if event is None else (_safe(event, _EVENT_RE) or INVALID)
             tool_name = None if tool_name is None else (_safe(tool_name) or INVALID)
-            session_id = None if session_id is None else (session_id if _ID_VALUE.match(session_id) else INVALID)
+            session_id = None if session_id is None else (session_id if _id_shaped(session_id) else INVALID)
     return {
         "schema": LOG_SCHEMA,
         "ts": time.time(),

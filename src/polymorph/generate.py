@@ -45,8 +45,10 @@ def enabled_targets(repo: Path) -> list[str]:
 
 def adapter_command(harness: str, script: str, timeout: int | None = None) -> str:
     extra = f" --timeout {timeout}" if timeout is not None else ""
+    # python3, never python: on a python3-only system a bare `python` fails with
+    # exit 127 before polymorph runs, and a nonzero non-2 exit does not block
     return (
-        f'python -m polymorph adapter --harness {harness}{extra} -- '
+        f'python3 -m polymorph adapter --harness {harness}{extra} -- '
         f'"$CLAUDE_PROJECT_DIR/{script}"'
     )
 

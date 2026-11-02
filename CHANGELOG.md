@@ -63,6 +63,21 @@ First state of the project. Python 3.11+, standard library only.
   NOT-checked fault, never a silent allow. `validate_mapping` rejects a `payload_out` string
   referencing an unknown placeholder (a typo used to fail open at runtime) and a `deny` or
   `ask` route with `exit = 0`.
+- **Hardening follow-ups:** the deferred items from the same security pass. `env` refuses a
+  `[key] path` with anything a shell would interpret (it is embedded in `GIT_SSH_COMMAND`,
+  which git executes through a shell) and refuses to export loader, interpreter or shell
+  variables (`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `IFS`,
+  `GIT_SSH_COMMAND`, ...). Generated commands say `python3`, not `python` (a bare `python`
+  on a python3-only system fails with exit 127 before polymorph runs, which harnesses read
+  as non-blocking). A `delivery = "direct"` mapping's `[tools]` names must be the canonical
+  ones for their class (`Bash`; `Edit`, `Write`, `MultiEdit`; `Read`, `Grep`, `Glob`;
+  `mcp__*`) -- a renamed tool used to pass validation and silently never fire the hook.
+  `equip` pins the mapping bytes it consumed (`mapping-path` + `mapping-hash` in
+  `loadout.toml`), `check` reports `loadout-drift` (warning) when that file changes or
+  disappears -- the adapter re-reads mappings at run time, so a swap after equip used to be
+  invisible -- and `loadout-invalid` (error) instead of a raw traceback on a malformed
+  manifest. Redacted discovery logs reduce credential-shaped values under id-named keys
+  (GitHub, OpenAI, AWS, Slack, GitLab token formats; JWTs) instead of keeping them as "ids".
 - **Links:** `equip` and `manage adopt` create the symlinks that close `no-link` gaps
   (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`, `.claude/rules ->
   ../.agents/rules`), as relative links, only where nothing exists at the path the harness

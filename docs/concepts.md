@@ -87,10 +87,10 @@ needs any translation is a validation error (`mapping-invalid` in `check`). `cla
 **`adapter`** (default): the harness differs, so the hook goes through polymorph:
 
 ```
-python -m polymorph adapter --harness gemini -- "$CLAUDE_PROJECT_DIR/.agents/hooks/block-rm.sh"
+python3 -m polymorph adapter --harness gemini -- "$CLAUDE_PROJECT_DIR/.agents/hooks/block-rm.sh"
 ```
 
-This needs `python` on the harness's `PATH` with `polymorph` importable, and the harness
+This needs `python3` on the harness's `PATH` with `polymorph` importable, and the harness
 must set `CLAUDE_PROJECT_DIR` or the shell must expand it; both are assumptions the
 mapping does not check. At run time the adapter:
 
