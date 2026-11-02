@@ -35,7 +35,9 @@ class Canon:
 Claude reader: matcher regex `Bash`->shell, `Edit|Write|MultiEdit`->edit,
 `Read|Grep|Glob`->read, `mcp__*`->mcp, else other. `permissions.*` and `attribution`
 are reported in `unmapped`, never dropped silently. A script outside `.agents/hooks/`
-(after `realpath`) is refused with an error.
+(after `realpath`) is refused with an error. The resolved script path is embedded in
+generated command lines, so it may contain only plain path characters; quotes, whitespace,
+`$`, backticks or other shell metacharacters are refused with an error.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -109,7 +111,9 @@ post-call `decision:"block"`, or exit 2 with stderr.
 Adapter invocation: `python -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
 Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the
 answer to native form. Translation failure => visible message (stderr + exit code the
-harness shows to the model) and NEVER a deny; never fail open silently. `ask` on a harness
+harness shows to the model) and NEVER a deny; never fail open silently. A hook answer
+polymorph cannot translate (an unknown decision shape) is such a failure too: visible,
+never a deny and never a silent allow. `ask` on a harness
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
 the adapter.
 
@@ -127,7 +131,8 @@ the adapter.
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
 Discovery logs go to `.polymorph/discovery/` (by default under the current directory, or
-`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph/discovery/` yourself so a
+`--log-dir`). polymorph edits `.gitignore` only when `equip --gitignore` appends the issued
+artifact path; add `.polymorph/discovery/` yourself so a
 raw log is not one `git add` away from being committed. `--full` (on `discover init` and
 `capture`) is refused without an explicit `--log-dir` / `--out`, and without
 `--i-really-want-this-in-the-repo-raw`; with both it still asks for a typed `yes`. The log is
@@ -185,7 +190,9 @@ backs is valid but emits no markers. Owner: `env.py`.
 
 ## Trust
 
-Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
+Hook scripts must resolve under `<repo>/.agents/hooks/`. A mapping's `config_path` must
+resolve inside the repository: a symlinked component that leaves it is refused, for the
+generated-config read and the write alike. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
 mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in `src/polymorph/mappings/`.
 
@@ -224,7 +231,7 @@ Discovery log line: `{schema (1; older lines lack it and still read), ts, event,
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
 By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
-The default log holds full commands and file contents and must not be shared.
+The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.
 The log is untrusted data: draft copies back only values matching strict name patterns,
 never command text or paths, and omits what it did not observe. Comments carry evidence
 counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.

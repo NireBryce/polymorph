@@ -48,6 +48,8 @@ if mode == "late":
     subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl"), src])
     sys.exit(0)
 silent = os.path.exists(os.path.join(ctrl, "silent")) and "sleep" in prompt
+js = os.path.join(os.getcwd(), ".opencode", "plugins", "polymorph-discovery", "index.js")
+full = os.path.exists(js) and "--full" in open(js).read()
 log = os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl")
 tools = [("bash", {{"command": "echo hello"}})]
 if "scratch.txt" in prompt:
@@ -56,8 +58,8 @@ for name, inp in tools:
     if silent:
         break
     payload = {{"hook_event_name": "execute.before", "tool_name": name, "session_id": "s1", "input": inp}}
-    subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log],
-                   input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
+    argv = [sys.executable, "-m", "polymorph", "discover", "log"] + (["--full"] if full else []) + ["--out", log]
+    subprocess.run(argv, input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
 '''
 
 
@@ -210,6 +212,21 @@ class Confirmation(CaptureCase):
             self.assertEqual(rc, 2, errs.getvalue())
             self.assertIn("cancelled", errs.getvalue())
             self.assertFalse((Path(d) / "results").exists())
+
+    def test_full_gate_acceptance_produces_a_raw_log_and_says_so(self):
+        # every refusal above guards this path: with --out + the long flag + typed
+        # yesses (cost, then the raw-log confirmation), capture runs, and the
+        # results say RAW and hold an unredacted log
+        rc, out, err = self.run_cap("--full", "--i-really-want-this-in-the-repo-raw",
+                                    "--steps", "shell", stdin=Tty("yes\nyes\n"))
+        self.assertEqual(rc, 0, out + err)
+        r = self.base / "results" / "r"
+        self.assertIn("RAW (--full): contains commands and file contents, do not share",
+                      (r / "report.md").read_text())
+        recs = [json.loads(l) for l in (r / "log.jsonl").read_text().splitlines()]
+        self.assertTrue(recs)
+        self.assertEqual({rec.get("redacted") for rec in recs}, {False})
+        self.assert_clean()
 
     def test_non_tty_without_yes_refuses_with_2(self):
         rc, out, err = self.run_cap()
@@ -542,6 +559,7 @@ class Drivers(unittest.TestCase):
         self.assertIn(f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': capture_drivers.PACKAGE_PARENT})}", js)
         args = json.loads(js.split("const POLYMORPH_ARGS = ")[1].split("\nconst POLYMORPH_ENV")[0])
         self.assertEqual(args[:2], ["-m", "polymorph"])
+        self.assertIn("--full", args)   # install(full=True) bakes the flag: the plugin logs raw
         self.assertFalse([a for a in args if a.startswith("PYTHONPATH=")])
         self.assertIn("env: POLYMORPH_ENV", js)
 

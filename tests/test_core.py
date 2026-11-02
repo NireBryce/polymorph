@@ -79,6 +79,23 @@ class ReaderTests(Base):
         with self.assertRaises(ReaderError):
             read_claude(self.repo)
 
+    def test_script_name_metacharacters_refused(self):
+        # each command parses to a single shlex token, so the bare-script rule
+        # alone would pass it; the characters reach generated command lines
+        p = self.repo / ".agents/settings.json"
+        d = json.loads(p.read_text())
+        for bad in (
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/x\\"; id; : \\""',
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/$(touch${IFS}/tmp/pwned).sh"',
+            '"$CLAUDE_PROJECT_DIR/.agents/hooks/`id`.sh"',
+            '".agents/hooks/my hook.sh"',
+            '".agents/hooks/$HOME/x.sh"',
+        ):
+            d["hooks"]["SessionStart"][0]["hooks"][0]["command"] = bad
+            p.write_text(json.dumps(d))
+            with self.assertRaises(ReaderError, msg=bad):
+                read_claude(self.repo)
+
 
 class MappingTests(Base):
     def test_loads_repo_mapping(self):
@@ -172,6 +189,18 @@ class GenerateTests(Base):
     def test_verified_no_warning(self):
         self.assertEqual(generate(self.repo, ["zcode"])[0].warnings, [])
 
+    def test_config_path_symlink_escape_refused(self):
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        os.symlink(outside, self.repo / "escape")
+        d = self.repo / ".polymorph/basecamp/mappings"
+        text = (d / "zcode.toml").read_text()
+        (d / "zcode.toml").write_text(
+            text.replace('config_path = ".zcode/config.json"', 'config_path = "escape/evil.json"'))
+        with self.assertRaises(ValueError):
+            generate(self.repo)
+        self.assertFalse((outside / "evil.json").exists())
+
 
 class CliTests(Base):
     def run_cli(self, *argv):
@@ -238,6 +267,44 @@ class DirectDeliveryTests(Base):
         for n in ("zcode", "claude"):
             self.assertEqual(load_mapping(n, self.repo.parent).delivery, "direct")
 
+    def test_direct_delivery_never_asks_missing_field_questions(self):
+        # a direct mapping hands the hook the Claude payload unchanged, so a
+        # partially-mapped payload_in is not a missing-field mismatch there --
+        # while the same trimmed payload_in under adapter delivery is one
+        import tomllib
+        raw = tomllib.loads(
+            (Path(__file__).resolve().parents[1] / "src" / "polymorph" / "mappings" / "zcode.toml").read_text())
+        trimmed = dict(raw, payload_in={"tool_name": "tool_name", "cwd": "cwd"})
+        d = self.repo / ".polymorph/basecamp/mappings"
+
+        def toml(src: dict) -> str:
+            import io
+
+            def quote(v):
+                if isinstance(v, bool):
+                    return "true" if v else "false"
+                if isinstance(v, list):
+                    return "[" + ", ".join(quote(x) for x in v) + "]"
+                return json.dumps(v)
+            buf = io.StringIO()
+            for k, v in src.items():
+                if isinstance(v, dict):
+                    buf.write(f"\n[{k}]\n")
+                    for kk, vv in v.items():
+                        key = json.dumps(kk) if "." in kk or "-" in kk else kk
+                        buf.write(f"{key} = {quote(vv)}\n")
+                else:
+                    buf.write(f"{k} = {quote(v)}\n")
+            return buf.getvalue()
+
+        (d / "pdirect.toml").write_text(toml(dict(trimmed, name="pdirect", delivery="direct")))
+        (d / "padapter.toml").write_text(toml(dict(trimmed, name="padapter", delivery="adapter")))
+        (self.repo / ".polymorph/basecamp/config.toml").write_text(
+            'enabled = ["pdirect", "padapter"]\n')
+        rs = {r.harness: r for r in generate(self.repo)}
+        self.assertEqual([u.kind for u in rs["pdirect"].undecided], [])
+        self.assertIn("missing-field", {u.kind for u in rs["padapter"].undecided})
+
     def test_validate_rejects_non_identity(self):
         from polymorph.validate import validate_mapping
         base = self._write()
@@ -270,8 +337,38 @@ class DirectDeliveryTests(Base):
         self.assertTrue(any(f.severity == "error" and f.code == "mapping-invalid" for f in findings))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class ValidateOutTests(unittest.TestCase):
+    """payload_out placeholders and exit values are checked at validation time,
+    so a typo or a zero exit cannot reach the adapter and turn a deny into an allow."""
+
+    @staticmethod
+    def _base(**payload_out):
+        return {
+            "schema": 1, "name": "x", "config_path": "a.json", "format": "json",
+            "template": "t", "tools": {}, "events": {}, "payload_in": {},
+            "payload_out": payload_out,
+            "capabilities": {"ask": False, "post_event": False, "exit_2_blocks": False,
+                             "rewrites_input": False, "json_answers": False},
+        }
+
+    def test_known_placeholders_valid(self):
+        from polymorph.validate import validate_mapping
+        m = self._base(deny={"exit": 2, "stderr": "{reason}"},
+                       warn={"exit": 0, "stdout": "{context}"})
+        self.assertEqual(validate_mapping(m), [])
+
+    def test_unknown_placeholder_is_an_error(self):
+        from polymorph.validate import validate_mapping
+        errs = validate_mapping(self._base(deny={"exit": 2, "stderr": "{reson}"}))
+        self.assertTrue(any("reson" in e for e in errs), errs)
+
+    def test_deny_or_ask_exit_zero_is_an_error(self):
+        from polymorph.validate import validate_mapping
+        for kind in ("deny", "ask"):
+            errs = validate_mapping(self._base(**{kind: {"exit": 0}}))
+            self.assertTrue(any(f"{kind}.exit" in e for e in errs), errs)
+        for kind in ("allow", "warn", "remind"):
+            self.assertEqual(validate_mapping(self._base(**{kind: {"exit": 0}})), [])
 
 
 class HookCommandTimeoutTests(unittest.TestCase):
@@ -283,3 +380,7 @@ class HookCommandTimeoutTests(unittest.TestCase):
         self.assertNotIn("--timeout", generate.hook_command(m, "s.sh"))
         direct = mapping_mod.load_mapping("zcode")   # direct delivery: the harness owns the timeout
         self.assertNotIn("--timeout", generate.hook_command(direct, "s.sh", 300))
+
+
+if __name__ == "__main__":
+    unittest.main()

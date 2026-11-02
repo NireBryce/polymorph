@@ -67,6 +67,20 @@ class ExprTests(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(out))["m"], 'a "q" x"\n')
 
 
+    def test_render_whole_placeholder_keeps_type(self):
+        self.assertEqual(exprs.render("{reason}", {"reason": {"a": 1}}), {"a": 1})
+        self.assertEqual(exprs.render("x {reason}", {"reason": {"a": 1}}), "x {'a': 1}")
+
+    def test_translate_out_block_maps_to_deny(self):
+        r = adapter.translate_out(MAPPING, {"decision": "block", "reason": "stop"})
+        self.assertEqual((r["exit"], r["stderr"]), (2, "stop"))
+
+    def test_translate_in_tool_response_passes_through(self):
+        c = adapter.translate_in(MAPPING, {"tool": "run_shell", "args": {"cmd": "ls"},
+                                           "tool_response": {"out": "x"}})
+        self.assertEqual(c["tool_response"], {"out": "x"})
+
+
 class ExtractorTests(unittest.TestCase):
     def test_apply_patch_paths(self):
         patch = "*** Begin Patch\n*** Update File: a/b.txt\n@@\n*** Add File: c.txt\n*** End Patch"
@@ -118,6 +132,12 @@ class PureTests(unittest.TestCase):
         self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, warn))
         self.assertEqual(adapter.translate_out(MAPPING, None)["exit"], 0)
 
+    def test_translate_out_unrecognized_answer_is_never_an_allow(self):
+        for ans in ({"decision": "deny", "reason": "old style"}, {}, {"weird": True}):
+            with self.assertRaises(adapter.AdapterError, msg=ans):
+                adapter.translate_out(MAPPING, ans)
+        self.assertEqual(adapter.translate_out(MAPPING, None), {"stdout": "", "exit": 0, "stderr": ""})
+
 
 class RunAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -160,6 +180,87 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
         code, _, err = self.run_it(script, self.NATIVE)
         self.assertEqual((code, err.strip()), (2, "blocked"))
 
+    def test_unrecognized_answer_is_not_checked_never_a_silent_allow(self):
+        script = self.hook(
+            "old.sh",
+            '#!/bin/sh\ncat >/dev/null\necho \'{"decision": "deny", "reason": "old style"}\'\n')
+        code, out, err = self.run_it(script, self.NATIVE)
+        joined = out + err
+        self.assertNotEqual(code, 2, joined)
+        # a json_answers harness reads the answer from stdout: the NOT-checked
+        # message must be there, or the fault is invisible to the harness
+        self.assertIn("NOT checked", json.loads(out)["systemMessage"])
+        self.assertIn("NOT checked", err)
+
+    def test_block_answer_maps_to_deny(self):
+        script = self.hook(
+            "blk.sh", '#!/bin/sh\ncat >/dev/null\necho \'{"decision": "block", "reason": "stop"}\'\n')
+        code, _, err = self.run_it(script, self.NATIVE)
+        self.assertEqual((code, err.strip()), (2, "stop"))
+
+    def test_hook_stdout_garbage_and_non_object_are_not_checked(self):
+        for name, body in (("g.rb", 'echo "garbage"'), ("arr.sh", 'echo "[]"')):
+            script = self.hook(name, f"#!/bin/sh\ncat >/dev/null\n{body}\n")
+            code, out, err = self.run_it(script, self.NATIVE)
+            joined = out + err
+            self.assertNotEqual(code, 2, joined)
+            self.assertIn("NOT checked", joined)
+
+    def test_missing_and_nonexecutable_script_are_not_checked(self):
+        (self.repo / ".agents/hooks/absent.sh").write_text("#!/bin/sh\n")
+        lazy = self.repo / ".agents/hooks/lazy.sh"
+        lazy.write_text("#!/bin/sh\nexit 0\n")
+        lazy.chmod(0o644)
+        for script in (".agents/hooks/absent.sh", ".agents/hooks/lazy.sh"):
+            code, out, err = self.run_it(script, self.NATIVE)
+            joined = out + err
+            self.assertNotEqual(code, 2, joined)
+            self.assertIn("NOT checked", joined)
+
+    def test_missing_mapping_is_not_checked(self):
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", "nomap", "--repo", str(self.repo), "--", ".agents/hooks/lazy.sh"],
+            stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
+        self.assertNotEqual(code, 2)
+        self.assertIn("NOT checked", out.getvalue() + err.getvalue())
+
+    def test_mappings_outside_trusted_dirs_is_refused(self):
+        other = Path(self.tmp.name) / "other-maps"
+        other.mkdir()
+        (other / "fake.toml").write_text(TOML)
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", "fake", "--mappings", str(other), "--repo", str(self.repo),
+             "--", ".agents/hooks/lazy.sh"],
+            stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
+        self.assertNotEqual(code, 2)
+        self.assertIn("NOT checked", out.getvalue() + err.getvalue())
+        self.assertIn("trust", out.getvalue() + err.getvalue())
+
+    def test_bad_timeout_is_not_checked_never_a_deny(self):
+        for value in ("0", "-1", "inf", "nan"):
+            out, err = io.StringIO(), io.StringIO()
+            code = adapter.run_adapter(
+                ["--harness", "fake", "--repo", str(self.repo), "--timeout", value,
+                 "--", ".agents/hooks/lazy.sh"],
+                stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
+            joined = out.getvalue() + err.getvalue()
+            self.assertNotEqual(code, 2, (value, joined))
+            self.assertIn("NOT checked", joined)
+
+    def test_fault_without_json_answers_is_exit_1_stderr_visible(self):
+        (self.repo / ".polymorph" / "basecamp" / "mappings" / "plain.toml").write_text(
+            TOML.replace("json_answers = true", "json_answers = false"))
+        script = self.hook("boom.sh", "#!/bin/sh\nexit 1\n")
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", "plain", "--repo", str(self.repo), "--", script],
+            stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
+        self.assertEqual(code, 1, (out.getvalue(), err.getvalue()))
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("NOT checked", err.getvalue())
+
     def test_translation_failure_is_visible_not_deny(self):
         script = self.hook("ok.sh", "#!/bin/sh\nexit 0\n")
         code, out, err = self.run_it(script, "this is not json")
@@ -185,10 +286,6 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
             self.assertIn("refused", err, s)
             self.assertIn("NOT checked", err, s)
             self.assertNotEqual(code, 2)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ReviewFixTests(unittest.TestCase):
@@ -237,3 +334,7 @@ class ReviewFixTests(unittest.TestCase):
         joined = out + err
         self.assertNotEqual(code, 2, joined)
         self.assertIn("NOT checked", joined)
+
+
+if __name__ == "__main__":
+    unittest.main()

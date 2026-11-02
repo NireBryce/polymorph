@@ -31,7 +31,6 @@ class DocsChecks(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         write(self.root, 'AGENTS.md', '| `demo` | a demo |\n')
         write(self.root, '.agents/skills/demo/SKILL.md', SKILL)
-        write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n')
         write(self.root, 'docs/a.md', 'hi\n')
         write(self.root, 'src/polymorph/cli.py', CLI)
         write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n\n## Cost and responsibility\n\ntext\n')

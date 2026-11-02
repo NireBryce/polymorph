@@ -75,6 +75,12 @@ class EmitTests(unittest.TestCase):
                                "harness": {"x": {"exports": ['PROMPT=hello world; rm -rf /']}}})
         lines = env.contract_lines(facts, "x")
         self.assertEqual(lines[-1], "export PROMPT='hello world; rm -rf /'")
+        import shlex
+
+        facts = env.parse_env({"schema": 1,
+                               "harness": {"x": {"exports": ["PROMPT=it's fine"]}}})
+        lines = env.contract_lines(facts, "x")
+        self.assertEqual(lines[-1], "export PROMPT=" + shlex.quote("it's fine"))
 
     def test_missing_env_file_names_the_path(self):
         with self.assertRaises(env.EnvError) as ctx:
@@ -108,6 +114,22 @@ class EmitTests(unittest.TestCase):
     def test_harness_table_name_must_be_a_harness_name(self):
         with self.assertRaises(env.EnvError):
             env.parse_env({"schema": 1, "harness": {"not a name": {"exports": []}}})
+
+    def test_unknown_keys_inside_subtables_are_errors(self):
+        cases = (
+            {"schema": 1, "key": {"path": "/k", "bogus": 1}},
+            {"schema": 1, "vault": {"unset": [], "bogus": 1}},
+            {"schema": 1, "harness": {"x": {"exports": [], "bogus": 1}}},
+        )
+        for raw in cases:
+            with self.subTest(raw=raw), self.assertRaises(env.EnvError):
+                env.parse_env(raw)
+
+    def test_export_value_must_be_one_line(self):
+        # "A=1\nEVIL=2" passes the NAME check: the newline guard is the only
+        # thing keeping one export from injecting a second variable
+        with self.assertRaises(env.EnvError):
+            env.parse_env({"schema": 1, "harness": {"x": {"exports": ["A=1\nEVIL=2"]}}})
 
 
 class ExecTests(unittest.TestCase):

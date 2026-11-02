@@ -44,6 +44,11 @@ def assign(obj: dict, path: str, value: Any) -> None:
     cur[parts[-1]] = value
 
 
+def placeholder_names(template: str) -> set[str]:
+    """The {names} a template references (the same syntax substitute renders)."""
+    return set(_PLACEHOLDER.findall(template))
+
+
 def substitute(template: str, values: dict[str, Any]) -> str:
     """Replace {name} with str(values[name]). Unknown names are an error; no other syntax."""
 
