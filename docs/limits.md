@@ -118,7 +118,7 @@ combination may cause adverse effects.
 [SPEC.md](SPEC.md) is the contract. Where the code does something it does not say:
 
 - The spec says discovery logs are "gitignored". Only polymorph's own repository ignores
-  `.polymorph-discovery/`; `discover init` does not edit your `.gitignore`.
+  `.polymorph/discovery/`; `discover init` does not edit your `.gitignore`.
 - The spec's CLI summary omits some flags that exist: `generate --mappings --trust-dir`,
   `adapter --mappings --trust-dir`, `discover init --shape --log-dir --env-be-very-careful`,
   `discover log --env-be-very-careful`, and `discover reload-check --event-name --matcher

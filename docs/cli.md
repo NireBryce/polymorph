@@ -4,7 +4,8 @@ Run as `python -m polymorph ...` or, after an install, `polymorph ...`. Exit cod
 success; `1` the command ran and found a problem (drift, findings, failed fixtures, an
 invalid mapping); `2` usage or internal error (`polymorph: error: ...` on stderr);
 `3` (`manage generate` only) a hook needs something the target lacks and no decision answers it. The
-adapter and `discover log` have their own rules, below.
+adapter and `discover log` have their own rules, below. Every flag, as the program defines it, is
+in [the usage reference](usage.md); the same is `man/polymorph.1` (`man -l man/polymorph.1`).
 
 ## `manage`
 
@@ -113,9 +114,10 @@ Output, per harness:
 - `honoured surface:` the discover-and-report kinds the coverage table says the harness
   honours. With no coverage table: `coverage: no coverage table; nothing is known` --
   nothing is claimed.
-- `gaps (will be silently ignored):` the provided paths the harness will not honour.
+- `gaps (will be silently ignored):` the provided paths the harness does not read, each with a
+  reason (`unsupported`, `no-link`, `unlinked-copy`, `points-elsewhere`) and a fix. See `inventory`.
 - `env contract:` the exports from env.toml (`no env.toml; no env contract emitted`
-  when there are none). Emit-only: applying them is the caller's job (`polymorph env
+  when there are none; `env: env.toml is invalid, ...` with the reason when it exists but fails validation). Emit-only: applying them is the caller's job (`polymorph env
   --exec` runs a command under them).
 - `manifest: .polymorph/basecamp/loadout.toml` -- the provenance manifest: per issued
   artifact, its sha256 and what generated it, so edits and staleness are checkable
@@ -144,7 +146,20 @@ no `SKILL.md`.
 |---|---|
 | `--repo PATH` | Repo root. Default `.`. |
 | `--harness NAME` | Report only this harness's gaps. Repeatable. Default: every coverage table found. |
-| `--json` | `{"inventory": {kind: [{"path", "target"}...]}, "gaps": [{"harness", "kind", "path"}...]}`. |
+| `--json` | `{"inventory": {kind: [{"path", "target"}...]}, "gaps": [{"harness", "kind", "path", "reason", "reads", "fix"}...]}`. |
+
+A harness reads fixed paths (its coverage table). A provided path is **reached** when one of
+them resolves to it, directly or through a symlink; otherwise it is a gap with a `reason`:
+
+| reason | Meaning |
+|---|---|
+| `unsupported` | the table has no path for this kind: the harness ignores it |
+| `no-link` | the harness reads a path that does not exist (Claude Code reads `CLAUDE.md`, `.claude/skills`, `.claude/rules`; the repo has `AGENTS.md`, `.agents/skills`, `.agents/rules` and no link) |
+| `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
+| `points-elsewhere` | the harness reads a symlink that leads somewhere else |
+
+The `fix` text names the link that would reach the path (`link CLAUDE.md -> AGENTS.md`);
+polymorph makes no link itself.
 
 What a harness honours comes from its **coverage table**, `coverage/NAME.toml` — shipped
 beside the mappings, overridable at `.polymorph/basecamp/coverage/NAME.toml` (with a
@@ -169,8 +184,8 @@ touched: they stay where the harness reads them.
 
 Per candidate it prints one of `moved|already|absent|refused [kind] PATH`, then a count
 line. Refusals (per path; exit 1 when any): a path that is already a symlink is left alone
-and reported with where it points; a path with uncommitted changes (`git status
---porcelain`) is refused — no clean tree, no safety net; a store copy that already exists
+and reported with where it points; a path with uncommitted changes, or one git ignores (`git status
+--porcelain --ignored`), is refused — no clean tree and no committed copy, no safety net; a store copy that already exists
 beside a real file at rest is refused rather than overwritten. A second run on an adopted
 repo is a no-op. `--dry-run` reports without writing. adopt writes nothing outside the
 repository and never edits a file through a symlink: the store copy is the only one
@@ -265,7 +280,7 @@ Run the [discovery](discovery.md) procedure against a harness by itself.
 
 ```
 polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S]
-                  [--total-timeout S] [--out DIR] [--full]
+                  [--total-timeout S] [--out DIR] [--full] [--i-really-want-this-in-the-repo-raw]
 polymorph capture --print-prompts
 ```
 
@@ -293,7 +308,8 @@ Nothing read from a log, a mapping or a harness reply is used as a prompt or a c
 | `--steps STEP ...` | Run only these steps. |
 | `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds; each must be finite and above 0 (else exit 2). A timed-out step's process group is killed. |
 | `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty, and creatable and writable: checked before the first step (else exit 2). |
-| `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. |
+| `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. Needs `--out DIR` (without one: exit 2 with a loud explanation), the long flag below, and then a typed `yes`. |
+| `--i-really-want-this-in-the-repo-raw` | Also spelled `--i-really-want-this-in-the-repo`. Required with `--full`, wherever `--out` points. It is not enough alone: you are then asked to type `yes` (no terminal: refused). `--yes` answers the cost question only, not this one. |
 | `--print-prompts` | Print the [prompt kit](discovery.md#prompt-kit-for-a-harness-capture-has-no-driver-for) and exit 0, running nothing. |
 
 Confirmation: a framed warning says it runs a real model once per step, spends tokens, may
@@ -320,7 +336,8 @@ Capture what an unmapped harness sends to hooks. Walkthrough: [Discovery](discov
 ```
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR]
-                        [--full] [--env-be-very-careful]
+                        [--full] [--i-really-want-this-in-the-repo-raw]
+                        [--env-be-very-careful]
 ```
 
 Adds a catch-all logger hook to the harness's config file `P`, as its own matcher group beside
@@ -333,8 +350,9 @@ any hooks already there. Prints `wrote P`.
 | `--event-name E` | Native event to hook. Default `PreToolUse`. |
 | `--matcher M` | Native tool matcher. Default `*`. |
 | `--shape` | `claude-settings` (default, `hooks.<Event>`) or `claude-like` (`hooks.enabled` + `hooks.events`, ZCode's). |
-| `--log-dir DIR` | Absolute directory for the log. Default `./.polymorph-discovery` under the current directory. |
-| `--full` | Log raw payloads. See below. |
+| `--log-dir DIR` | Absolute directory for the log. Default `./.polymorph/discovery` under the current directory. |
+| `--full` | Log raw payloads. See below. Needs `--log-dir DIR` (without one: exit 2 with a loud explanation), the long flag below, and then a typed `yes`. |
+| `--i-really-want-this-in-the-repo-raw` | Also spelled `--i-really-want-this-in-the-repo`. Required with `--full`, wherever `--log-dir` points. It is not enough alone: you are then asked to type `yes` (no terminal: refused). |
 | `--env-be-very-careful` | Log environment variable names. See below. |
 
 If `P` exists it must be a JSON object; every other key, event and matcher group is kept
@@ -424,7 +442,10 @@ reduced to `{type, length}`; a key name that is not a plain identifier is replac
 `<invalid key>`. Each log line also carries `schema: 1`; older lines without it still read.
 
 `--full` (on `init`, which bakes it into the hook command, or on `log`) records raw
-payloads, including commands, file paths and file contents. A `--full` log must not be
+payloads, including commands, file paths and file contents, in plain text. Nothing encrypts or
+hides the log, so a secret scanner would see a leak, which is intended. `init --full` (and
+`capture --full`) therefore asks for an explicit log directory, the long
+`--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. A `--full` log must not be
 shared, attached to an issue or committed.
 
 `--env-be-very-careful` makes the logger look at its process environment and record the

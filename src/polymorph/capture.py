@@ -114,11 +114,18 @@ def build_parser(sub=None) -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true", help="skip the typed confirmation (required when stdin is not a terminal)")
     p.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
     p.add_argument("--steps", nargs="+", metavar="STEP", help=f"run only these steps, in the fixed order: {', '.join(STEP_NAMES)}")
-    p.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS")
-    p.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS")
+    p.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS",
+                   help="kill a step after this many seconds (default %(default)s)")
+    p.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS",
+                   help="skip the remaining steps after this many seconds (default %(default)s)")
     p.add_argument("--out", default=None, metavar="DIR", help="results directory (default ./polymorph-capture-NAME; must be absent or empty)")
     p.add_argument("--print-prompts", action="store_true", help="print the prompt kit for a harness with no driver, run nothing, exit 0")
-    p.add_argument("--full", action="store_true", help="log raw payloads (commands, paths, contents); default is redacted")
+    p.add_argument("--full", action="store_true",
+                   help="log raw payloads (commands, paths, contents); default is redacted. Needs --out "
+                        "and the long flag below, then asks you to type yes")
+    p.add_argument("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo",
+                   dest="raw_in_repo", action="store_true",
+                   help="required with --full: accept a plain-text raw log (then type yes when asked)")
     return p
 
 
@@ -414,6 +421,11 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
         print(f"polymorph capture: {what}. Known drivers:\n{_drivers_text()}\n"
               "For any other harness use `polymorph capture --print-prompts`.", file=stderr)
         return 2
+    try:
+        discover.require_out_for_full(getattr(args, "full", False), getattr(args, "out", None) is not None, "--out")
+    except ValueError as e:
+        print(f"polymorph capture: {e}", file=stderr)
+        return 2
     driver = DRIVERS[args.harness]
     if driver.blocked:
         print(f"polymorph capture: the {driver.name} driver is blocked: {driver.blocked}.", file=stderr)
@@ -441,6 +453,12 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
     if out_dir.exists() and (not out_dir.is_dir() or any(out_dir.iterdir())):
         print(f"polymorph capture: {out_dir} exists and is not an empty directory", file=stderr)
         return 2
+    if args.full:
+        try:
+            discover.confirm_full(out_dir, args.raw_in_repo, "--out", stdin, stdout)
+        except ValueError as e:
+            print(f"polymorph capture: {e}", file=stderr)
+            return 2
     interactive = stdin.isatty()
     if not interactive and not args.yes:
         print("polymorph capture: stdin is not a terminal; refusing without --yes", file=stderr)

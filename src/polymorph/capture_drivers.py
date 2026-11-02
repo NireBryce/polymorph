@@ -5,7 +5,7 @@ discovery log or a harness reply says ever picks, builds or extends a driver, a 
 command. A driver has three parts: install the discovery logger into the scratch directory,
 give the argv that runs one step headlessly, and remove the logger again.
 
-Every driver logs to `<scratch>/.polymorph-discovery/<name>.jsonl` through
+Every driver logs to `<scratch>/.polymorph/discovery/<name>.jsonl` through
 `<python> -m polymorph discover log`, with PYTHONPATH pointing at this polymorph so a source
 checkout works without an install.
 """
@@ -32,7 +32,7 @@ class Driver:
     blocked = ""    # non-empty: `capture` refuses to run this driver, and says why
 
     def log_path(self, scratch: Path) -> Path:
-        return scratch / ".polymorph-discovery" / f"{self.name}.jsonl"
+        return scratch / discover.DISCOVERY_DIR / f"{self.name}.jsonl"
 
     def install(self, scratch: Path, full: bool) -> None:
         raise NotImplementedError

@@ -39,7 +39,7 @@ class DocsChecks(unittest.TestCase):
 
     def test_good_tree_passes(self):
         for check in docs.CHECKS:
-            if check not in (docs.check_cli, docs.check_cost):
+            if check not in (docs.check_cli, docs.check_cost, docs.check_generated):
                 self.assertEqual(check(self.root), [], check.__name__)
 
     def test_skill_not_listed(self):

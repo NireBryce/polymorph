@@ -126,9 +126,12 @@ the adapter.
 ```
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
-Discovery logs go to `.polymorph-discovery/` (by default under the current directory, or
-`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph-discovery/` yourself so a
-raw log is not one `git add` away from being committed.
+Discovery logs go to `.polymorph/discovery/` (by default under the current directory, or
+`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph/discovery/` yourself so a
+raw log is not one `git add` away from being committed. `--full` (on `discover init` and
+`capture`) is refused without an explicit `--log-dir` / `--out`, and without
+`--i-really-want-this-in-the-repo-raw`; with both it still asks for a typed `yes`. The log is
+plain text: nothing encrypts or hides it.
 
 ## Inventory and coverage tables
 
@@ -145,8 +148,8 @@ no way of honouring. Owner: `inventory.py`.
 `adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
 `CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp
 store and replaces each original path with a relative symlink into it. It refuses a path
-that is already a symlink (reporting where it points), a path with uncommitted changes
-(`git status --porcelain`; a directory that is not a git worktree refuses everything), and
+that is already a symlink (reporting where it points), a path with uncommitted changes or ignored by git
+(`git status --porcelain --ignored`; a directory that is not a git worktree refuses everything), and
 a store copy that already exists beside the file at rest. A second run is a no-op.
 Hook scripts and `.agents/settings.json` are never moved: they stay where the harness
 reads them. adopt never edits a file through a symlink -- the store copy is the only one
@@ -190,7 +193,7 @@ polymorph manage adopt [--repo .] [--dry-run]
 polymorph env [--repo .] [--harness NAME] [--exec CMD]
                         # emits the env contract from host facts (.polymorph/basecamp/env.toml) as shell exports, or runs CMD under it; emit-only
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
-                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
+                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--i-really-want-this-in-the-repo-raw] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
 polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
@@ -200,7 +203,7 @@ polymorph discover reload-check --config-path P --scratch-log F [--finish]
 polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event EVENT ...]
                         # prints draft mapping, no `verified`
 polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S] [--total-timeout S]
-                  [--out DIR] [--full]   # runs a real harness headless in a scratch dir; typed `yes` unless --yes
+                  [--out DIR] [--full] [--i-really-want-this-in-the-repo-raw]   # runs a real harness headless in a scratch dir; typed `yes` unless --yes
 polymorph capture --print-prompts        # prints the manual prompt kit, runs nothing
 ```
 

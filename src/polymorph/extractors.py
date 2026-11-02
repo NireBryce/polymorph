@@ -20,10 +20,11 @@ class ExtractorError(ValueError):
 def apply_patch_paths(native: dict) -> dict[str, Any]:
     """Pull file paths out of an apply_patch envelope into tool_input.file_path(s).
 
-    Tolerant by design: a payload with no patch text, or with the marker but no valid
-    file headers, yields no fields at all. Raising here would fail the whole
-    translation open (NOT checked) for every tool call that merely mentions "*** " --
-    the guard must still run on whatever fields exist.
+    Tolerant of text that is not a patch: a payload with no patch text, or that merely
+    mentions "*** ", yields no fields and the guard runs on whatever fields exist. A real
+    patch envelope ("*** Begin Patch") with no file header the extractor can read raises:
+    returning no path there would let the guard see no file at all, so it is NOT checked
+    instead, visibly.
     """
     for field in _PATCH_FIELDS:
         text = lookup(native, field, None)
@@ -32,6 +33,8 @@ def apply_patch_paths(native: dict) -> dict[str, Any]:
         if isinstance(text, str) and "*** " in text:
             paths = list(dict.fromkeys(_PATCH_FILE.findall(text)))
             if not paths:
+                if "*** Begin Patch" in text:
+                    raise ExtractorError("apply_patch_paths: patch text has no file headers")
                 return {}
             return {"tool_input.file_path": paths[0], "tool_input.file_paths": paths}
     return {}

@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-.polymorph-discovery/
+.polymorph/discovery/
 *.egg-info/
 .venv/
 result

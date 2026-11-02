@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,7 +36,7 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(doc["model"], "x")
         ev = doc["hooks"]
         self.assertEqual(list(ev), ["BeforeTool"])
-        self.assertIn("/.polymorph-discovery/h.jsonl",
+        self.assertIn("/.polymorph/discovery/h.jsonl",
                       ev["BeforeTool"][0]["hooks"][0]["command"])
 
     def test_init_cli_defaults(self):
@@ -272,9 +273,98 @@ class RedactTest(unittest.TestCase):
             discover.init_config("h", str(cfg), log_dir=d)
             self.assertNotIn("--full", cfg.read_text())
             cfg2 = Path(d) / "s2.json"
-            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg2), "--full"])
-            self.assertEqual(r.returncode, 0, r.stderr)
+            discover.init_config("h", str(cfg2), log_dir=d, redact=False)   # the CLI gate is tested below
             self.assertIn("log --full --out", cfg2.read_text())
+
+    def test_full_without_a_log_dir_is_refused_with_the_reason(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full"])
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("raw commands, file contents and paths", r.stderr)
+        self.assertIn("--log-dir", r.stderr)
+        self.assertIn("--i-really-want-this-in-the-repo-raw", r.stderr)
+        self.assertFalse(cfg.exists())
+
+    def test_the_long_flag_does_not_waive_the_missing_log_dir(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        for flag in ("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo"):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full", flag])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("REFUSED", r.stderr)
+        self.assertFalse(cfg.exists())
+
+    def _repo_and_cfg(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        (self.d / "repo" / ".git").mkdir(parents=True)
+        (self.d / "outside").mkdir()
+        return self.d / "repo", self.d / "outside", self.d / "c.json"
+
+    def test_full_with_a_log_dir_but_no_long_flag_is_refused(self):
+        repo, outside, cfg = self._repo_and_cfg()
+        for where in (repo / "logs", outside):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full",
+                         "--log-dir", str(where)])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("--full needs --i-really-want-this-in-the-repo-raw", r.stderr)
+            self.assertIn("Nothing hides or encrypts the log", r.stderr)
+            self.assertFalse(cfg.exists())
+
+    def test_the_long_flag_without_a_terminal_is_still_refused(self):
+        repo, _, cfg = self._repo_and_cfg()
+        for flag in ("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo"):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full",
+                         "--log-dir", str(repo / "logs"), flag])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("nobody to type yes", r.stderr)
+            self.assertIn("inside the git repo", r.stderr)
+            self.assertFalse(cfg.exists())
+
+    def test_confirm_full_needs_the_flag_and_then_the_word_yes(self):
+        repo, outside, _ = self._repo_and_cfg()
+
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+        discover.confirm_full(repo / "x", True, "--out", Tty("yes\n"), io.StringIO())
+        discover.confirm_full(outside / "x", True, "--out", Tty("YES\n"), io.StringIO())
+        for answer in ("y\n", "\n", "no\n", "yes please\n"):
+            with self.assertRaises(ValueError, msg=answer):
+                discover.confirm_full(repo / "x", True, "--out", Tty(answer), io.StringIO())
+        with self.assertRaises(ValueError) as cm:   # the flag is required even for a perfect answer
+            discover.confirm_full(outside / "x", False, "--out", Tty("yes\n"), io.StringIO())
+        self.assertIn("--i-really-want-this-in-the-repo-raw", str(cm.exception))
+        out = io.StringIO()
+        discover.confirm_full(repo / "x", True, "--out", Tty("yes\n"), out)
+        self.assertIn("inside the git repo", out.getvalue())
+        out = io.StringIO()
+        discover.confirm_full(outside / "x", True, "--out", Tty("yes\n"), out)
+        self.assertIn("outside any git repo", out.getvalue())
+        self.assertIn('Type "yes"', out.getvalue())
+
+    def test_a_git_worktree_file_counts_as_a_repo(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / ".git").write_text("gitdir: /elsewhere\n")   # linked worktrees have a .git file
+        self.assertEqual(discover.containing_repo(d / "a" / "b"), d.resolve())
+
+    def test_there_is_no_encryption_option(self):
+        for sub in ("init", "log"):
+            h = run_cli(["discover", sub, "--help"]).stdout
+            self.assertNotIn("encrypt", h.lower(), sub)
+        self.assertNotEqual(run_cli(["discover", "decrypt", "x", "--identity", "y"]).returncode, 0)
+
+    def test_default_log_dir_is_under_dot_polymorph(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("/.polymorph/discovery/h.jsonl", cfg.read_text())
 
     def test_non_json_not_leaked_by_default(self):
         with tempfile.TemporaryDirectory() as d:
@@ -762,8 +852,8 @@ class InitShapeTests(unittest.TestCase):
         doc = json.loads(self.cfg.read_text())
         groups = doc["hooks"]["PreToolUse"]
         self.assertEqual(len(groups), 1, "a changed --log-dir must replace the logger, not add one")
-        self.assertIn("d2", groups[0]["hooks"][0]["command"])
-        self.assertNotIn("d1", groups[0]["hooks"][0]["command"])
+        self.assertIn("/d2/", groups[0]["hooks"][0]["command"])
+        self.assertNotIn("/d1/", groups[0]["hooks"][0]["command"])   # not "d1": a temp dir name can contain it
 
 
 class LeafPathTests(unittest.TestCase):

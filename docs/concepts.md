@@ -170,8 +170,10 @@ the **discover-and-report** kinds: skills (`.agents/skills/`), rules (`.claude/r
 `.agents/rules/`), memory (`AGENTS.md`, `CLAUDE.md`) and the entries of `.claude/`. They
 are reported as paths and symlink targets -- contents are never opened, and nothing found
 is dropped. `polymorph inventory` prints that surface plus each harness's **gap report**:
-the provided paths the harness has no recorded way of honouring, which it will silently
-ignore even after equipping.
+the provided paths the harness does not read, which it will silently ignore even after
+equipping: kinds it never reads (`unsupported`), and paths it reads that are missing
+(`no-link`), a second real copy (`unlinked-copy`, the drift between `AGENTS.md` and
+`CLAUDE.md`, or `.agents/` and `.claude/`) or a symlink to somewhere else (`points-elsewhere`).
 
 What a harness honours is the **coverage table**, `coverage/NAME.toml` -- data with the
 same character as the mappings, not the mapping's `[capabilities]` flags (those say how a
@@ -213,7 +215,7 @@ idempotent section to `.gitignore`. See [the CLI reference](cli.md#equip).
 `config.toml` accepts only the key `enabled`; anything else is an error. Generated harness
 configs are not stored here: they are written where the harness reads them, at the
 mapping's `config_path` (`.zcode/config.json`, `.claude/settings.json`, ...). Discovery
-logs live in `.polymorph-discovery/` in the directory you ran `discover init` from, kept
+logs live in `.polymorph/discovery/` in the directory you ran `discover init` from, kept
 out of `.agents/` so a raw log is never inside a tree you are likely to commit. polymorph
 does not add that folder to your `.gitignore`; do it yourself (see
 [Discovery](discovery.md#privacy)).

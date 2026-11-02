@@ -10,6 +10,7 @@ that harness: absence is reported as unknown, never as a gap.
 """
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -68,13 +69,28 @@ class Coverage:
     source: str = ""
 
 
+# Why a provided path is not reached by a harness.
+UNSUPPORTED = "unsupported"          # the harness has no recorded way to read this kind at all
+NO_LINK = "no-link"                  # the harness reads a path that does not exist; the content lives elsewhere
+UNLINKED_COPY = "unlinked-copy"      # the harness reads a real file or dir that is a second copy (drift)
+POINTS_ELSEWHERE = "points-elsewhere"  # the harness reads a symlink that leads somewhere else
+REASONS = (UNSUPPORTED, NO_LINK, UNLINKED_COPY, POINTS_ELSEWHERE)
+
+
 @dataclass(frozen=True)
 class Gap:
-    """A provided path the harness has no recorded way of honouring."""
+    """A provided path the harness will not read, and why.
+
+    reads: the path(s) the harness looks at for this kind (empty when unsupported);
+    fix: what would make it reach the provided path, as text -- polymorph does not make the link.
+    """
 
     harness: str
     kind: str
     path: str
+    reason: str = UNSUPPORTED
+    reads: tuple[str, ...] = ()
+    fix: str = ""
 
 
 def _rel(repo: Path, p: Path) -> str:
@@ -220,17 +236,70 @@ def available_tables(repo: str | Path = ".") -> list[str]:
     return sorted(names)
 
 
-def _honours(cap: Coverage, kind: str, item: Item) -> bool:
+def _read_paths(cap: Coverage, kind: str) -> tuple[str, ...]:
+    """The repo-relative paths a harness reads for a kind; empty when it reads none."""
     if kind == "memory":
-        return PurePosixPath(item.path).name in cap.memory
-    return getattr(cap, kind) is not None
+        return tuple(cap.memory)
+    value = getattr(cap, kind)
+    return (value,) if value is not None else ()
 
 
-def gaps(inv: Inventory, cap: Coverage) -> list[Gap]:
-    """Provided paths the coverage table gives no way of honouring."""
+def _same(a: Path, b: Path) -> bool:
+    return a.exists() and b.exists() and a.resolve() == b.resolve()
+
+
+def _reached(repo: Path, kind: str, item: Item, read: str) -> bool:
+    """Does the harness's read path lead to this item? Files compare by resolved path; for the
+    directory kinds an item is reached when the directory holding it is the one the harness reads."""
+    target, read_path = repo / item.path, repo / read
+    if kind == "memory":
+        return _same(target, read_path)
+    return _same(target.parent, read_path)
+
+
+def _link_fix(repo: Path, kind: str, item: Item, read: str) -> str:
+    """Text only: the link that would make `read` reach the item."""
+    source = repo / item.path
+    if kind != "memory":
+        source = source.parent
+    target = os.path.relpath(source, (repo / read).parent)
+    return f"link {read} -> {target}"
+
+
+def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
+    """Provided paths the harness will not read, with the reason.
+
+    A harness reads fixed paths (the coverage table). An item is reached when one of them
+    resolves to it, directly or through a symlink. Otherwise the reason says what stands
+    there instead: nothing (`no-link`), a second real copy (`unlinked-copy`, the usual
+    source of drift between CLAUDE.md and AGENTS.md or .claude/ and .agents/), or a symlink
+    to something else (`points-elsewhere`). A kind the harness has no path for is `unsupported`.
+    """
+    repo = Path(repo)
     out: list[Gap] = []
     for kind in KINDS:
+        reads = _read_paths(cap, kind)
         for item in inv.kind(kind):
-            if not _honours(cap, kind, item):
-                out.append(Gap(harness=cap.name, kind=kind, path=item.path))
+            if not reads:
+                out.append(Gap(cap.name, kind, item.path, UNSUPPORTED))
+                continue
+            if any(_reached(repo, kind, item, r) for r in reads):
+                continue
+            present = [r for r in reads if (repo / r).exists() or (repo / r).is_symlink()]
+            if not present:
+                reason = NO_LINK
+            elif any((repo / r).is_symlink() for r in present):
+                reason = POINTS_ELSEWHERE
+            else:
+                reason = UNLINKED_COPY
+            links = [r for r in present if (repo / r).is_symlink()]
+            read = (links or present or list(reads))[0]
+            here = item.path if kind == "memory" else PurePosixPath(item.path).parent.as_posix()
+            if reason == NO_LINK:
+                fix = _link_fix(repo, kind, item, read)
+            elif reason == UNLINKED_COPY:
+                fix = f"{read} and {here} are separate copies: merge them into one and link the other to it"
+            else:
+                fix = f"{read} is a symlink to {os.readlink(repo / read)}, not to {here}"
+            out.append(Gap(cap.name, kind, item.path, reason, reads=reads, fix=fix))
     return out
