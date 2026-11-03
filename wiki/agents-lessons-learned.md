@@ -1,5 +1,5 @@
 # Lessons agents learned the hard way
-_Last modified: 2026-10-31_
+_Last modified: 2026-11-02_
 
 Past mistakes from building this project, one line each. **Home** is where
 the rule is enforced or stated; a lesson with no Home reaches nobody.
@@ -25,3 +25,5 @@ Skill `record-a-lesson` adds rows.
 | A post-landing commit went onto local `experimental` because the checkout was still sitting on it (twice in one session; the push failing on a bad refspec was the only guard). | After every `ship-land`, `git status -sb` before the next commit and branch first — the landing branch is not a workspace. | skill `use-a-worktree` ("check `git status -sb` before anything that changes state"), skill `ship` |
 | A redaction guard ran second and never fired: `tool_use_id` sat in the verbatim-allowlist above the id-shape check, so hostile content under that key was logged verbatim and the guard was dead code. | When one branch pre-empts a guard, the guard is dead: test every guard with a value that must FAIL it, not only values that should pass, and put the specific check before the broad allowlist. | skill `review` (checklist), `tests/test_discover.py` RedactionFixTests |
 | The loadout-manifest emitter wrote JSON into TOML (`{"k": "v"}`); tomllib rejected it on the second run, so the first run poisoned the second. | Emitting a format with the wrong writer is a round-trip bug: every emitted artifact is parsed back through the real parser by a test, not eyeballed as text. | `tests/test_equip.py` (second-equip round-trip), skill `review` |
+| `git commit` failed with "Couldn't get agent socket": the machine's git config asks for SSH-signed commits, but no ssh-agent is running and no private key exists on the machine (the saved agent-environment file under `~/.ssh` points at a dead socket). | Agents land commits with `git -c commit.gpgsign=false` on purpose; signing resumes only when the user restores the key into a live agent. | none yet |
+| A redaction test's realistic fake tokens (a real-length JWT, a `ghp_…` string) failed the repo's GitGuardian PR check as "Generic High Entropy Secret" and blocked the merge -- twice, because each scan reports only its highest-entropy finding. | Fake secrets use the real token prefix with a flat low-entropy suffix (`ghp_aaaaaaaaaaaa`): still matches credential-detector regexes in code, too dull for secret scanners. | `tests/test_discover.py` (RedactTest) |
