@@ -392,7 +392,8 @@ _PROVENANCE_VALUE = re.compile(r"^[A-Za-z0-9_.:/@+-]{1,128}$")
 def _provenance_mark(value) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
-    return value if _PROVENANCE_VALUE.match(value) else INVALID
+    # fullmatch, not match: `$` alone also matches before a trailing newline
+    return value if _PROVENANCE_VALUE.fullmatch(value) else INVALID
 
 
 # Values kept verbatim under redaction: structure, never user content. Everything

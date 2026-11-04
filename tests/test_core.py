@@ -351,7 +351,8 @@ class DirectDeliveryTests(Base):
 
 class ValidateOutTests(unittest.TestCase):
     """payload_out placeholders and exit values are checked at validation time,
-    so a typo or a zero exit cannot reach the adapter and turn a deny into an allow."""
+    so a typo or a deny/ask route without an explicit exit = 2 cannot reach the
+    adapter and turn a deny into an allow or a non-blocking error."""
 
     @staticmethod
     def _base(**payload_out):
@@ -381,6 +382,17 @@ class ValidateOutTests(unittest.TestCase):
             self.assertTrue(any(f"{kind}.exit" in e for e in errs), errs)
         for kind in ("allow", "warn", "remind"):
             self.assertEqual(validate_mapping(self._base(**{kind: {"exit": 0}})), [])
+
+    def test_deny_or_ask_exit_must_be_the_canonical_block_code(self):
+        # the adapter defaults a missing exit to 0, and no code but 2 is documented
+        # to block: a deny or ask rendered as anything else fails open silently
+        from polymorph.validate import validate_mapping
+        for kind in ("deny", "ask"):
+            for spec in ({}, {"stdout": "x"}, {"stderr": "x"}, {"exit": 1}, {"exit": 3}):
+                errs = validate_mapping(self._base(**{kind: spec}))
+                self.assertTrue(any(f"{kind}.exit" in e for e in errs), (kind, spec, errs))
+        self.assertEqual(validate_mapping(self._base(deny={"exit": 2})), [])
+        self.assertEqual(validate_mapping(self._base(ask={"exit": 2, "stderr": "{reason}"})), [])
 
 
 class HookCommandTimeoutTests(unittest.TestCase):

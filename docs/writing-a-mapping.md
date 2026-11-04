@@ -152,6 +152,13 @@ through). With none of the three, `check` warns `deny-unenforceable`: at run tim
 deny becomes a visible NOT-checked fault and the call proceeds, so the mapping cannot
 enforce anything.
 
+`exit` is required on `deny` and `ask` entries and must be `2`, the canonical block code.
+The adapter defaults a missing exit to `0`, which is an allow, and no other code is
+documented to block, so `validate` rejects a missing exit and any value but `2` — a deny
+or ask that renders as anything else fails open silently. `allow`, `warn` and `remind`
+entries are unconstrained. Because a valid mapping's `deny` entry always blocks, the
+`deny-unenforceable` warning above counts it as a real route.
+
 How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
 else `systemMessage` is `remind`; anything else is "no answer" (exit 0, no output). A kind

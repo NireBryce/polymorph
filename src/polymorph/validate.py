@@ -194,9 +194,11 @@ def validate_mapping(src: Any) -> list[str]:
                         continue
                     if not isinstance(v, want) or (want is int and isinstance(v, bool)):
                         errs.append(f"payload_out.{kind}.{f} must be {want.__name__}")
-                    elif f == "exit" and v == 0 and kind in ("deny", "ask"):
-                        errs.append(f"payload_out.{kind}.exit must be nonzero "
-                                    f"(exit 0 would turn the {kind} into an allow)")
+                    elif f == "exit" and kind in ("deny", "ask") and v != 2:
+                        # 2 is the only documented block code; the adapter defaults a
+                        # missing exit to 0, and any other code does not block
+                        errs.append(f"payload_out.{kind}.exit must be 2, the canonical block "
+                                    f"exit, got {v!r} (nothing else blocks; 0 is an allow)")
                     elif isinstance(v, str):
                         bad = sorted(placeholder_names(v) - KNOWN_PLACEHOLDERS)
                         if bad:
@@ -204,4 +206,7 @@ def validate_mapping(src: Any) -> list[str]:
                                         f"(known: {', '.join(sorted(KNOWN_PLACEHOLDERS))})")
                         elif _codey(v):
                             errs.append(f"payload_out.{kind}.{f}: code-like value {v!r}")
+                if kind in ("deny", "ask") and "exit" not in spec:
+                    errs.append(f"payload_out.{kind}.exit is missing and must be 2 "
+                                f"(the default exit 0 renders the {kind} as an allow)")
     return errs
