@@ -144,7 +144,13 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
   the two typed UPS marker prompts among them. An older session, started before the wiring
   existed, produced no such payloads at all. Derived: hook wiring is read at session start;
   config edits land only in sessions started afterwards. The trust store is the exception
-  that is re-read (see the trust-gating section). **Observed + derived.**
+  that is re-read (see the trust-gating section). **Observed + derived.** Two agent
+  sessions wiring hooks in one workspace overwrite each other's entries on disk — last
+  writer wins, and a frozen session can never see the other's edits — so wire one writer
+  at a time and diff the config before trusting a run's setup: on 2026-11-04 the
+  round-3 session ran on a fourteen-hook wiring while a parallel session's rewrite landed
+  underneath it, and each experiment stayed valid only because its wiring snapshot
+  predated the other's write.
 - Neither `UserPromptSubmit` action is honored: the prompt carrying the block marker was
   logged and still reached the model (no refusal), and the context-marker prompt arrived
   bare, with no injected stdout line. **Observed.**
