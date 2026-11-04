@@ -290,8 +290,16 @@ to the repo root, a colon, the hook's canonical event (`session_start`, `pre_too
 event that has that mismatch in that target. (Schema 1 ids had no event: one script
 registered under several events produced the same id for each, and one decision answered
 every event it was registered under, with `generate` recording only the first
-application's weakening. The event dimension is the schema 2 break; rename entries and
-bump the schema line.)
+application's weakening. The event dimension is the schema 2 break.)
+
+To migrate a schema 1 file by hand: set `schema = 2`, then for each old `<script>:<kind>`
+entry, find the events `.agents/settings.json` registers `<script>` under (the event keys
+whose matcher groups carry its command), map `SessionStart`/`PreToolUse`/`PostToolUse` to
+`session_start`/`pre_tool`/`post_tool`, and write one `[decisions."<script>:<event>:<kind>"]`
+per event with the same `choice`, `date` and `note`. A script registered under both tool
+events becomes two entries, which is the point: they can now be decided separately. An id
+for an event the script is not registered under simply matches no mismatch and reads as
+`decision-stale`, not an error.
 
 | Kind | Fires when | Choices |
 |---|---|---|
