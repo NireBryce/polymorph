@@ -963,6 +963,25 @@ def summarize(log: str | Path, include=(), events=()) -> str:
     pairing = _pairing(sel)
     if pairing:
         out.append("pairing by call id and message id: " + _pairing_text(pairing))
+    per_session: dict[str, list[tuple[int, dict]]] = {}
+    for i, rec in sel:
+        sid = _top(rec)[2] or "<no session id>"
+        per_session.setdefault(sid, []).append((i, rec))
+    if len(per_session) > 1:
+        out.append("per session: payloads, events, pairing")
+        for sid, group in sorted(per_session.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            counts: dict[str, int] = {}
+            for _, rec in group:
+                name = _safe(_top(rec)[0], _EVENT_RE) \
+                    or ("<none>" if _top(rec)[0] is None else "<invalid>")
+                counts[name] = counts.get(name, 0) + 1
+            events_text = ", ".join(f"{k} {n}" for k, n in
+                                    sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+            line = f"  {sid}  {len(group)} payloads  {events_text}"
+            p = _pairing(group)
+            if p:
+                line += ";  " + _pairing_text(p)
+            out.append(line)
     out.append("")
     out += table("per event: top-level keys", by_event) + [""]
     out += table("per tool: tool_input keys", by_tool)
