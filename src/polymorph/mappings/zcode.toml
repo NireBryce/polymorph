@@ -27,14 +27,27 @@
 # default correctly. `manage check` reports this shape as
 # direct-ask-unenforceable.
 #
+# Second probe round (2026-11-04, docs/observed-zcode-session.md): the other
+# events dispatch -- SessionStart, UserPromptSubmit and Stop logged payloads in
+# a session started after the wiring (PermissionRequest never dispatched in any
+# session) -- but no action from any hook answer is honored: allow +
+# updatedInput ran the original command, a UserPromptSubmit block marker
+# reached the model, stdout context injection did not land, and a Stop exit-2
+# continuation never happened. Hook wiring is read at session start: config
+# edits land only in sessions started afterwards (the trust store is re-read,
+# so trust changes do land). Matchers are case-sensitive regexes. The
+# canonical schema has no slot for UserPromptSubmit or Stop, so [events]
+# cannot carry them; adding slots is a schema change, not a mapping edit.
+#
 # `verified` covers the nixos-configs hook comments (payload shape,
-# ask-as-allow, config layout) and the 2026-11-04 live probe (payload shape,
-# exit 2 blocks, JSON answers ignored, post event fires). NOT verified, still
-# best guess: rewrites_input, skills_dir, context_file (see the report-harness
-# skill).
+# ask-as-allow, config layout), the 2026-11-04 live probe (payload shape,
+# exit 2 blocks, JSON answers ignored, post event fires) and the same day's
+# second round (session_start dispatches live, updatedInput ignored, wiring
+# freeze, case-sensitive matchers). NOT verified, still best guess:
+# skills_dir, context_file (see the report-harness skill).
 schema = 1
 name = "zcode"
-verified = "2026-11-04, live probe session (payload shape, exit 2 blocks, JSON answers ignored, post event fires, ask drew no prompt); 2026-10-30, nixos-configs hook comments (payload shape, ask-as-allow)"
+verified = "2026-11-04, live probe session (payload shape, exit 2 blocks, JSON answers ignored, post event fires, ask drew no prompt); 2026-11-04, second probe round (session_start dispatches live, updatedInput ignored, wiring freeze, case-sensitive matchers); 2026-10-30, nixos-configs hook comments (payload shape, ask-as-allow)"
 config_path = ".zcode/config.json"
 format = "json"
 delivery = "direct"   # hooks run bare, no adapter; payload is canonical, answers are not (see header)
@@ -56,7 +69,7 @@ post_tool = "PostToolUse"
 ask = false            # nixos-configs #448/#458; live: a JSON ask ran with no prompt
 post_event = true      # live: PostToolUse fires and logs; its exit-2 stderr does not reach the model
 exit_2_blocks = true   # live: exit 2 blocked Bash and Edit; JSON deny did not block
-rewrites_input = false # still best guess; live payloads carried tool_input.command verbatim
+rewrites_input = false # confirmed false, second probe round: allow + updatedInput ran the original command
 json_answers = false   # live 2026-11-04: JSON permissionDecision answers are ignored (#56)
 
 [payload_in]
