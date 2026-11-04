@@ -93,6 +93,11 @@ is valid. `generate`, `validate` and `check` apply the same rule (loading a mapp
 `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
 `context_file`, `skills_dir`, `delivery`.
 
+`payload_out` strings may use only the placeholders `{reason}`, `{context}` and `{message}`;
+any other is a validation error. A mapping with no `payload_out.deny` must have
+`json_answers` or `exit_2_blocks` true, or `validate` rejects it (a deny would otherwise leave
+as exit 0, an allow); the adapter treats that case as a fault, never as exit 0.
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.

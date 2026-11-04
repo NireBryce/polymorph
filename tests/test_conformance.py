@@ -27,8 +27,9 @@ class ValidateTests(unittest.TestCase):
                 self.assertEqual(validate_mapping(p), [])
 
     def test_verified_policy(self):
-        self.assertIn("verified", load("zcode"))
-        self.assertNotIn("verified", load("gemini"))
+        # no shipped mapping has had its block semantics seen in a live session
+        for p in MAPPINGS:
+            self.assertNotIn("verified", load(p.stem), p.name)
         self.assertFalse(load("zcode")["capabilities"]["ask"])
 
     def test_wrong_tool_class_caught(self):
@@ -58,6 +59,29 @@ class ValidateTests(unittest.TestCase):
         bad(lambda m: m["payload_in"].update(cwd="$(whoami)"))
         bad(lambda m: m["payload_out"].update(deny={"exit": 2, "stderr": "`id`"}))
         bad(lambda m: m["events"].update(pre_tool="Pre Tool"))
+
+    def test_deny_needs_a_route_that_blocks(self):
+        m = load("zcode")
+        m.pop("delivery")
+        m["capabilities"].update(json_answers=False, exit_2_blocks=False)
+        errs = validate_mapping(m)
+        self.assertTrue(any("payload_out.deny" in e for e in errs), errs)
+        m["payload_out"]["deny"] = {"exit": 2, "stderr": "{reason}"}
+        self.assertEqual(validate_mapping(m), [])
+        m["payload_out"].pop("deny")
+        m["capabilities"]["exit_2_blocks"] = True
+        self.assertEqual(validate_mapping(m), [])
+
+    def test_only_known_placeholders(self):
+        m = load("zcode")
+        m.pop("delivery")
+        for ok in ("{reason}", "{context}", "{message}", "why: {reason} ({context})"):
+            m["payload_out"]["deny"] = {"exit": 2, "stderr": ok}
+            self.assertEqual(validate_mapping(m), [], ok)
+        for bad in ("{reasn}", "{reason.x}", "{Reason}", "x {foo} y"):
+            m["payload_out"]["deny"] = {"exit": 2, "stderr": bad}
+            errs = validate_mapping(m)
+            self.assertTrue(any("placeholder" in e for e in errs), (bad, errs))
 
     def test_known_extractor_ok(self):
         m = load("zcode")

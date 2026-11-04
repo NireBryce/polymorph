@@ -10,13 +10,14 @@
 # ask=false: ZCode treats permissionDecision "ask" as allow (nixos-configs
 # #448/#458); hooks read GUARD_ASK_ENFORCED and harden to deny.
 #
-# `verified` covers only what those hook files state (payload shape, ask-as-allow,
-# config layout). NOT verified by them, so not claimed: rewrites_input,
-# exit_2_blocks, post_event behaviour, skills_dir, context_file. Values for those
-# are the best guess and need a live check (see the report-harness skill).
+# No `verified` field: block semantics have not been seen in a live session, which
+# `verified` requires (AGENTS.md). What this mapping rests on (2026-10-30): those hook
+# files' comments (payload shape, ask-as-allow, config layout); not a live run. Not
+# covered by them: rewrites_input, exit_2_blocks, post_event behaviour, skills_dir,
+# context_file. Values for those are the best guess and need a live check (see the
+# report-harness skill).
 schema = 1
 name = "zcode"
-verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
 config_path = ".zcode/config.json"
 format = "json"
 delivery = "direct"   # speaks the canonical protocol: hooks run bare, no adapter

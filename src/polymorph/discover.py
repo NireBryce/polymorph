@@ -342,13 +342,22 @@ def _shape(v, depth: int = _SHAPE_DEPTH):
     return out
 
 
+def _key_name(k) -> str:
+    """A key kept under redaction: a plain name, else `<invalid key>` (as `_shape` does)."""
+    k = str(k)
+    return k if _safe(k, _KEY_RE) else "<invalid key>"
+
+
 def _redact_payload(raw):
     """Keys kept; only _SAFE_VALUES survive verbatim, the rest become {type, length}."""
     if not isinstance(raw, dict):
         return _descriptor(raw)
     out = {}
     for k, v in raw.items():
-        if k in _SAFE_VALUES and isinstance(v, (str, int, float, bool)) and not isinstance(v, dict):
+        k_out = _key_name(k)
+        if k_out != k:   # a key that is not a plain name may be content (a path, a command)
+            out[k_out] = _descriptor(v)
+        elif k in _SAFE_VALUES and isinstance(v, (str, int, float, bool)) and not isinstance(v, dict):
             out[k] = v
         elif (k in (*_CALL_ID_KEYS, *_MESSAGE_ID_KEYS) and isinstance(v, str)
               and _ID_VALUE.match(v)):
@@ -356,7 +365,7 @@ def _redact_payload(raw):
         elif k in _OUTPUT_KEYS and isinstance(v, dict):
             out[k] = _shape(v)
         elif k in _INPUT_KEYS and isinstance(v, dict):
-            out[k] = {kk: _descriptor(vv) for kk, vv in v.items()}
+            out[k] = {_key_name(kk): _descriptor(vv) for kk, vv in v.items()}
         else:
             out[k] = _descriptor(v)
     return out
@@ -379,10 +388,11 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
     tool_input_keys: list = []
     event = tool_name = session_id = None
     if isinstance(raw, dict):
-        keys = sorted(str(k) for k in raw)
+        name = _key_name if redact else str
+        keys = sorted({name(k) for k in raw})
         for k in _INPUT_KEYS:
             if isinstance(raw.get(k), dict):
-                tool_input_keys = sorted(str(x) for x in raw[k])
+                tool_input_keys = sorted({name(x) for x in raw[k]})
                 break
         event = _first_str(raw, _EVENT_KEYS)
         tool_name = _first_str(raw, _TOOL_NAME_KEYS)
@@ -751,7 +761,10 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
         for t in sorted(flags):
             ks = ", ".join(f"{kk} {n}/{tool_calls.get(t, n)}" for kk, n in sorted(flags[t].items()))
             out.append(f"#   {t}: {ks}")
-    out += ["", "[payload_out]"]
+    out += ["", "[payload_out]",
+            "# How a deny blocks is not observable from payloads, so `validate` refuses this draft",
+            "# until it says: after a live test, set capabilities.exit_2_blocks or json_answers to",
+            '# true, or add deny = { exit = N, stderr = "{reason}" }.']
     if out_paths:
         out.append(f"# Output-like keys observed (values hidden by redaction; {out_total} payloads):")
         for path in sorted(out_paths):

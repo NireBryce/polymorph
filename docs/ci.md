@@ -26,8 +26,8 @@ change your CI result. polymorph is experimental and its interfaces may change.
 - `polymorph check` fails the job on errors only.
 - `polymorph check --strict` fails on warnings too: an unverified mapping
   (`mapping-unverified`), a decision that weakens a guard (`decision-weakens-guard`), a stale decision, missing
-  fixtures. An undecided mismatch (`decision-undecided`) is an error even without `--strict`. With the shipped `gemini` draft enabled, `--strict` always fails; that is the
-  point of the warning.
+  fixtures. An undecided mismatch (`decision-undecided`) is an error even without `--strict`. No shipped mapping has `verified` yet, so with any
+  built-in target enabled `--strict` always fails; that is the point of the warning.
 - Notes (`mapping-untested-live`, `setting-unmapped`) never fail a run.
 - Use `--harness NAME` to check one target regardless of `config.toml`.
 
@@ -42,7 +42,7 @@ repos:
     hooks:
       - id: polymorph-check
         name: polymorph check
-        entry: python -m polymorph check --strict
+        entry: python -m polymorph check
         language: system
         pass_filenames: false
         files: ^\.(agents|zcode|claude)/
@@ -53,7 +53,8 @@ directories plus `.agents/`).
 
 ## GitHub Actions
 
-Not run. Uploads the findings as code-scanning alerts, then gates on `--strict`.
+Not run. Uploads the findings as code-scanning alerts, then gates on errors. Add
+`--strict` once every target you enable has a `verified` mapping.
 
 ```yaml
 name: polymorph
@@ -72,7 +73,7 @@ jobs:
         continue-on-error: true
       - uses: github/codeql-action/upload-sarif@v3
         with: {sarif_file: polymorph.sarif}
-      - run: python -m polymorph check --strict
+      - run: python -m polymorph check
 ```
 
 Notes:

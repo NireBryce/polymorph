@@ -122,8 +122,12 @@ def translate_out(mapping: dict, answer: dict | None) -> dict:
     text = vals["reason"] or vals["context"] or vals["message"]
     if caps.get("json_answers"):
         return {"stdout": json.dumps(answer), "exit": 0, "stderr": ""}
-    if kind == "deny" and caps.get("exit_2_blocks"):
-        return {"stdout": "", "exit": 2, "stderr": text}
+    if kind == "deny":
+        if caps.get("exit_2_blocks"):
+            return {"stdout": "", "exit": 2, "stderr": text}
+        # validate rejects such a mapping; never let a deny leave as exit 0 (allow) unseen
+        raise AdapterError("the hook denied, but the mapping has no payload_out.deny and the "
+                           "harness takes neither JSON answers nor exit 2")
     return {"stdout": "", "exit": 0, "stderr": text}
 
 

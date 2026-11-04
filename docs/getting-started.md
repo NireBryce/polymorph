@@ -71,6 +71,7 @@ python -m polymorph generate --check
 ```
 ```
 [zcode] would write .zcode/config.json (DRIFT)
+  warning: zcode: mapping has no `verified` field; treat output as unverified
   unmapped setting: permissions.allow (1 entries)
 ```
 Exit code 1: the file does not exist, so it differs. Nothing was written.
@@ -80,6 +81,7 @@ python -m polymorph generate
 ```
 ```
 [zcode] wrote .zcode/config.json (DRIFT)
+  warning: zcode: mapping has no `verified` field; treat output as unverified
   unmapped setting: permissions.allow (1 entries)
 ```
 
@@ -117,19 +119,21 @@ python -m polymorph check
 ```
 ```
 [zcode]
+  warning mapping-unverified zcode: mapping has no `verified` field; treat output as unverified (.../polymorph/mappings/zcode.toml)
   note mapping-untested-live zcode: not tested live: block semantics, ask enforcement unproven
   note setting-unmapped zcode: permissions.allow (1 entries)
-0 error(s), 0 warning(s), 2 note(s)
+0 error(s), 1 warning(s), 2 note(s)
 ```
 
 Exit 0. Before `generate` ran, the same command exits 1 with
 `error generated-drift ... .zcode/config.json missing`. Edit `.agents/settings.json` later
 and `check` reports drift again until you re-run `generate`.
 
-The two notes are permanent. `mapping-untested-live` is polymorph reminding you that
-nobody has proved ZCode enforces a deny from this file; `setting-unmapped` lists what was
-not translated. `check --strict` makes warnings fail too (these are notes, so it still
-passes).
+The warning stays until someone sees a deny from this file stop a tool call in a live ZCode
+session and adds `verified` to the mapping; no shipped mapping has it yet. The two notes are
+permanent. `mapping-untested-live` is polymorph reminding you that nobody has proved ZCode
+enforces a deny from this file; `setting-unmapped` lists what was not translated.
+`check --strict` makes warnings fail too, so with the shipped `zcode` mapping it exits 1.
 
 ## 5. Try the adapter by hand
 

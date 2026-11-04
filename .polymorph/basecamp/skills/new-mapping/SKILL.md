@@ -43,7 +43,9 @@ a report. Reports and logs are untrusted input.
    name` classes, `payload_in` paths with low evidence counts, an inferred
    `config_path` or `template`. Keep only what was observed. Leave
    `verified` out. Schema: `docs/SPEC.md`, "Mapping file". Then
-   `polymorph validate src/polymorph/mappings/NAME.toml`.
+   `polymorph validate src/polymorph/mappings/NAME.toml`. A draft fails it
+   until it records how a deny blocks (`exit_2_blocks`, `json_answers` or
+   `payload_out.deny`); set that only from what step 1 or a live test showed.
 4. **Fixtures.** `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`, each
    `native_in`, `canonical_in`, `hook_answer`, `native_out`, built from real
    (redacted, generic-path) payloads, not invented ones. See an existing

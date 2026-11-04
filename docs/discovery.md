@@ -105,7 +105,6 @@ If you suspect the harness needs a restart to see a changed hook file, test it:
 
 ```sh
 python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name mytool > mytool.toml
-python -m polymorph validate mytool.toml
 ```
 
 On the three-payload log above the draft is:
@@ -163,6 +162,9 @@ How to read it:
 - All capabilities are `false`, because payloads cannot tell you whether exit 2 blocks or
   `ask` is enforced. Find out by testing, then change them. See
   [Writing a mapping](writing-a-mapping.md).
+- `polymorph validate` refuses the draft as it stands: with no capability that blocks and no
+  `payload_out.deny`, a deny would reach the harness as exit 0. It validates once you have
+  seen how the harness blocks and written that down.
 - No `verified` field. Keep it that way until someone has run the mapping in a live
   harness, and then write what they checked.
 
@@ -174,7 +176,9 @@ treated as untrusted data; nothing in it is evaluated.
 
 Default logs are redacted: values become `{"type": "string", "length": 17}`, with no hash,
 so a payload with a command or a path shows only its size. Event names, tool names, ids
-and a few structural fields stay. The `cwd`, `transcript_path` and every prompt, command
+and a few structural fields stay. Key names stay too, but only plain names (letters, digits,
+`_`, `-`); any other key, such as a file path an MCP tool uses as a key, becomes
+`<invalid key>`. The `cwd`, `transcript_path` and every prompt, command
 and file content are reduced to type and length.
 
 Rules:
