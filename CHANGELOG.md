@@ -3,7 +3,28 @@
 polymorph is experimental. Anything here can change without notice; this file says what
 changed and, from the first release that has users, how it breaks them.
 
-## 0.0.1.dev0 (unreleased)
+## 0.0.1.dev1 (unreleased)
+
+Fixes from a review of 0.0.1.dev0. Two of them break existing use; see each entry.
+
+- **`claude` and `zcode` lose `verified`:** no block has been seen in a live session, which
+  `verified` requires. Breaks: `generate` warns and `check --strict` fails on
+  `mapping-unverified` with either enabled.
+- **`validate` refuses a deny that cannot block:** a mapping with no `payload_out.deny` and
+  neither `json_answers` nor `exit_2_blocks` is rejected, because the adapter would have sent
+  the deny as exit 0 (allow); the adapter now reports that case as "NOT checked". Breaks: `discover
+  draft` output fails `validate` for this reason until the reviewer records how the harness
+  blocks. `payload_out` strings may use only `{reason}`, `{context}` and `{message}`; a typo
+  such as `{reasn}` used to pass validation and turn every deny into "NOT checked".
+- **Redacted discovery logs drop key names that are not plain names** (letters, digits, `_`,
+  `-`): a file path used as a `tool_input` key became visible in `tool_input_keys` and the
+  raw record. Such keys are now `<invalid key>`; `--full` is unchanged.
+- **`capture` keeps partial results:** Ctrl-C, SIGTERM or SIGHUP after some steps used to
+  discard the log (and, without `--keep`, the scratch directory with it). It now writes
+  `report.md`, `summary.txt`, `draft.toml` and `log.jsonl` from what was logged, marking the
+  cut step `interrupted` and the rest `not run`, then exits with the signal's status.
+
+## 0.0.1.dev0
 
 First state of the project. Python 3.11+, standard library only.
 
@@ -17,22 +38,8 @@ First state of the project. Python 3.11+, standard library only.
   meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
   that resolve under `.agents/hooks/`.
 - **Mappings:** TOML, `schema = 1`, with `delivery = "direct"` or `"adapter"`. Shipped:
-  `claude` and `zcode` (with a header comment stating their basis) and a `gemini` draft.
-  None has `verified`: `claude` and `zcode` lost it because no block has been seen in a live
-  session, so `generate` warns and `check --strict` fails on `mapping-unverified` for them.
-- **`validate` refuses a deny that cannot block:** a mapping with no `payload_out.deny` and
-  neither `json_answers` nor `exit_2_blocks` is rejected, because the adapter would have sent
-  the deny as exit 0 (allow); the adapter now reports that case as "NOT checked". `discover
-  draft` output fails `validate` for this reason until the reviewer records how the harness
-  blocks. `payload_out` strings may use only `{reason}`, `{context}` and `{message}`; a typo
-  such as `{reasn}` used to pass validation and turn every deny into "NOT checked".
-- **Redacted discovery logs drop key names that are not plain names** (letters, digits, `_`,
-  `-`): a file path used as a `tool_input` key became visible in `tool_input_keys` and the
-  raw record. Such keys are now `<invalid key>`; `--full` is unchanged.
-- **`capture` keeps partial results:** Ctrl-C, SIGTERM or SIGHUP after some steps used to
-  discard the log (and, without `--keep`, the scratch directory with it). It now writes
-  `report.md`, `summary.txt`, `draft.toml` and `log.jsonl` from what was logged, marking the
-  cut step `interrupted` and the rest `not run`, then exits with the signal's status.
+  `claude` and `zcode` (with `verified` text stating their basis) and a `gemini` draft with
+  no `verified`.
 - **`generate`:** writes JSON hook configs using the `claude-settings` and `claude-like`
   templates, with `--check` for drift. Lookup of mappings from the repo's
   `.polymorph/basecamp/mappings/` overrides the built-in ones with a warning.
