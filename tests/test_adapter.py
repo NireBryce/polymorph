@@ -110,6 +110,14 @@ class PureTests(unittest.TestCase):
         self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, warn))
         self.assertEqual(adapter.translate_out(MAPPING, None)["exit"], 0)
 
+    def test_gemini_ask_is_passed_through_not_blocked(self):
+        # issue 70: the adapter does not harden ask; the hook does, reading GUARD_ASK_ENFORCED
+        m = adapter.load_mapping(Path("."), "gemini")
+        ask = {"hookSpecificOutput": {"permissionDecision": "ask", "permissionDecisionReason": "confirm?"}}
+        r = adapter.translate_out(m, ask)
+        self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, ask))
+        self.assertEqual(adapter.capability_env(m)["GUARD_ASK_ENFORCED"], "0")
+
     def test_deny_with_no_route_is_an_error_not_an_allow(self):
         m = {**MAPPING, "payload_out": {},
              "capabilities": {**MAPPING["capabilities"], "json_answers": False, "exit_2_blocks": False}}

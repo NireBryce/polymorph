@@ -114,7 +114,8 @@ Sets `GUARD_*` capability env vars, runs the script with the canonical payload, 
 answer to native form. Translation failure => visible message (stderr + exit code the
 harness shows to the model) and NEVER a deny; never fail open silently. `ask` on a harness
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
-the adapter.
+the adapter, so `validate` rejects a `payload_out.ask` with a non-zero `exit` on such a
+mapping.
 
 ## Repo layout (everything polymorph stores in a repo)
 

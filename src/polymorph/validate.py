@@ -177,7 +177,22 @@ def validate_mapping(src: Any) -> list[str]:
                                 errs.append(f"payload_out.{kind}.{f}: unknown placeholder {{{name}}} "
                                             f"(known: {', '.join('{' + p + '}' for p in OUT_PLACEHOLDERS)})")
     errs += deny_route_errors(m)
+    errs += ask_hardening_errors(m)
     return errs
+
+
+def ask_hardening_errors(m: dict) -> list[str]:
+    """With capabilities.ask = false the hook hardens ask to deny (it reads GUARD_ASK_ENFORCED=0;
+    SPEC "Wire protocol"). A payload_out.ask that blocks would harden it in the mapping too,
+    deciding for every hook, including one that chose to let ask through."""
+    caps, po = m.get("capabilities"), m.get("payload_out")
+    if not isinstance(caps, dict) or caps.get("ask") is not False or not isinstance(po, dict):
+        return []
+    spec = po.get("ask")
+    if isinstance(spec, dict) and isinstance(spec.get("exit"), int) and spec["exit"] != 0:
+        return [f"payload_out.ask blocks (exit {spec['exit']}) while capabilities.ask is false: "
+                "hardening ask is the hook's job (GUARD_ASK_ENFORCED), not the mapping's"]
+    return []
 
 
 def deny_route_errors(m: dict) -> list[str]:

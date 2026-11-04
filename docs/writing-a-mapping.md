@@ -145,8 +145,11 @@ A harness that blocks by exit code, like the draft `gemini` mapping, looks like 
 ```toml
 [payload_out]
 deny = { exit = 2, stderr = "{reason}" }
-ask = { exit = 2, stderr = "{reason}" }
 ```
+
+There is no `ask` entry. When `capabilities.ask` is `false`, the hook hardens `ask` to deny
+itself (it reads `GUARD_ASK_ENFORCED=0`), so the mapping does not: `validate` rejects a
+`payload_out.ask` with a non-zero `exit` alongside `ask = false`.
 
 How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
