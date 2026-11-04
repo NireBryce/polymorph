@@ -75,7 +75,8 @@ just test            # the unit tests: PYTHONPATH=src python3 -m unittest discov
 just check           # nix flake check: builds the package and runs the tests in the sandbox
 just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths
 just lint            # byte-compile, stdlib-only imports, no committed build output
-just preflight       # test + docs + lint + check: what CI runs
+just self-check      # dogfood: shipped mappings validate, fixtures pass, this repo's own agent layout has no coverage gaps
+just preflight       # test + docs + lint + check + self-check: what CI runs
 just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
 just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)

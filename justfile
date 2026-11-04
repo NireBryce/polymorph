@@ -27,8 +27,38 @@ reference:
 reference-check:
     python3 scripts/gen_reference.py --check
 
+# Dogfood: the tool reads its own repo. Fails on an invalid shipped mapping, a
+# failed fixture, or a new gap in this repo's own agent layout (the basecamp
+# store and its symlinks must stay fully honoured).
+self-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for m in src/polymorph/mappings/*.toml; do
+        PYTHONPATH=src python3 -m polymorph manage validate "$m"
+    done
+    PYTHONPATH=src python3 -m polymorph manage conformance
+    PYTHONPATH=src python3 - <<'EOF'
+    import json, os, subprocess, sys
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "src"
+    r = subprocess.run([sys.executable, "-m", "polymorph", "inventory", "--repo", ".", "--json"],
+                       capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        print(r.stderr, file=sys.stderr)
+        sys.exit(r.returncode)
+    gaps = json.loads(r.stdout)["gaps"]
+    for g in gaps:
+        print(f"gap: {g['harness']} {g['kind']} {g['path']} ({g['reason']})", file=sys.stderr)
+    if gaps:
+        print(f"self-check: {len(gaps)} gap(s) in this repo's own agent layout; link or "
+              "restructure them, or change the expectation here deliberately", file=sys.stderr)
+        sys.exit(1)
+    print("self-check: shipped mappings valid, fixtures pass, inventory reports no gaps")
+    EOF
+
 # Everything CI runs
-preflight: test docs lint check
+preflight: test docs lint check self-check
 
 # Point git at .githooks (pre-commit runs docs and lint)
 install-hooks:
