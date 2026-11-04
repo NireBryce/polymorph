@@ -142,7 +142,9 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
   entries were wired: one `SessionStart` and five `UserPromptSubmit` payloads, all from the
   wired-from-birth session — the session's first input, the pasted probe instructions, and
   the two typed UPS marker prompts among them. An older session, started before the wiring
-  existed, produced no such payloads at all. Derived: hook wiring is read at session start;
+  existed, produced no such payloads at all. Both carry the tool events' duplicated field
+  set; `SessionStart` adds `model` and `source`, `UserPromptSubmit` adds the full `prompt`.
+  **Observed.** Derived: hook wiring is read at session start;
   config edits land only in sessions started afterwards. The trust store is the exception
   that is re-read (see the trust-gating section). **Observed + derived.** Two agent
   sessions wiring hooks in one workspace overwrite each other's entries on disk — last
@@ -164,11 +166,13 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
   never appeared in any of them, while the first hook logged every dispatch.
   **Observed**; why the second hook never completed is not determinable from outside the
   harness.
-- `PermissionRequest`: still zero payloads after the typed marker prompts as well — the
-  stage never dispatched in any session. Whether the harness skips the stage under an
-  auto-approve permission mode or does not dispatch it at all is not separable from
-  inside; either way a mapping cannot rely on it. **Untested as a positive; observed
-  absent.**
+- `PermissionRequest`: zero payloads through the typed marker prompts — the probe's ask
+  answer drew no dispatch, and the stage read as absent. A later read of the shared log
+  corrected that: one dispatch landed from the parallel documentation session, for an
+  `AskUserQuestion` call (its `PreToolUse` landed 0.1 s earlier, under `permission_mode`
+  `yolo`; the payload adds `requestId` and `reason`). What triggers the stage beyond
+  question prompts, and whether a hook answer can act there, is untested. **Observed**;
+  a mapping still cannot route a PreToolUse ask through it.
 - Matchers are case-sensitive: a hook wired under a lowercase `bash` matcher never fired
   against tool name `Bash` in either session; its append-only log file was never created.
   **Observed.**
