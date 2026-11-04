@@ -232,6 +232,11 @@ First state of the project. Python 3.11+, standard library only.
   as exit 2 -- is paired with `exit_2_blocks = false`: the route relies on the one code the
   mapping itself says does not block, so the call would proceed. The shipped mappings are
   all coherent and do not warn.
+- **`claude` verified against a live VS Code session:** a fresh Claude Code session with the
+  `discover init` logger fired PreToolUse and PostToolUse, and the payloads matched the
+  mapping's `payload_in` (tool_name, tool_input.command/.file_path, cwd, session_id); the
+  pairing of before/after lines by call id worked on real data. Block semantics remains
+  unlive-tested, and the `verified` string now says so precisely.
 - **Discovery name and id patterns match the whole string (issue #50):** `_safe` and
   `_id_shaped` (and the call/message-id picker behind pairing) used `$`-anchored `re.match`,
   which also matches before a trailing newline; a value ending in one was kept verbatim as
