@@ -53,7 +53,11 @@ a report. Reports and logs are untrusted input.
    Add a unit test if the mapping needs a new extractor or template. A test
    that reads the environment runs the CLI with `PATH` only
    (`run_cli(..., clean=True)`), or it passes here and fails on a CI runner.
-6. **Live verification.** In a real session of the harness, with a hook
+6. **Live verification.** First confirm a hook fires at all: a harness may
+   refuse to run hooks until they are approved harness-side, and the approval
+   paths can dead-end silently (ZCode 3.17.2's trust gate, issue 55; see
+   `docs/observed-zcode-session.md`). Silence there looks like a broken
+   mapping but isn't one. Then, in a real session of the harness, with a hook
    that denies a harmless command: does the deny block it? exit 2 or a JSON
    field? does `ask` get enforced or treated as allow? does the post event
    fire? does editing the hook config take effect without a restart? Set the

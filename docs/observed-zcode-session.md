@@ -70,3 +70,58 @@ the harness that needs `CLAUDE.md`, `.claude/skills` and `.claude/rules` links t
 repo keeps under `AGENTS.md` and `.agents/`; ZCode needs none. A third-party review that has
 ZCode reading `.claude/skills` disagrees with ZCode's own documentation. This page's session
 observation of `.agents/skills` agrees with the documentation.
+
+## Hook trust gating (3.17.2)
+
+Observed on 2026-11-04 in **ZCode 3.17.2** in this repository, while wiring the discovery
+logger per [`discovery`](discovery.md): hooks in `.zcode/config.json` with `enabled: true` on
+the root and on every hook never executed — no payload was logged, a deny-answer probe did not
+block, an ask-answer probe did not prompt, the log file was never created. Observed in the
+harness: each pending hook's enable toggle in Settings → Hooks forced off and disabled, a
+per-hook Trust button disabled with the tooltip "This connection cannot trust this Hook.",
+and a chat-side "Workspace hooks pending review" popover whose Review button navigated to the
+Hooks pane without starting a review. Neither path produced an error, a toast or a log line.
+
+Derived: ZCode gates workspace hooks per workspace behind a trust store
+(`~/.zcode/security/workspace-hook-trust-v1.json` on this machine), keyed by a sha256 digest
+over each hook's declaration (event, matcher, indexes, resolved command and defaults); the
+formula was reproduced exactly against another workspace's existing records. Observed after
+the records were written by hand into that store: the gated session's hooks started firing
+about 45 minutes later without a restart, so the gate re-reads trust instead of freezing it
+at session start. Untested: whether the Trust and Review paths work in another build or
+window arrangement. Derived: a wired hook that never fires in ZCode may be pending trust,
+not a broken mapping — confirm a hook actually fires before debugging the mapping
+(issue 55).
+
+## Hook answers and failure behavior (3.17.2)
+
+Observed on 2026-11-04 in **ZCode 3.17.2**, with a probe hook wired on `PreToolUse` and
+`PostToolUse` (matcher `*`) that branched on marker strings in the payload and answered in
+one of several ways:
+
+- `exit 2` on `PreToolUse` blocked the call — Bash and Edit alike — and the hook's stderr
+  line was the entire visible tool result, verbatim, with no harness wrapper.
+- A stdout JSON answer (`hookSpecificOutput` with `permissionDecision` `"deny"`, then
+  `"ask"`) did nothing: the call ran, no denial text and no prompt reached the model (the
+  ask call's Pre and Post landed 1 second apart). Derived: for these shapes only exit codes
+  act; JSON decisions are ignored.
+- `exit 1` ran the call, and the hook's stderr never reached the model. A hook sleeping past
+  the 60s default timeout was killed and the call proceeded; the harness surfaced nothing
+  about either. Derived: ZCode fails open on hook error and on hook timeout — a broken or
+  slow guard hook blocks nothing here.
+- `exit 2` on `PostToolUse` produced no feedback the model could see.
+- The probe's matcher matched marker text inside a later Edit's payload and denied the call
+  that was editing the probe itself: matchers run on raw payload text, so a hook script
+  quoting its own marker denies its installer. Worked around by writing placeholders and
+  materializing the markers with `sed` built from parts.
+- Payloads carry every field twice, camelCase and snake_case (`toolName`/`tool_name`,
+  `toolCallId`/`tool_use_id`), plus `traceId`, `turnId`, `mode`, `permission_mode` and
+  `transcriptPath`/`transcript_path`; `PreToolUse` adds `riskLevel` and `sideEffectScope`;
+  `PostToolUse` adds `toolResponse`, `toolResultPreview`, `tool_response`. `tool_input`
+  shapes for Bash, Read, Write and Edit matched Claude Code's (`command` + `description`,
+  `file_path` with optional `limit`, `content`, `old_string`/`new_string`/`replace_all`),
+  and a `timeout` set on a Bash call passed through.
+
+Derived for the mapping: `zcode.toml` must express deny as exit 2 with stderr as the reason
+channel; JSON-answer templates and a PostToolUse deny route have nothing to attach to; and
+nothing in this harness can assume fail-closed behavior from a broken hook.
