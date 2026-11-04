@@ -111,14 +111,15 @@ left is a canonical key; the right is a dotted path into the native JSON (list i
 allowed as numbers: `args.0.path`). The adapter builds the canonical payload from these.
 
 Accepted canonical keys: `tool_name`, `cwd`, `session_id`, `tool_response`, `event`, and
-`CLASS.field` for a class in the tool list (`shell.command`, `edit.file_path`,
-`read.file_path`, `read.path`, `read.pattern`, `read.glob`), plus `extractor`. The adapter
-places `shell.command` at `tool_input.command`, `edit.file_path` and `read.file_path` at
-`tool_input.file_path`. Other `CLASS.field` keys are accepted by validation, but the
-adapter currently stores them at that dotted name (for example `read.path`) rather than
-under `tool_input`; see [Limits](limits.md#known-gaps). Missing source values are skipped,
-not errors. `tool_response`, `session_id` and `cwd` are copied through if present even
-when unlisted.
+the six classed fields `shell.command`, `edit.file_path`, `read.file_path`, `read.path`,
+`read.pattern`, `read.glob`, plus `extractor`. A classed key must be one of those six:
+a typo (`shell.cmd`) or a key for a class with no canonical field (`mcp.server`) is a
+validation error, because the adapter would store the value where nothing in the canonical
+payload reads it. The adapter places each classed field at its canonical path:
+`shell.command` at `tool_input.command`, `edit.file_path` and `read.file_path` at
+`tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` at
+`tool_input.path`/`.pattern`/`.glob`. Missing source values are skipped, not errors.
+`tool_response`, `session_id` and `cwd` are copied through if present even when unlisted.
 
 `extractor = "apply_patch_paths"` (optional) names a built-in that pulls file paths out of
 a patch-style edit tool's text (`*** Update File: path` lines) into `tool_input.file_path`

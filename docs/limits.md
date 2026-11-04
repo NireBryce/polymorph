@@ -80,10 +80,6 @@ covered.
   only to them is skipped for those targets and reported as a gap.
 - `generate` rewrites the whole `hooks` key of the target file; hooks added there by hand
   are lost.
-- The adapter reads `payload_in` entries of the form `read.path`, `read.pattern` and
-  `read.glob` but stores them under those names rather than in `tool_input`, so a hook
-  that looks in `tool_input.path` will not see them. `shell.command`, `edit.file_path` and
-  `read.file_path` are placed correctly. Direct delivery is unaffected (no translation).
 - A mapping's `format` may validate as `toml` or `yaml`, but only `json` can be generated,
   and only with the `claude-settings` and `claude-like` templates.
 - `context_file` and `skills_dir` are recorded and validated but nothing uses them yet.
@@ -128,5 +124,3 @@ combination may cause adverse effects.
   although `generate` itself loads a mapping without them.
 - The spec says fixtures cover deny, ask, warn and remind "for each mapping"; `gemini` has
   none.
-- The spec's `read.path`, `read.pattern` and `read.glob` appear in the direct-delivery
-  identity table as `tool_input.*`; the adapter does not place them there (above).

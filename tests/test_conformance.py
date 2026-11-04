@@ -67,6 +67,22 @@ class ValidateTests(unittest.TestCase):
         m["payload_in"]["extractor"] = "apply_patch_paths"
         self.assertEqual(validate_mapping(m), [])
 
+    def test_class_prefixed_payload_in_keys_must_be_canonical(self):
+        m = load("zcode")
+        m["delivery"] = "adapter"  # the identity rule would also reject these; test the key rule alone
+        m["payload_in"]["shell.cmd"] = "tool_input.cmd"
+        errs = validate_mapping(m)
+        self.assertTrue(any("shell.cmd" in e for e in errs), errs)
+        m = load("zcode")
+        m["delivery"] = "adapter"
+        m["payload_in"]["mcp.server"] = "input.server"
+        errs = validate_mapping(m)
+        self.assertTrue(any("mcp.server" in e for e in errs), errs)
+        m = load("zcode")
+        m["delivery"] = "adapter"
+        m["payload_in"]["read.pattern"] = "tool_input.pattern"
+        self.assertEqual(validate_mapping(m), [])
+
 
 class FixtureShapeTests(unittest.TestCase):
     def test_fixtures_present_and_well_formed(self):

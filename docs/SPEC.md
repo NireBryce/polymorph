@@ -100,6 +100,11 @@ is valid. `generate`, `validate` and `check` apply the same rule (loading a mapp
 `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
 `context_file`, `skills_dir`, `delivery`.
 
+A classed `payload_in` key must be one of the canonical fields (`shell.command`,
+`edit.file_path`, `read.file_path`, `read.path`, `read.pattern`, `read.glob`); any other
+`CLASS.field` key is a validation error, because the adapter would place its value at a
+top-level dotted path nothing in the canonical payload reads.
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.
