@@ -105,6 +105,11 @@ A classed `payload_in` key must be one of the canonical fields (`shell.command`,
 `CLASS.field` key is a validation error, because the adapter would place its value at a
 top-level dotted path nothing in the canonical payload reads.
 
+A `payload_out.deny` or `payload_out.ask` entry must set `exit = 2`, the canonical block
+exit: the adapter defaults a missing exit to 0, which renders the answer as an allow, and
+no other code is documented to block. `allow`, `warn` and `remind` entries are unconstrained
+(they are not block claims).
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.

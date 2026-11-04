@@ -216,3 +216,10 @@ First state of the project. Python 3.11+, standard library only.
   `<invalid>`; absent reads as unmarked), and `discover summary` marks both the way it
   marks the schema. The OpenCode discovery plugin sends its own generation (the polymorph
   version `capture` bakes in) and `ctx.location`, read defensively.
+- **`payload_out.deny`/`ask` must set `exit = 2` (breaking, found in review):** the
+  adapter defaults a missing exit to 0, so a deny or ask entry without one -- or with any
+  code but 2, the only one documented to block -- rendered as an allow or a non-blocking
+  error and passed validation silently, the same fail-open shape issue #35 closed for a
+  missing entry. `validate` now requires the explicit `exit = 2`, so the adapter (which
+  re-validates at load) refuses such a mapping with a visible NOT-checked fault instead.
+  `allow`, `warn` and `remind` entries are unconstrained.
