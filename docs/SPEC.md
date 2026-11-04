@@ -100,6 +100,11 @@ is valid. `generate`, `validate` and `check` apply the same rule (loading a mapp
 `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
 `context_file`, `skills_dir`, `delivery`.
 
+A classed `payload_in` key must be one of the canonical fields (`shell.command`,
+`edit.file_path`, `read.file_path`, `read.path`, `read.pattern`, `read.glob`); any other
+`CLASS.field` key is a validation error, because the adapter would place its value at a
+top-level dotted path nothing in the canonical payload reads.
+
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
 ever executed, shell-expanded, or loaded as code.
@@ -151,7 +156,13 @@ or kind is an error), with `load_mapping`'s lookup rules (the repo-local file ov
 built-in with a warning; an explicit dir must be the repo's, the built-in's or trusted). A
 harness with no coverage table means nothing is known about it: the gap report claims
 nothing rather than claiming a gap. The gap report lists each provided path the table gives
-no way of honouring. Owner: `inventory.py`.
+no way of honouring. A symlink whose resolved target is already honoured content is a
+pointer, not a gap (issue #31): a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind -- `.claude/skills` -> `.agents/skills`
+when the table honours skills at `.agents/skills` -- is read by the harness through that
+other path, so it is not reported. A memory item is honoured only by resolving to a named
+memory file; a real second copy stays `unlinked-copy`, and a symlink to anything else stays
+a gap. Owner: `inventory.py`.
 
 `adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
 `CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp
@@ -222,7 +233,7 @@ polymorph env [--repo .] [--harness NAME] [--exec CMD]
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--i-really-want-this-in-the-repo-raw] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
-polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
                         # per-event/per-tool key tables, counts, sessions; tool events by default, sorted by ts, paired by id
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
@@ -236,6 +247,10 @@ polymorph capture --print-prompts        # prints the manual prompt kit, runs no
 
 Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
+`plugin_version` and `location` (issue #23) appear only when the calling plugin passed
+`--plugin-version`/`--location`: a value is kept verbatim when short and free of shell
+characters, becomes `<invalid>` when it is not, and a missing key reads as unmarked in the
+summary, which marks both the way it marks the schema.
 By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
 The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.
@@ -255,18 +270,23 @@ not guess and does not drop the hook silently. Each mismatch is *undecided* unti
 `.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
 
 ```toml
-schema = 1
+schema = 2
 
-[decisions.".agents/hooks/edit-check.sh:no-event"]   # id = <hook-script>:<kind>
+[decisions.".agents/hooks/edit-check.sh:post_tool:no-event"]   # id = <hook-script>:<event>:<kind>
 choice = "substitute:BeforeTool"
 date = "2026-10-30"
 note = "optional free text"
 ```
 
-Top-level keys are `schema` (must be 1) and `decisions`; unknown keys are errors. An entry has
+Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon and the kind. One decision covers every hook of that script that has
-that mismatch in that target.
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool` or
+`post_tool`), a colon and the kind. One decision covers every hook of that script on that
+event that has that mismatch in that target. (Schema 1 ids had no event: one script
+registered under several events produced the same id for each, and one decision answered
+every event it was registered under, with `generate` recording only the first
+application's weakening. The event dimension is the schema 2 break; rename entries and
+bump the schema line.)
 
 | Kind | Fires when | Choices |
 |---|---|---|
@@ -332,6 +352,8 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-invalid` | error | mapping fails `validate_mapping`, or cannot be loaded |
 | `mapping-unverified` | warning | mapping has no `verified` |
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
+| `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
+| `deny-unenforceable` | warning | an adapter mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a guard deny becomes a visible NOT-checked fault and the call proceeds (#35) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
 | `decision-undecided` | error | a hook needs an event, tool class or field the target lacks and no decision answers it |

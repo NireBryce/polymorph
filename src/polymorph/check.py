@@ -27,6 +27,8 @@ CODES = {
     "mapping-invalid": ("error", "A target's mapping fails validation or cannot be loaded."),
     "mapping-unverified": ("warning", "A mapping has no `verified` field."),
     "mapping-untested-live": ("note", "Block semantics and ask enforcement are unproven without a live test."),
+    "direct-ask-unenforceable": ("warning", "A direct-delivery mapping sets ask = false: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot observe the claim (issue #34)."),
+    "deny-unenforceable": ("warning", "An adapter-delivery mapping has no way to express a deny (no payload_out.deny; exit_2_blocks and json_answers both false), so a guard deny is a NOT-checked fault and the call proceeds (issue #35)."),
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
     "hook-not-executable": ("error", "A hook script is not executable."),
@@ -112,6 +114,18 @@ def check_mapping(repo: Path, name: str, m: Mapping) -> list[Finding]:
         out.append(_f("mapping-unverified", name, "mapping has no `verified` field; treat output as unverified",
                       _rel(repo, m.source)))
     out.append(_f("mapping-untested-live", name, "not tested live: block semantics, ask enforcement unproven"))
+    # claims a hook cannot observe or enforce, from the delivery the mapping chose (issues #34, #35)
+    if m.delivery == "direct" and m.capabilities.get("ask") is False:
+        out.append(_f("direct-ask-unenforceable", name,
+                      'delivery = "direct" runs the hook bare: no adapter runs, so nothing sets '
+                      "GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening "
+                      "works only in a script written to detect this harness itself", _rel(repo, m.source)))
+    if m.delivery == "adapter" and not m.payload_out.get("deny") \
+            and not m.capabilities.get("exit_2_blocks") and not m.capabilities.get("json_answers"):
+        out.append(_f("deny-unenforceable", name,
+                      "no payload_out.deny and both exit_2_blocks and json_answers are false: a guard "
+                      "deny becomes a visible NOT-checked fault and the call proceeds, so this mapping "
+                      "cannot enforce a block", _rel(repo, m.source)))
     return out
 
 

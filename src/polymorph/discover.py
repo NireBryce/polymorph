@@ -381,6 +381,19 @@ _RESPONSE_KEYS = ("tool_response", "toolResponse")
 _JSON_TYPES = ((bool, "boolean"), (int, "number"), (float, "number"), (str, "string"),
                (list, "array"), (dict, "object"), (type(None), "null"))
 
+# Plugin provenance (--plugin-version, --location), recorded verbatim alongside schema so a
+# line says which plugin generation wrote it and where its session runs (an event bus can be
+# server-global: one log holds lines from several working directories). A value is kept only
+# when short and free of shell characters; an odd one becomes INVALID, an absent one leaves
+# the key off, which reads as unmarked in the summary.
+_PROVENANCE_VALUE = re.compile(r"^[A-Za-z0-9_.:/@+-]{1,128}$")
+
+
+def _provenance_mark(value) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value if _PROVENANCE_VALUE.match(value) else INVALID
+
 
 # Values kept verbatim under redaction: structure, never user content. Everything
 # else (cwd, transcript_path, prompts, tool_input, tool_response, ...) is reduced
@@ -473,7 +486,8 @@ def _env_keys() -> list[str]:
     return sorted(k for k in os.environ if _ENV_NAME.search(k))
 
 
-def _record(text: str, redact: bool = True, env: bool = False) -> dict:
+def _record(text: str, redact: bool = True, env: bool = False,
+            plugin_version: str | None = None, location: str | None = None) -> dict:
     try:
         raw = json.loads(text)
     except (ValueError, RecursionError):
@@ -495,7 +509,7 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
             event = None if event is None else (_safe(event, _EVENT_RE) or INVALID)
             tool_name = None if tool_name is None else (_safe(tool_name) or INVALID)
             session_id = None if session_id is None else (session_id if _id_shaped(session_id) else INVALID)
-    return {
+    rec: dict = {
         "schema": LOG_SCHEMA,
         "ts": time.time(),
         "event": event,
@@ -507,6 +521,12 @@ def _record(text: str, redact: bool = True, env: bool = False) -> dict:
         "keys": keys,
         "tool_input_keys": tool_input_keys,
     }
+    pv, loc = _provenance_mark(plugin_version), _provenance_mark(location)
+    if pv:
+        rec["plugin_version"] = pv
+    if loc:
+        rec["location"] = loc
+    return rec
 
 
 def _log_error(out: str, what: str) -> None:
@@ -521,12 +541,13 @@ def _log_error(out: str, what: str) -> None:
         pass
 
 
-def log_stdin(out: str, stream=None, redact: bool = True, env: bool = False) -> None:
+def log_stdin(out: str, stream=None, redact: bool = True, env: bool = False,
+              plugin_version: str | None = None, location: str | None = None) -> None:
     """Append one record. Never raises, never writes stdout: must not affect the harness."""
     try:
         stream = stream or sys.stdin
         text = stream.read()
-        rec = _record(text, redact, env)
+        rec = _record(text, redact, env, plugin_version, location)
         try:
             is_obj = isinstance(json.loads(text), dict)
             why = "stdin JSON is not an object"
@@ -912,14 +933,26 @@ def summarize(log: str | Path, include=(), events=()) -> str:
             lines.append(f"  {k:<24} {b['n']:>5}  {ks}")
         return lines
 
-    marks: dict[str, int] = {}
-    for r in all_recs:
-        m = str(r["schema"]) if isinstance(r.get("schema"), int) else "unmarked"
-        marks[m] = marks.get(m, 0) + 1
+    def marks(key: str) -> dict[str, int]:
+        """Value counts for a provenance key; anything missing or odd-shaped reads as unmarked."""
+        counts: dict[str, int] = {}
+        for r in all_recs:
+            v = r.get(key)
+            ok = (isinstance(v, int) and not isinstance(v, bool)) if key == "schema" \
+                else (isinstance(v, str) and bool(v))
+            m = str(v) if ok else "unmarked"
+            counts[m] = counts.get(m, 0) + 1
+        return counts
+
+    def mark_line(label: str, key: str) -> str:
+        return label + " " + ", ".join(f"{m} ({n})" for m, n in sorted(marks(key).items()))
+
     out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}"]
     if broken:
         out.append(f"unparseable lines: {broken} (truncated or corrupt; not counted as payloads)")
-    out.append("log line schema: " + ", ".join(f"{m} ({n})" for m, n in sorted(marks.items())))
+    out.append(mark_line("log line schema:", "schema"))
+    out.append(mark_line("plugin versions:", "plugin_version"))
+    out.append(mark_line("locations:", "location"))
     if hidden:
         out.append("hidden: " + ", ".join(f"{k} {n}" for k, n in
                                           sorted(hidden.items(), key=lambda kv: (-kv[1], kv[0])))

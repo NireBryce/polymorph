@@ -48,7 +48,7 @@ class Base(unittest.TestCase):
         (d / "gemini.toml").write_text(text.replace('post_tool = "AfterTool"\n', ""))
 
     def decide(self, **entries):
-        lines = ["schema = 1", ""]
+        lines = ["schema = 2", ""]
         for did, (choice, extra) in entries.items():
             lines += [f'[decisions."{did.replace("__", ":")}"]', f'choice = "{choice}"', 'date = "2026-10-30"', *extra, ""]
         d = self.repo / ".polymorph/basecamp/decisions"
@@ -72,9 +72,9 @@ class Base(unittest.TestCase):
         return self.repo / ".gemini/settings.json"
 
 
-M = ".agents/hooks/mcp-guard.sh:no-tool-class"
-R = ".agents/hooks/read-guard.sh:missing-field"
-P = ".agents/hooks/post-edit.sh:no-event"
+M = ".agents/hooks/mcp-guard.sh:pre_tool:no-tool-class"
+R = ".agents/hooks/read-guard.sh:pre_tool:missing-field"
+P = ".agents/hooks/post-edit.sh:post_tool:no-event"
 
 
 class UndecidedTests(Base):
@@ -155,10 +155,10 @@ class DecidedTests(Base):
 
     def test_stale_decision_warns(self):
         self.decide(**{M.replace(":", "__"): ("skip", []), R.replace(":", "__"): ("skip", []),
-                       ".agents/hooks/gone.sh__no-event": ("skip", [])})
+                       ".agents/hooks/gone.sh__pre_tool__no-event": ("skip", [])})
         rc, out, _ = self.gen()
         self.assertEqual(rc, 0)
-        self.assertIn("stale decision .agents/hooks/gone.sh:no-event", out)
+        self.assertIn("stale decision .agents/hooks/gone.sh:pre_tool:no-event", out)
         self.assertIn(("decision-stale", "warning"), self.codes())
 
     def test_decision_for_event_that_exists_is_stale(self):
@@ -173,6 +173,36 @@ class DecidedTests(Base):
         self.assertNotIn("question:", out)
 
 
+class SharedScriptTests(Base):
+    def test_one_decision_per_event_for_a_shared_script(self):
+        """Issue #37: a script registered under two events gets one mismatch (and one
+        answer) per event. With the event-less id both fired as the same id and the
+        second application was deduped away: its substitution was recorded with no
+        weakening and no per-event choice was possible."""
+        s = self.repo / ".agents/hooks/both.sh"
+        s.write_text("#!/bin/sh\n")
+        s.chmod(0o755)
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir(exist_ok=True)
+        (d / "gemini.toml").write_text((BUILTIN_DIR / "gemini.toml").read_text()
+                                       .replace('pre_tool = "BeforeTool"\n', "")
+                                       .replace('post_tool = "AfterTool"\n', ""))
+        (self.repo / ".agents/settings.json").write_text(json.dumps({"hooks": {
+            "PreToolUse": [hook("Bash", "both.sh")],
+            "PostToolUse": [hook("Edit", "both.sh")],
+        }}))
+        self.decide(**{".agents/hooks/both.sh__pre_tool__no-event": ("substitute:SessionStart", []),
+                       ".agents/hooks/both.sh__post_tool__no-event": ("skip", [])})
+        rc, out, _ = self.gen()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("weakened: .agents/hooks/both.sh:pre_tool:no-event = substitute:SessionStart", out)
+        self.assertIn("decided: .agents/hooks/both.sh:post_tool:no-event = skip", out)
+        doc = json.loads(self.out_file.read_text())
+        self.assertNotIn("PostToolUse", json.dumps(doc["hooks"]))   # skip drops the post registration
+        self.assertIn("both.sh", json.dumps(doc["hooks"]))          # substitute keeps the pre one
+        self.assertIn(("decision-weakens-guard", "warning"), self.codes())
+
+
 class InvalidTests(Base):
     def write(self, text):
         d = self.repo / ".polymorph/basecamp/decisions"
@@ -180,7 +210,7 @@ class InvalidTests(Base):
         (d / "gemini.toml").write_text(text)
 
     def test_invalid_file_is_error_in_generate_and_check(self):
-        self.write("schema = 1\n[decisions.\"%s\"]\nchoice = \"run-empty\"\ndate = \"2026-10-30\"\n" % M)  # not allowed for no-tool-class
+        self.write("schema = 2\n[decisions.\"%s\"]\nchoice = \"run-empty\"\ndate = \"2026-10-30\"\n" % M)  # not allowed for no-tool-class
         rc, _, err = self.gen()
         self.assertEqual(rc, 2)
         self.assertIn("choice", err)
@@ -191,19 +221,23 @@ class InvalidTests(Base):
         def errs(raw):
             return parse_decisions(raw, NATIVE)[1]
         ok = {"choice": "skip", "date": "2026-10-30"}
-        self.assertEqual(errs({"schema": 1, "decisions": {P: ok}}), [])
-        self.assertTrue(errs({"schema": 2, "decisions": {}}))
-        self.assertTrue(errs({"schema": 1, "extra": 1}))
-        self.assertTrue(errs({"schema": 1, "decisions": {"nokind": ok}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {"a.sh:other": ok}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "choice": "run-empty"}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "choice": "substitute:Nope"}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "choice": "substitute:"}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "choice": "skip:BeforeTool"}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "date": "yesterday"}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "note": 3}}}))
-        self.assertTrue(errs({"schema": 1, "decisions": {P: {**ok, "other": 1}}}))
-        self.assertEqual(errs({"schema": 1, "decisions": {P: {**ok, "choice": "substitute:BeforeTool", "note": "x"}}}), [])
+        self.assertEqual(errs({"schema": 2, "decisions": {P: ok}}), [])
+        self.assertTrue(errs({"schema": 3, "decisions": {}}))
+        self.assertTrue(errs({"schema": 1, "decisions": {}}))   # schema 1 ids had no event
+        self.assertTrue(errs({"schema": 2, "extra": 1}))
+        self.assertTrue(errs({"schema": 2, "decisions": {"nokind": ok}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {"a.sh:other": ok}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {"a.sh:no-event": ok}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {"a.sh:bogus_event:no-event": ok}}))
+        self.assertEqual(errs({"schema": 2, "decisions": {"a.sh:pre_tool:no-event": ok}}), [])
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "choice": "run-empty"}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "choice": "substitute:Nope"}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "choice": "substitute:"}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "choice": "skip:BeforeTool"}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "date": "yesterday"}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "note": 3}}}))
+        self.assertTrue(errs({"schema": 2, "decisions": {P: {**ok, "other": 1}}}))
+        self.assertEqual(errs({"schema": 2, "decisions": {P: {**ok, "choice": "substitute:BeforeTool", "note": "x"}}}), [])
 
     def test_unparsable_toml(self):
         self.write("schema = = 1\n")

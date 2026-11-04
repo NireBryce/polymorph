@@ -96,22 +96,27 @@ def _provided(m: Mapping, cls: str) -> bool:
 
 
 def hook_mismatches(h: Hook, m: Mapping) -> list[Mismatch]:
-    """Everything the target lacks that this hook needs, before any decision."""
+    """Everything the target lacks that this hook needs, before any decision.
+
+    The id carries the hook's canonical event: one script registered under several events
+    gets one mismatch per event, and one decision answers only its own (issue #37).
+    """
     out: list[Mismatch] = []
     base = dict(script=h.script, event=h.event, classes=h.classes)
     if m.events.get(h.event) is None:
-        out.append(Mismatch(f"{h.script}:no-event", "no-event", detail=f"{m.name} has no {h.event} event",
+        out.append(Mismatch(f"{h.script}:{h.event}:no-event", "no-event",
+                            detail=f"{m.name} has no {h.event} event",
                             options=options_for("no-event"), **base))
     _, missing = _matcher(h, m)
     if missing:
-        out.append(Mismatch(f"{h.script}:no-tool-class", "no-tool-class",
+        out.append(Mismatch(f"{h.script}:{h.event}:no-tool-class", "no-tool-class",
                             detail=f"{m.name} has no tool for class(es) {', '.join(missing)}",
                             options=options_for("no-tool-class"), **base))
     if m.delivery != "direct":  # direct delivery hands the hook the Claude payload unchanged
         lacking = [c for c in h.classes if c in CLASS_FIELDS and c in m.tools and not _provided(m, c)]
         if lacking:
             fields = ", ".join(CLASS_FIELDS[c][0] if len(CLASS_FIELDS[c]) == 1 else "read.*" for c in lacking)
-            out.append(Mismatch(f"{h.script}:missing-field", "missing-field",
+            out.append(Mismatch(f"{h.script}:{h.event}:missing-field", "missing-field",
                                 detail=f"{m.name} payload_in does not map {fields}, which a {'/'.join(lacking)} hook reads",
                                 options=options_for("missing-field"), **base))
     return out

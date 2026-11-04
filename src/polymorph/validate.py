@@ -164,9 +164,15 @@ def validate_mapping(src: Any) -> list[str]:
                         errs.append(f"payload_in.extractor {v!r} not in registry {EXTRACTORS}")
                     continue
                 base = k.split(".", 1)
-                if len(base) == 2 and base[0] not in CLASSES:
-                    errs.append(f"payload_in key {k!r}: unknown class {base[0]!r}")
-                elif len(base) == 1 and k not in ("tool_name", "cwd", "session_id", "tool_response", "event"):
+                if len(base) == 2:
+                    # the adapter places a classed key via CANON_PATHS; an unknown one would
+                    # land at a top-level dotted path nothing in the canonical payload reads
+                    if base[0] not in CLASSES:
+                        errs.append(f"payload_in key {k!r}: unknown class {base[0]!r}")
+                    elif k not in CANON_PATHS:
+                        known = ", ".join(sorted(p for p in CANON_PATHS if "." in p))
+                        errs.append(f"payload_in key {k!r} is not a canonical field (known: {known})")
+                elif k not in ("tool_name", "cwd", "session_id", "tool_response", "event"):
                     errs.append(f"payload_in: unknown canonical key {k!r}")
                 if not isinstance(v, str) or not _PATH.match(v):
                     errs.append(f"payload_in.{k}: must be a dotted path, got {v!r}")

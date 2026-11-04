@@ -142,6 +142,49 @@ class GapTests(TempRepoTest):
         self.inv = inventory.read_inventory(self.repo)
         self.assertIn(("memory", "AGENTS.md", "points-elsewhere"), self.gaps_for("claude"))
 
+    def test_a_pointer_to_honoured_content_is_not_a_gap(self):
+        """Issue #31: .claude/skills -> .agents/skills holds bytes the harness honours via
+        .agents/skills, and CLAUDE.md -> AGENTS.md bytes honoured as memory: pointers,
+        not gaps, even for a kind the harness has no path of its own for."""
+        (self.repo / "CLAUDE.md").unlink()
+        (self.repo / "CLAUDE.md").symlink_to("AGENTS.md")
+        shutil.rmtree(self.repo / ".claude/rules")
+        (self.repo / ".claude/skills").symlink_to("../.agents/skills")
+        self.inv = inventory.read_inventory(self.repo)
+        got = self.gaps_for("zcode")
+        self.assertNotIn(("claude_dir", ".claude/skills", "unsupported"), got)
+        self.assertNotIn("CLAUDE.md", [p for _, p, _ in got])
+        # what the harness genuinely does not honour is still named
+        self.assertIn(("claude_dir", ".claude/settings.json", "unsupported"), got)
+        self.assertIn(("rules", ".agents/rules/extra.md", "unsupported"), got)
+
+    def test_a_rules_child_symlinked_into_the_honoured_rules_dir_is_a_pointer(self):
+        table = self.repo / ".polymorph/basecamp/coverage"
+        table.mkdir(parents=True)
+        (table / "picker.toml").write_text(
+            'schema = 1\nname = "picker"\n\n[inventory]\nrules = ".agents/rules"\n')
+        (self.repo / ".claude/rules/keep.md").unlink()
+        (self.repo / ".claude/rules/keep.md").symlink_to("../../.agents/rules/extra.md")
+        self.inv = inventory.read_inventory(self.repo)
+        self.assertEqual([g for g in self.gaps_for("picker") if g[0] == "rules"], [])
+
+    def test_a_real_second_copy_next_to_an_honoured_one_is_still_drift(self):
+        """The pointer rule needs a symlink: a real file with the same content stays a gap."""
+        table = self.repo / ".polymorph/basecamp/coverage"
+        table.mkdir(parents=True)
+        (table / "picker.toml").write_text(
+            'schema = 1\nname = "picker"\n\n[inventory]\nrules = ".agents/rules"\n')
+        self.inv = inventory.read_inventory(self.repo)
+        self.assertIn(("rules", ".claude/rules/keep.md", "unlinked-copy"), self.gaps_for("picker"))
+
+    def test_a_memory_symlink_pointing_outside_honoured_memory_is_a_gap(self):
+        (self.repo / "CLAUDE.md").unlink()
+        (self.repo / "CLAUDE.md").symlink_to(".agents/skills/alpha")
+        self.inv = inventory.read_inventory(self.repo)
+        got = self.gaps_for("zcode")
+        # the target is honoured only as skills content, not as memory: the gap stays
+        self.assertIn(("memory", "CLAUDE.md", "unlinked-copy"), got)
+
     def test_fix_text_names_the_link(self):
         (self.repo / "CLAUDE.md").unlink()
         self.inv = inventory.read_inventory(self.repo)

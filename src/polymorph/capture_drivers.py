@@ -17,7 +17,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import discover
+from . import __version__, discover
 from .resources import DATA_DIR
 
 PACKAGE_PARENT = str(Path(__file__).resolve().parent.parent)   # the directory holding polymorph/
@@ -74,7 +74,9 @@ class OpenCodeDriver(Driver):
                 "--out", str(self.log_path(scratch).resolve())]
         consts = (f"const POLYMORPH_CMD = {json.dumps(sys.executable)}\n"
                   f"const POLYMORPH_ARGS = {json.dumps(args)}\n"
-                  f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': PACKAGE_PARENT})}")
+                  f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': PACKAGE_PARENT})}\n"
+                  # provenance: the plugin sends it with every line (--plugin-version)
+                  f"const PLUGIN_VERSION = {json.dumps(__version__)}")
         return template.replace(_CONSTANTS_MARK, consts)
 
     def install(self, scratch: Path, full: bool) -> None:

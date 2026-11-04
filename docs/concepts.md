@@ -129,7 +129,13 @@ The adapter only reports these; **the hook script decides what to do with them.*
 canonical example: when `GUARD_ASK_ENFORCED=0` a well-written guard should answer `deny`
 instead of `ask`, because the harness would turn `ask` into allow. polymorph does not
 rewrite the answer for you. Hooks run `direct` get no variables from polymorph, since no
-adapter runs; a script that needs them must default sensibly when they are unset.
+adapter runs; a script that needs them must default sensibly when they are unset. A direct
+mapping that also sets `ask = false` is therefore flagged by `check` as
+`direct-ask-unenforceable`: the hardening the flag promises is unobservable by the hook,
+which can only apply it if it was written for this harness and detects it itself.
+An adapter mapping that cannot express a block at all (no `payload_out.deny`, and
+`exit_2_blocks` and `json_answers` both false) is flagged as `deny-unenforceable`: a deny
+would become a visible NOT-checked fault and the call would proceed.
 
 Capabilities in a mapping are claims. Only a live test establishes them; see
 [Limits](limits.md).
@@ -159,7 +165,9 @@ Harnesses differ: one may have no post-tool event, no tool for a class, or no pa
 a hook reads. polymorph does not guess a substitute and does not drop the hook quietly.
 `generate` stops for that target (exit 3), writes nothing for it, and prints each item as a
 question with its options. The answer goes in `.polymorph/basecamp/decisions/NAME.toml`, keyed
-by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a choice you
+by `<hook-script>:<event>:<kind>` -- the hook's canonical event is part of the key, so a
+script registered under several events is decided per event -- with a `choice` and a `date`.
+Skipping is always a choice you
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
 event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
 
@@ -174,6 +182,11 @@ the provided paths the harness does not read, which it will silently ignore even
 equipping: kinds it never reads (`unsupported`), and paths it reads that are missing
 (`no-link`), a second real copy (`unlinked-copy`, the drift between `AGENTS.md` and
 `CLAUDE.md`, or `.agents/` and `.claude/`) or a symlink to somewhere else (`points-elsewhere`).
+A symlink whose resolved target is already honoured content is a pointer, not a gap:
+`.claude/skills` -> `.agents/skills` when the table honours skills at `.agents/skills`, or
+`CLAUDE.md` -> `AGENTS.md` when the table honours `AGENTS.md` -- the harness reads those
+bytes through the other path, so the report leaves them out. A real second copy stays a
+gap: the pointer rule needs a symlink.
 
 What a harness honours is the **coverage table**, `coverage/NAME.toml` -- data with the
 same character as the mappings, not the mapping's `[capabilities]` flags (those say how a

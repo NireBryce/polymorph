@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from polymorph import capture, capture_drivers
+from polymorph import __version__, capture, capture_drivers
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = str(ROOT / "src")
@@ -562,6 +562,19 @@ class Drivers(unittest.TestCase):
         self.assertIn("--full", args)   # install(full=True) bakes the flag: the plugin logs raw
         self.assertFalse([a for a in args if a.startswith("PYTHONPATH=")])
         self.assertIn("env: POLYMORPH_ENV", js)
+
+    def test_rendered_plugin_sends_provenance(self):
+        # the plugin stamps every line with its own generation and ctx.location, so a
+        # server-global log can be split by origin (issue #23)
+        scratch = Path(tempfile.mkdtemp()).resolve()
+        d = capture_drivers.DRIVERS["opencode"]
+        d.install(scratch, full=False)
+        js = (scratch / ".opencode/plugins/polymorph-discovery/index.js").read_text()
+        d.remove(scratch)
+        self.assertIn("setProvenance(ctx)", js)
+        self.assertIn("const PLUGIN_VERSION = " + json.dumps(__version__), js)
+        self.assertIn("spawn(POLYMORPH_CMD, [...POLYMORPH_ARGS, ...PROVENANCE_ARGS]", js)
+        self.assertIn('args.push("--location=" + ctx.location)', js)
 
     def test_plugin_tool_hook_registration_cannot_throw_out_of_setup(self):
         # node is not available to the tests, so this reads the code: every ctx.tool.hook call

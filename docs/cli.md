@@ -45,7 +45,9 @@ lines:
 payload field (`missing-field`) that a hook needs, `generate` writes nothing for that target,
 prints one `question:` block per item (id, hook, problem, options, default `skip`) and exits
 `3` after handling the other targets. Answer in `.polymorph/basecamp/decisions/NAME.toml` and
-run again; it never prompts. `--check` also exits 3 for undecided items. Format and choices:
+run again; it never prompts. `--check` also exits 3 for undecided items. A decision id is
+`<hook-script>:<event>:<kind>` (the hook's canonical event: a script registered under two
+events is decided per event). Format and choices:
 [SPEC, Decisions](SPEC.md#decisions).
 
 Other top-level keys already in the target file are kept; the whole `hooks` key is
@@ -79,6 +81,8 @@ grouped by target, then a summary line.
 | `mapping-invalid` | error | Mapping fails validation or cannot be loaded. |
 | `mapping-unverified` | warning | Mapping has no `verified` field. |
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
+| `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
+| `deny-unenforceable` | warning | An `adapter` mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a deny becomes a NOT-checked fault and the call proceeds. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
 | `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
@@ -163,6 +167,12 @@ them resolves to it, directly or through a symlink; otherwise it is a gap with a
 | `no-link` | the harness reads a path that does not exist (Claude Code reads `CLAUDE.md`, `.claude/skills`, `.claude/rules`; the repo has `AGENTS.md`, `.agents/skills`, `.agents/rules` and no link) |
 | `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
 | `points-elsewhere` | the harness reads a symlink that leads somewhere else |
+
+A symlink whose resolved target is already honoured content is a **pointer**, not a gap,
+and is left out of the report: a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind (`.claude/skills` -> `.agents/skills` when
+the table honours skills there). A real second copy is never a pointer: that is
+`unlinked-copy` drift.
 
 For `no-link` the `fix` text is the command that makes the link
 (`polymorph equip --harness claude links CLAUDE.md -> AGENTS.md`); `equip` and `manage adopt`
@@ -379,7 +389,7 @@ that ran `init` and the absolute log path, so it works from any directory.
 ### `discover log`
 
 ```
-polymorph discover log [--full] [--env-be-very-careful] --out FILE
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE
 ```
 
 The logger hook itself: reads one payload on stdin and appends one JSON line to FILE. It
@@ -387,14 +397,22 @@ The logger hook itself: reads one payload on stdin and appends one JSON line to 
 non-JSON input, so it can never block the harness. Failures go to `NAME.errors.jsonl`
 beside the log when that folder is writable.
 
+`--plugin-version` and `--location` are provenance for the calling plugin: which plugin
+generation wrote the line, and where its session runs (an event bus can be server-global,
+so one log can hold lines from several working directories). A value is recorded verbatim
+when it is short and free of shell characters, replaced by `<invalid>` when it is not, and
+the key is left off when the caller did not pass it; `discover summary` marks all three
+cases the way it marks the schema.
+
 ### `discover summary`
 
 ```
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
 ```
 
-Prints payload count, non-object lines and session count, the log-line schema marks, then
-per-event top-level keys and per-tool `tool_input` keys, each with counts. Names and counts only.
+Prints payload count, non-object lines and session count, the log-line schema marks, the
+plugin-version and location marks, then per-event top-level keys and per-tool `tool_input`
+keys, each with counts. Names and counts only.
 
 By default only **tool events** (lines with a tool name) are used, so a flood of session
 events from a server-wide bus does not drown them; the hidden event names and counts are

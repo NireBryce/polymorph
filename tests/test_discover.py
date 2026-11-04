@@ -86,6 +86,34 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(r["tool_input_keys"], ["command", "timeout"])
         self.assertIn("ts", r)
 
+    def test_log_records_plugin_provenance(self):
+        out = self.d / "l.jsonl"
+        payload = {"tool_name": "Bash", "tool_input": {"command": "ls"}}
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="2.0.32", location="/tmp/pm-opencode")
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)))
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="bad version; rm -rf", location="x")
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="   ", location=None)
+        lines = [json.loads(l) for l in out.read_text().splitlines()]
+        self.assertEqual(lines[0]["plugin_version"], "2.0.32")
+        self.assertEqual(lines[0]["location"], "/tmp/pm-opencode")
+        self.assertNotIn("plugin_version", lines[1])
+        self.assertNotIn("location", lines[1])
+        self.assertEqual(lines[2]["plugin_version"], "<invalid>")
+        self.assertEqual(lines[2]["location"], "x")
+        self.assertNotIn("plugin_version", lines[3])
+
+    def test_log_cli_provenance_flags(self):
+        out = self.d / "l.jsonl"
+        r = run_cli(["discover", "log", "--out", str(out), "--plugin-version", "1.2.3",
+                     "--location", "/tmp/scratch"], "{}")
+        self.assertEqual((r.returncode, r.stdout), (0, ""), r.stderr)
+        rec = json.loads(out.read_text())
+        self.assertEqual(rec["plugin_version"], "1.2.3")
+        self.assertEqual(rec["location"], "/tmp/scratch")
+
     def _log(self, payloads):
         f = self.d / "l.jsonl"
         for p in payloads:
@@ -252,6 +280,23 @@ class SummaryTest(unittest.TestCase):
             r = run_cli(["discover", "summary", str(f)])
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("per tool", r.stdout)
+
+    def test_summary_marks_provenance_like_schema(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO("{}"), plugin_version="2.0.32", location="/tmp/a")
+            discover.log_stdin(str(f), io.StringIO("{}"), plugin_version="2.0.32", location="/tmp/b")
+            discover.log_stdin(str(f), io.StringIO("{}"))
+            out = discover.summarize(f)
+            self.assertIn("plugin versions: 2.0.32 (2), unmarked (1)", out)
+            self.assertIn("locations: /tmp/a (1), /tmp/b (1), unmarked (1)", out)
+            # a log from a plugin too old to send them reads as unmarked, not an error
+            old = Path(d) / "old.jsonl"
+            old.write_text(json.dumps({"schema": 1, "ts": 1.0, "raw": {"tool_name": "Bash"}}) + "\n")
+            out = discover.summarize(old)
+            self.assertIn("log line schema: 1 (1)", out)
+            self.assertIn("plugin versions: unmarked (1)", out)
+            self.assertIn("locations: unmarked (1)", out)
 
 
 class RedactTest(unittest.TestCase):

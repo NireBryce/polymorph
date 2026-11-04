@@ -26,7 +26,7 @@ polymorph capture [\-\-harness HARNESS] [\-\-yes] [\-\-keep] [\-\-steps STEP] [\
 .br
 polymorph discover init \-\-harness HARNESS \-\-config\-path CONFIG_PATH [\-\-event\-name EVENT_NAME] [\-\-matcher MATCHER] [\-\-shape {claude\-settings,claude\-like}] [\-\-log\-dir LOG_DIR] [\-\-env\-be\-very\-careful] [\-\-full] [\-\-i\-really\-want\-this\-in\-the\-repo\-raw]
 .br
-polymorph discover log \-\-out OUT [\-\-env\-be\-very\-careful] [\-\-full]
+polymorph discover log \-\-out OUT [\-\-env\-be\-very\-careful] [\-\-full] [\-\-plugin\-version V] [\-\-location LOC]
 .br
 polymorph discover reload\-check \-\-config\-path CONFIG_PATH \-\-scratch\-log SCRATCH_LOG [\-\-finish] [\-\-event\-name EVENT_NAME] [\-\-matcher MATCHER] [\-\-shape {claude\-settings,claude\-like}]
 .br
@@ -270,7 +270,7 @@ required with \-\-full: accept a plain\-text raw log (then type yes when asked)
 Append stdin to a JSONL log (always exits 0, silent).
 .PP
 .nf
-polymorph discover log \-\-out OUT [\-\-env\-be\-very\-careful] [\-\-full]
+polymorph discover log \-\-out OUT [\-\-env\-be\-very\-careful] [\-\-full] [\-\-plugin\-version V] [\-\-location LOC]
 .fi
 .TP
 .B \-\-out OUT
@@ -281,6 +281,12 @@ log names (never values) of PROJECT/WORKSPACE/HARNESS\-like env vars
 .TP
 .B \-\-full
 log raw payloads; default replaces values with {type, length}
+.TP
+.B \-\-plugin\-version V
+provenance: the calling plugin's version; kept verbatim when short and shell\-free, else <invalid>
+.TP
+.B \-\-location LOC
+provenance: where the calling session runs (e.g. ctx.location); same rule
 .SS polymorph discover reload\-check
 Test whether a running harness re\-reads hook edits.
 .PP

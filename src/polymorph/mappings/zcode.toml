@@ -8,7 +8,12 @@
 # signal, which this schema has no key for -- hooks detect it themselves.
 #
 # ask=false: ZCode treats permissionDecision "ask" as allow (nixos-configs
-# #448/#458); hooks read GUARD_ASK_ENFORCED and harden to deny.
+# #448/#458). The hardening can only live in the hook, and this mapping is
+# delivery = "direct": no adapter runs, so nothing sets GUARD_ASK_ENFORCED and
+# a shared guard script cannot read it. Only a hook written for zcode itself
+# (detecting hookEventName/transcriptPath, as the nixos-configs ones do) can
+# default correctly. `manage check` reports this shape as
+# direct-ask-unenforceable.
 #
 # `verified` covers only what those hook files state (payload shape, ask-as-allow,
 # config layout). NOT verified by them, so not claimed: rewrites_input,

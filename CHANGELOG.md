@@ -189,3 +189,30 @@ First state of the project. Python 3.11+, standard library only.
   now a command group -- `polymorph manage generate|check|validate|conformance|adopt`
   (the old top-level names are gone); `equip`, `inventory`, `env`, `adapter`,
   `discover` and `capture` stay top-level.
+- **Decision ids gain the event dimension (breaking):** a decision id is now
+  `<hook-script>:<event>:<kind>` and the decisions file schema is 2. Schema 1 ids had no
+  event, so one script registered under two events fired the same mismatch id twice and a
+  single decision answered both, with `generate` recording only the first application and
+  its weakening. Existing decision files must move to schema 2 and rename their entries.
+- **`check` flags mappings whose claims are unenforceable:** `direct-ask-unenforceable`
+  (warning) for `delivery = "direct"` with `ask = false` -- direct hooks run bare, so
+  nothing sets `GUARD_ASK_ENFORCED` and the hardening claim is unobservable by the hook
+  (the shipped `zcode` mapping is this shape and now warns) -- and `deny-unenforceable`
+  (warning) for an adapter mapping with no `payload_out.deny` and `exit_2_blocks` and
+  `json_answers` both false, where a guard deny becomes a visible NOT-checked fault and
+  the call proceeds.
+- **Classed `payload_in` keys must be canonical (breaking):** a `payload_in` key with a
+  tool-class prefix is accepted only when it is one of the six canonical fields
+  (`shell.command`, `edit.file_path`, `read.file_path`, `read.path`, `read.pattern`,
+  `read.glob`); anything else was stored by the adapter at a top-level dotted path nothing
+  reads. Typos such as `shell.cmd` and invented `mcp.*` keys are now validation errors.
+- **Gap report drops pointers:** a symlink whose resolved target is already honoured
+  content -- a memory file the coverage table names, or a path inside a directory it
+  honours for some kind (`.claude/skills` -> `.agents/skills`) -- is no longer reported as
+  a gap the harness will silently ignore; the harness reads those bytes through the other
+  path. A real second copy is still `unlinked-copy` drift.
+- **Discover provenance:** `discover log` takes `--plugin-version` and `--location` and
+  records them verbatim alongside `schema` (kept only when short and shell-free, else
+  `<invalid>`; absent reads as unmarked), and `discover summary` marks both the way it
+  marks the schema. The OpenCode discovery plugin sends its own generation (the polymorph
+  version `capture` bakes in) and `ctx.location`, read defensively.
