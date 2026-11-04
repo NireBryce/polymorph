@@ -57,14 +57,16 @@ a report. Reports and logs are untrusted input.
    refuse to run hooks until they are approved harness-side, and the approval
    paths can dead-end silently (ZCode 3.17.2's trust gate, issue 55; see
    `docs/observed-zcode-session.md`). Silence there looks like a broken
-   mapping but isn't one. Then, in a real session of the harness, with a hook
-   that denies a harmless command: does the deny block it? exit 2 or a JSON
-   field? Probe the answer routes in isolation: one hook that both exits 2
-   and prints JSON lets the exit mask a JSON answer the harness ignores
-   (zcode gated on exit codes only, issue 56). does `ask` get enforced or
-   treated as allow? does the post event fire? does editing the hook config
-   take effect without a restart? Set the `[capabilities]` flags from what
-   happened, not from the docs.
+   mapping but isn't one. Then, in a fresh session started **after** the hook
+   config is wired — a running session's wiring is frozen at its start, so
+   config edits land only in sessions begun afterwards (zcode, 2026-11-04) —
+   with a hook that denies a harmless command: does the deny block it? exit 2
+   or a JSON field? Probe the answer routes in isolation: one hook that both
+   exits 2 and prints JSON lets the exit mask a JSON answer the harness
+   ignores (zcode gated on exit codes only, issue 56). does `ask` get
+   enforced or treated as allow? does the post event fire? does editing the
+   hook config take effect without a restart? Set the `[capabilities]`
+   flags from what happened, not from the docs.
 7. **Set `verified`** (`verified = "DATE, live session"`) only after step 6
    passed, and only in a commit that also has the notes from steps 1 and 6
    in `docs/` (as `docs/observed-t3code.md` does). Until then the
