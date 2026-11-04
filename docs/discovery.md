@@ -161,7 +161,9 @@ How to read it:
   objects, with values hidden. Enum-valued keys cannot be told apart from other strings
   once values are redacted, so they are not listed.
 - All capabilities are `false`, because payloads cannot tell you whether exit 2 blocks or
-  `ask` is enforced. Find out by testing, then change them. See
+  `ask` is enforced. Find out by testing, then change them — and first confirm the hooks run
+  at all: a harness may hold them behind an approval gate and run nothing (ZCode 3.17.2's
+  trust gate does; see [the observed ZCode session](observed-zcode-session.md)). See
   [Writing a mapping](writing-a-mapping.md).
 - No `verified` field. Keep it that way until someone has run the mapping in a live
   harness, and then write what they checked.
