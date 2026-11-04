@@ -223,3 +223,7 @@ First state of the project. Python 3.11+, standard library only.
   missing entry. `validate` now requires the explicit `exit = 2`, so the adapter (which
   re-validates at load) refuses such a mapping with a visible NOT-checked fault instead.
   `allow`, `warn` and `remind` entries are unconstrained.
+- **Provenance values match as a whole string (found in review):** a trailing newline
+  slipped past the `--plugin-version`/`--location` safe-value pattern (a `$` anchor also
+  matches before one); the check now uses `fullmatch`, and such a value records as
+  `<invalid>` like any other unsafe value.

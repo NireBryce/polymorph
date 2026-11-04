@@ -105,6 +105,13 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(lines[2]["location"], "x")
         self.assertNotIn("plugin_version", lines[3])
 
+    def test_provenance_value_must_match_as_a_whole(self):
+        # a trailing newline used to slip past the pattern ($ matches before one):
+        # a value that is not one clean shell-free token becomes <invalid>
+        rec = discover._record("{}", plugin_version="abc\n", location="/tmp/a\n")
+        self.assertEqual(rec["plugin_version"], "<invalid>")
+        self.assertEqual(rec["location"], "<invalid>")
+
     def test_log_cli_provenance_flags(self):
         out = self.d / "l.jsonl"
         r = run_cli(["discover", "log", "--out", str(out), "--plugin-version", "1.2.3",
