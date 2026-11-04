@@ -227,3 +227,13 @@ First state of the project. Python 3.11+, standard library only.
   slipped past the `--plugin-version`/`--location` safe-value pattern (a `$` anchor also
   matches before one); the check now uses `fullmatch`, and such a value records as
   `<invalid>` like any other unsafe value.
+- **`check` flags a deny route on an unhonoured exit 2 (issue #49):** `exit2-unhonoured`
+  (warning) when an adapter mapping's `payload_out.deny`/`.ask` entry -- which must render
+  as exit 2 -- is paired with `exit_2_blocks = false`: the route relies on the one code the
+  mapping itself says does not block, so the call would proceed. The shipped mappings are
+  all coherent and do not warn.
+- **Discovery name and id patterns match the whole string (issue #50):** `_safe` and
+  `_id_shaped` (and the call/message-id picker behind pairing) used `$`-anchored `re.match`,
+  which also matches before a trailing newline; a value ending in one was kept verbatim as
+  a name or id. `fullmatch` now, so it reduces to `<invalid>` or a `{type, length}`
+  descriptor like any other unsafe value.

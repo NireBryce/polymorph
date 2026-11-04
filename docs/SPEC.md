@@ -367,6 +367,7 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
 | `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
 | `deny-unenforceable` | warning | an adapter mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a guard deny becomes a visible NOT-checked fault and the call proceeds (#35) |
+| `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
 | `decision-undecided` | error | a hook needs an event, tool class or field the target lacks and no decision answers it |

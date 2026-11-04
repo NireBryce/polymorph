@@ -153,6 +153,35 @@ class CheckTest(unittest.TestCase):
         fs = [f for f in check.run_check(self.repo) if f.code == "deny-unenforceable"]
         self.assertEqual(fs, [])
 
+    def test_a_deny_route_on_an_exit_the_mapping_calls_non_blocking_is_flagged(self):
+        # issue #49: gemini's deny/ask entries render as exit 2, the only code
+        # validate allows; pairing that route with exit_2_blocks = false means the
+        # route relies on the one code the mapping itself says does not block
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir(exist_ok=True)
+        base = (Path(check.BUILTIN_DIR) / "gemini.toml").read_text()
+        (d / "gemini.toml").write_text(base.replace("exit_2_blocks = true", "exit_2_blocks = false"))
+        fs = [f for f in check.run_check(self.repo, harnesses=["gemini"])
+              if f.code == "exit2-unhonoured"]
+        self.assertTrue(fs)
+        self.assertTrue(all(f.severity == "warning" and f.target == "gemini" for f in fs))
+        self.assertIn("exit_2_blocks", fs[0].message)
+        # the shipped gemini (exit_2_blocks = true, deny exit 2) is coherent, and a
+        # mapping with no deny/ask entry has no such route to be incoherent about
+        (d / "gemini.toml").write_text(base)
+        self.assertEqual([f for f in check.run_check(self.repo, harnesses=["gemini"])
+                          if f.code == "exit2-unhonoured"], [])
+        (d / "gemini.toml").write_text(base.replace('deny = { exit = 2, stderr = "{reason}" }\n', "")
+                                              .replace('ask = { exit = 2, stderr = "{reason}" }\n', "")
+                                              .replace("exit_2_blocks = true", "exit_2_blocks = false"))
+        self.assertEqual([f for f in check.run_check(self.repo, harnesses=["gemini"])
+                          if f.code == "exit2-unhonoured"], [])
+
+    def test_a_direct_mapping_is_never_flagged_as_exit2_unhonoured(self):
+        # direct hooks run bare; their payload_out is empty by validation
+        fs = [f for f in check.run_check(self.repo) if f.code == "exit2-unhonoured"]
+        self.assertEqual(fs, [])
+
     def test_hook_missing_and_not_executable(self):
         hooks = self.repo / ".agents/hooks"
         (hooks / "session-start.sh").unlink()

@@ -83,6 +83,7 @@ grouped by target, then a summary line.
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
 | `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
 | `deny-unenforceable` | warning | An `adapter` mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a deny becomes a NOT-checked fault and the call proceeds. |
+| `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
 | `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
