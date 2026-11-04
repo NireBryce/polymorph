@@ -83,6 +83,18 @@ class ValidateTests(unittest.TestCase):
             errs = validate_mapping(m)
             self.assertTrue(any("placeholder" in e for e in errs), (bad, errs))
 
+    def test_ask_is_hardened_by_the_hook_not_the_mapping(self):
+        # SPEC "Wire protocol": with ask = false the hook hardens ask (GUARD_ASK_ENFORCED)
+        m = load("gemini")
+        m["payload_out"]["ask"] = {"exit": 2, "stderr": "{reason}"}
+        errs = validate_mapping(m)
+        self.assertTrue(any("payload_out.ask" in e for e in errs), errs)
+        m["payload_out"]["ask"] = {"exit": 0, "stderr": "{reason}"}   # translated, not blocked
+        self.assertEqual(validate_mapping(m), [])
+        m["payload_out"]["ask"] = {"exit": 2, "stderr": "{reason}"}
+        m["capabilities"]["ask"] = True   # the harness enforces ask; exit 2 is its native form
+        self.assertEqual(validate_mapping(m), [])
+
     def test_known_extractor_ok(self):
         m = load("zcode")
         m["delivery"] = "adapter"  # an extractor is a translation, so not direct

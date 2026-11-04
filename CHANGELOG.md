@@ -16,6 +16,11 @@ Fixes from a review of 0.0.1.dev0. Two of them break existing use; see each entr
   draft` output fails `validate` for this reason until the reviewer records how the harness
   blocks. `payload_out` strings may use only `{reason}`, `{context}` and `{message}`; a typo
   such as `{reasn}` used to pass validation and turn every deny into "NOT checked".
+- **`ask` is hardened by the hook only:** the `gemini` draft no longer maps `ask` to exit 2,
+  and `validate` rejects a `payload_out.ask` with a non-zero `exit` when `capabilities.ask`
+  is `false` (issue 70). Breaks: on `gemini`, an `ask` from a hook that does not read
+  `GUARD_ASK_ENFORCED` is now passed through as JSON instead of blocking; a repo-local
+  mapping with such an entry fails `validate`.
 - **Redacted discovery logs drop key names that are not plain names** (letters, digits, `_`,
   `-`): a file path used as a `tool_input` key became visible in `tool_input_keys` and the
   raw record. Such keys are now `<invalid key>`; `--full` is unchanged.
