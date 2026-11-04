@@ -180,8 +180,8 @@ class GenerateTests(Base):
     def test_undecided_mismatches_write_nothing(self):
         r = generate(self.repo, ["nopost"])[0]
         ids = {u.id for u in r.undecided}
-        self.assertIn(".agents/hooks/edit-check-posttooluse.sh:no-event", ids)
-        self.assertIn(".agents/hooks/secrets-read-guard-pretooluse.sh:no-tool-class", ids)
+        self.assertIn(".agents/hooks/edit-check-posttooluse.sh:post_tool:no-event", ids)
+        self.assertIn(".agents/hooks/secrets-read-guard-pretooluse.sh:pre_tool:no-tool-class", ids)
         self.assertTrue(any("verified" in w for w in r.warnings))
         self.assertIn("attribution", " ".join(r.unmapped))
         self.assertFalse((self.repo / ".nopost/config.json").exists())

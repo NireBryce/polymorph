@@ -14,8 +14,10 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from .canon import EVENTS
+
 DECISIONS_DIR = ".polymorph/basecamp/decisions"
-SCHEMA = 1
+SCHEMA = 2   # schema 1 ids were <hook-script>:<kind>; the event dimension was added in schema 2
 
 # kind -> allowed choices ("substitute" takes ":<native event>")
 KINDS = {
@@ -23,7 +25,10 @@ KINDS = {
     "no-tool-class": ("skip",),
     "missing-field": ("skip", "run-empty"),
 }
-_ID = re.compile(r"^(?P<script>[^:\s]+):(?P<kind>[a-z-]+)$")
+# id = <hook-script>:<canonical event>:<kind>: a script registered under several events gets
+# one mismatch (and one answer) per event, so a shared script's decision no longer answers
+# every event it is registered under (issue #37)
+_ID = re.compile(r"^(?P<script>[^:\s]+):(?P<event>[a-z_]+):(?P<kind>[a-z-]+)$")
 _NATIVE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")
 ENTRY_KEYS = {"choice", "date", "note"}
 TOP_KEYS = {"schema", "decisions"}
@@ -41,13 +46,17 @@ class Decision:
     note: str | None = None
 
     @property
+    def event(self) -> str:
+        return self.id.split(":")[1]
+
+    @property
     def kind(self) -> str:
         return self.id.rsplit(":", 1)[1]
 
 
 @dataclass(frozen=True)
 class Mismatch:
-    """One thing the target lacks that a hook needs. id = `<hook-script>:<kind>`."""
+    """One thing the target lacks that a hook needs. id = `<hook-script>:<event>:<kind>`."""
     id: str
     kind: str
     script: str
@@ -85,7 +94,12 @@ def parse_decisions(raw: object, native_events: set[str]) -> tuple[dict[str, Dec
     for did, e in table.items():
         m = _ID.match(did)
         if not m or m["kind"] not in KINDS:
-            errs.append(f"decision id {did!r} must be <hook-script>:<kind>, kind one of {', '.join(KINDS)}")
+            errs.append(f"decision id {did!r} must be <hook-script>:<event>:<kind>, "
+                        f"event one of {', '.join(EVENTS)}, kind one of {', '.join(KINDS)}")
+            continue
+        if m["event"] not in EVENTS:
+            errs.append(f"decision id {did!r}: event {m['event']!r} is not a canonical event "
+                        f"({', '.join(EVENTS)})")
             continue
         if not isinstance(e, dict):
             errs.append(f"{did}: must be a table")

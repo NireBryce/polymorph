@@ -45,7 +45,9 @@ lines:
 payload field (`missing-field`) that a hook needs, `generate` writes nothing for that target,
 prints one `question:` block per item (id, hook, problem, options, default `skip`) and exits
 `3` after handling the other targets. Answer in `.polymorph/basecamp/decisions/NAME.toml` and
-run again; it never prompts. `--check` also exits 3 for undecided items. Format and choices:
+run again; it never prompts. `--check` also exits 3 for undecided items. A decision id is
+`<hook-script>:<event>:<kind>` (the hook's canonical event: a script registered under two
+events is decided per event). Format and choices:
 [SPEC, Decisions](SPEC.md#decisions).
 
 Other top-level keys already in the target file are kept; the whole `hooks` key is

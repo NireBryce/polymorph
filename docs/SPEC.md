@@ -270,18 +270,23 @@ not guess and does not drop the hook silently. Each mismatch is *undecided* unti
 `.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
 
 ```toml
-schema = 1
+schema = 2
 
-[decisions.".agents/hooks/edit-check.sh:no-event"]   # id = <hook-script>:<kind>
+[decisions.".agents/hooks/edit-check.sh:post_tool:no-event"]   # id = <hook-script>:<event>:<kind>
 choice = "substitute:BeforeTool"
 date = "2026-10-30"
 note = "optional free text"
 ```
 
-Top-level keys are `schema` (must be 1) and `decisions`; unknown keys are errors. An entry has
+Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon and the kind. One decision covers every hook of that script that has
-that mismatch in that target.
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool` or
+`post_tool`), a colon and the kind. One decision covers every hook of that script on that
+event that has that mismatch in that target. (Schema 1 ids had no event: one script
+registered under several events produced the same id for each, and one decision answered
+every event it was registered under, with `generate` recording only the first
+application's weakening. The event dimension is the schema 2 break; rename entries and
+bump the schema line.)
 
 | Kind | Fires when | Choices |
 |---|---|---|

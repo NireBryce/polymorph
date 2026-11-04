@@ -165,7 +165,9 @@ Harnesses differ: one may have no post-tool event, no tool for a class, or no pa
 a hook reads. polymorph does not guess a substitute and does not drop the hook quietly.
 `generate` stops for that target (exit 3), writes nothing for it, and prints each item as a
 question with its options. The answer goes in `.polymorph/basecamp/decisions/NAME.toml`, keyed
-by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a choice you
+by `<hook-script>:<event>:<kind>` -- the hook's canonical event is part of the key, so a
+script registered under several events is decided per event -- with a `choice` and a `date`.
+Skipping is always a choice you
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
 event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
 
