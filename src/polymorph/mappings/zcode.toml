@@ -15,9 +15,8 @@
 # line surfaced as the whole tool result; exit-1 stderr and PostToolUse
 # exit-2 stderr never reached the model; a 65s hook drew no timeout message.
 # A guard script that answers JSON deny therefore fails open here: the deny
-# route a zcode hook can rely on is exit 2. fixtures/zcode/deny.json still
-# teaches the JSON route (#56 tracks the exit-2 answer shape for direct
-# delivery).
+# route a zcode hook can rely on is exit 2. fixtures/zcode/deny.json teaches
+# that shape: canonical deny renders as exit 2 with the reason on stderr.
 #
 # ask=false: ZCode treats permissionDecision "ask" as allow (nixos-configs
 # #448/#458; consistent with the live session: a JSON ask ran with no
