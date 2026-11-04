@@ -352,6 +352,23 @@ class SummaryPerSessionTest(unittest.TestCase):
             out = discover.summarize(f)
             self.assertIn("<no session id>  1 payloads  PreToolUse 1", out)
 
+    def test_pairs_by_toolCallId_when_tool_use_id_is_absent(self):
+        # zcode names its call id toolCallId; a payload carrying only that used to
+        # redact it and pair nothing, reporting every line "without an id"
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            for event in ("PreToolUse", "PostToolUse"):
+                discover.log_stdin(str(f), io.StringIO(json.dumps(
+                    {"hook_event_name": event, "hookEventName": event,
+                     "tool_name": "Bash", "toolName": "Bash",
+                     "toolCallId": "call_aaa", "tool_input": {"command": "echo hi"}})))
+            out = discover.summarize(f)
+            self.assertIn("1 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            # the id is kept verbatim under redaction, like the other call-id keys
+            rec = json.loads(f.read_text().splitlines()[0])
+            self.assertEqual(rec["raw"]["toolCallId"], "call_aaa")
+
 
 class RedactTest(unittest.TestCase):
     def test_name_and_id_patterns_match_the_whole_string(self):

@@ -424,8 +424,9 @@ printed on a `hidden:` line. `--include EVENT` (repeatable) adds an event to the
 `--event EVENT` (repeatable) replaces the default with exactly those events. Lines are
 sorted by `ts` before counting, because each hook event is logged by its own process and
 lines can land out of order. When lines carry a call id and a message id (`tool_use_id` or
-`id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines are paired by
-them and the `pairing` line reports paired, out-of-order, unpaired and id-less counts.
+`toolCallId` / `id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines
+are paired by them and the `pairing` line reports paired, out-of-order, unpaired and
+id-less counts.
 
 ### `discover draft`
 

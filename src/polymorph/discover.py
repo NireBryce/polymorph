@@ -412,7 +412,7 @@ def _descriptor(v) -> dict:
 
 # Call and message ids, kept verbatim only when they look like ids, so before/after lines
 # can be paired. Anything else under these names is reduced like any other value.
-_CALL_ID_KEYS = ("tool_use_id", "id", "call_id", "callID", "toolCallID", "prompt_id")
+_CALL_ID_KEYS = ("tool_use_id", "toolCallId", "id", "call_id", "callID", "toolCallID", "prompt_id")
 _MESSAGE_ID_KEYS = ("messageID", "message_id")
 _ID_VALUE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 # The id shape class also matches common credential formats (they are word/dot/dash
