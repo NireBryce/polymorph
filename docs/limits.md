@@ -50,7 +50,7 @@ and the safe default is `false`.
 
 | Mapping | `verified` | Basis |
 |---|---|---|
-| `claude` | present | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)). Block semantics not live-tested. |
+| `claude` | present | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)) and a live VS Code session whose payloads matched `payload_in`. Block semantics not live-tested. |
 | `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
 | `gemini` | absent | A draft from an issue sketch. Every name is a guess. No fixtures. |
 
