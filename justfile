@@ -37,6 +37,8 @@ self-check:
         PYTHONPATH=src python3 -m polymorph manage validate "$m"
     done
     PYTHONPATH=src python3 -m polymorph manage conformance
+    # heredoc body lines carry the recipe indentation: just strips it before bash
+    # runs this, and an under-indented line is parsed as justfile syntax instead
     PYTHONPATH=src python3 - <<'EOF'
     import json, os, subprocess, sys
 

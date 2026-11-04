@@ -31,6 +31,10 @@ Then `README.md` and `docs/cli.md` if a command or example changed, and the
 
 - Test first: write the case that shows the new behaviour (and, for the
   validator, the case it must reject), see it fail, then change the code.
+- Reject the absence too: when a rule rejects a bad explicit value, check
+  what the runtime does when the field is missing -- the default is often
+  exactly the value you rejected (`payload_out.deny.exit` defaulted to 0,
+  an allow). Write the missing-field case next to the bad-value case.
 - Bump `schema` and refuse the old value only for a breaking change;
   adding an optional key is not breaking. Say what a break costs users.
 - Anything a mapping can name stays data: dotted paths, `{placeholder}`s and
