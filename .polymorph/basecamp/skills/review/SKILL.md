@@ -18,6 +18,10 @@ saying "done".
 2. `just preflight`, reading the output rather than the exit status.
 3. For a check the change adds or edits: undo the core of the change and
    confirm the check fails for that reason.
+4. For your own just-landed batch: probe the runtime boundary by hand
+   through the CLI (a bad mapping through `adapter`, a new finding through
+   `check`) -- the unit suite cannot show what a hand-run can
+   (wiki/patterns.md, post-landing probe).
 
 ## Read for
 
