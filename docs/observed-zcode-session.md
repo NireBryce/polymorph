@@ -139,17 +139,30 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
   and 0.12 s, from the discovery log's logger write timestamps). Nothing was surfaced either
   time. **Observed.**
 - `SessionStart` and `UserPromptSubmit` hooks fire in a session **started after** those
-  entries were wired: one `SessionStart` and two `UserPromptSubmit` payloads, all from a
-  third session. The session where the UPS marker prompts were actually typed had started
-  before the wiring existed and produced no refusal, no injected context line, and no
-  payloads. Derived: hook wiring is read at session start; config edits land only in
-  sessions started afterwards. The trust store is the exception that is re-read (see the
-  trust-gating section). **Observed + derived.**
-- `Stop` never fired anywhere: zero payloads in the session wired from its start, and the
-  marker file that hook arms at `SessionStart` and consumes at its first fire still existed
-  untouched hours later. **Observed.**
-- `PermissionRequest`: no data — no permission prompt occurred in a session with the hook
-  wired. **Untested.**
+  entries were wired: one `SessionStart` and five `UserPromptSubmit` payloads, all from the
+  wired-from-birth session — the session's first input, the pasted probe instructions, and
+  the two typed UPS marker prompts among them. An older session, started before the wiring
+  existed, produced no such payloads at all. Derived: hook wiring is read at session start;
+  config edits land only in sessions started afterwards. The trust store is the exception
+  that is re-read (see the trust-gating section). **Observed + derived.**
+- Neither `UserPromptSubmit` action is honored: the prompt carrying the block marker was
+  logged and still reached the model (no refusal), and the context-marker prompt arrived
+  bare, with no injected stdout line. **Observed.**
+- `Stop` fires on every reply end: four payloads in the wired-from-birth session. (An
+  earlier read taken before those replies had ended saw zero, which calls this event dead
+  when it is not — check reply boundaries, not just the log, before concluding.) Each
+  payload carries `stopHookActive`, `responseText`, `responsePreview`,
+  `last_assistant_message` and `toolCallCount`. Its action is not honored: an `exit 2`
+  asking for one continuation produced no continuation across all four fires, and the
+  second Stop hook's side effect — consuming the marker file armed at `SessionStart` —
+  never appeared in any of them, while the first hook logged every dispatch.
+  **Observed**; why the second hook never completed is not determinable from outside the
+  harness.
+- `PermissionRequest`: still zero payloads after the typed marker prompts as well — the
+  stage never dispatched in any session. Whether the harness skips the stage under an
+  auto-approve permission mode or does not dispatch it at all is not separable from
+  inside; either way a mapping cannot rely on it. **Untested as a positive; observed
+  absent.**
 - Matchers are case-sensitive: a hook wired under a lowercase `bash` matcher never fired
   against tool name `Bash` in either session; its append-only log file was never created.
   **Observed.**
