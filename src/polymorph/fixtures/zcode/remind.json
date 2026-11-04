@@ -21,9 +21,8 @@
     "systemMessage": "remember to run just preflight"
   },
   "native_out": {
-    "stdout": {
-      "systemMessage": "remember to run just preflight"
-    },
-    "exit": 0
+    "stdout": "",
+    "exit": 0,
+    "stderr": "remember to run just preflight"
   }
 }

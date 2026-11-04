@@ -25,13 +25,8 @@
     }
   },
   "native_out": {
-    "stdout": {
-      "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": "git reset --hard would discard changes"
-      }
-    },
-    "exit": 0
+    "stdout": "",
+    "exit": 2,
+    "stderr": "git reset --hard would discard changes"
   }
 }

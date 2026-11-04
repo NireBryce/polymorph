@@ -21,13 +21,14 @@ python -m polymorph validate .polymorph/basecamp/mappings/mytool.toml
 
 ## Worked example: `zcode`
 
-This is `src/polymorph/mappings/zcode.toml`, annotated. ZCode accepts the same hook protocol as Claude
-Code, so almost every field is identity.
+This is `src/polymorph/mappings/zcode.toml`, annotated. ZCode accepts the same hook config shape as
+Claude Code, so almost every field is identity; the answer side differs (see the mapping's header
+comment).
 
 ```toml
 schema = 1
 name = "zcode"
-verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
+verified = "2026-11-04, live probe session (payload shape, exit 2 blocks, JSON answers ignored, post event fires, ask drew no prompt); 2026-10-30, nixos-configs hook comments (payload shape, ask-as-allow)"
 config_path = ".zcode/config.json"
 format = "json"
 delivery = "direct"
@@ -40,7 +41,7 @@ skills_dir = ".agents/skills"
 |---|---|---|
 | `schema` | yes | Must be the integer `1`. |
 | `name` | yes | Harness name; `--harness zcode` and `enabled = ["zcode"]` refer to it. |
-| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, as the zcode one does ("from hook comments ... not a live run"). |
+| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, naming the evidence and its date (`src/polymorph/mappings/zcode.toml` holds one written from hook comments and later extended by a live probe). |
 | `config_path` | yes | Where the harness reads hooks, relative to the repo root. No leading `/`, no `..`. |
 | `format` | yes | `json`, `toml` or `yaml` pass validation, but `generate` only writes `json`. |
 | `template` | yes | The shipped writer: `claude-settings` (`hooks.<Event>`, as Claude Code) or `claude-like` (`hooks.enabled` plus `hooks.events.<Event>`, per-hook `enabled: true`, as ZCode). Templates are named code in polymorph, never code from the mapping. A harness whose file looks like neither needs a new template, which is a code change. |
