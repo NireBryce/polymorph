@@ -379,7 +379,7 @@ that ran `init` and the absolute log path, so it works from any directory.
 ### `discover log`
 
 ```
-polymorph discover log [--full] [--env-be-very-careful] --out FILE
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE
 ```
 
 The logger hook itself: reads one payload on stdin and appends one JSON line to FILE. It
@@ -387,14 +387,22 @@ The logger hook itself: reads one payload on stdin and appends one JSON line to 
 non-JSON input, so it can never block the harness. Failures go to `NAME.errors.jsonl`
 beside the log when that folder is writable.
 
+`--plugin-version` and `--location` are provenance for the calling plugin: which plugin
+generation wrote the line, and where its session runs (an event bus can be server-global,
+so one log can hold lines from several working directories). A value is recorded verbatim
+when it is short and free of shell characters, replaced by `<invalid>` when it is not, and
+the key is left off when the caller did not pass it; `discover summary` marks all three
+cases the way it marks the schema.
+
 ### `discover summary`
 
 ```
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
 ```
 
-Prints payload count, non-object lines and session count, the log-line schema marks, then
-per-event top-level keys and per-tool `tool_input` keys, each with counts. Names and counts only.
+Prints payload count, non-object lines and session count, the log-line schema marks, the
+plugin-version and location marks, then per-event top-level keys and per-tool `tool_input`
+keys, each with counts. Names and counts only.
 
 By default only **tool events** (lines with a tool name) are used, so a flood of session
 events from a server-wide bus does not drown them; the hidden event names and counts are

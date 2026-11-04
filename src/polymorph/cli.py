@@ -96,6 +96,10 @@ def _parser() -> argparse.ArgumentParser:
     dl.add_argument("--env-be-very-careful", dest="env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
     dl.add_argument("--full", action="store_true",
                     help="log raw payloads; default replaces values with {type, length}")
+    dl.add_argument("--plugin-version", default=None, metavar="V",
+                    help="provenance: the calling plugin's version; kept verbatim when short and shell-free, else <invalid>")
+    dl.add_argument("--location", default=None, metavar="LOC",
+                    help="provenance: where the calling session runs (e.g. ctx.location); same rule")
     dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
     dr.add_argument("--config-path", required=True, help="the harness config file under test")
     dr.add_argument("--scratch-log", required=True, help="log file the temporary hook writes to")
@@ -120,7 +124,8 @@ def _cmd_discover(args) -> int:
     from . import discover
 
     if args.dcmd == "log":
-        discover.log_stdin(args.out, redact=not args.full, env=args.env)
+        discover.log_stdin(args.out, redact=not args.full, env=args.env,
+                           plugin_version=args.plugin_version, location=args.location)
         return 0
     if args.dcmd == "init":
         if args.full:

@@ -227,7 +227,7 @@ polymorph env [--repo .] [--harness NAME] [--exec CMD]
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--i-really-want-this-in-the-repo-raw] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
-polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
                         # per-event/per-tool key tables, counts, sessions; tool events by default, sorted by ts, paired by id
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
@@ -241,6 +241,10 @@ polymorph capture --print-prompts        # prints the manual prompt kit, runs no
 
 Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
+`plugin_version` and `location` (issue #23) appear only when the calling plugin passed
+`--plugin-version`/`--location`: a value is kept verbatim when short and free of shell
+characters, becomes `<invalid>` when it is not, and a missing key reads as unmarked in the
+summary, which marks both the way it marks the schema.
 By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
 The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.

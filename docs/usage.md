@@ -198,7 +198,7 @@ polymorph discover init --harness HARNESS --config-path CONFIG_PATH [--event-nam
 Append stdin to a JSONL log (always exits 0, silent).
 
 ```
-polymorph discover log --out OUT [--env-be-very-careful] [--full]
+polymorph discover log --out OUT [--env-be-very-careful] [--full] [--plugin-version V] [--location LOC]
 ```
 
 | Argument | Meaning |
@@ -206,6 +206,8 @@ polymorph discover log --out OUT [--env-be-very-careful] [--full]
 | `--out OUT` | JSONL file to append one line to |
 | `--env-be-very-careful` | log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars |
 | `--full` | log raw payloads; default replaces values with {type, length} |
+| `--plugin-version V` | provenance: the calling plugin's version; kept verbatim when short and shell-free, else <invalid> |
+| `--location LOC` | provenance: where the calling session runs (e.g. ctx.location); same rule |
 
 ## polymorph discover reload-check
 
