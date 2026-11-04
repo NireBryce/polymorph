@@ -413,7 +413,10 @@ polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
 
 Prints payload count, non-object lines and session count, the log-line schema marks, the
 plugin-version and location marks, then per-event top-level keys and per-tool `tool_input`
-keys, each with counts. Names and counts only.
+keys, each with counts. Names and counts only. When the log holds more than one session,
+a `per session:` block sits between the pairing line and the tables: payloads, per-event
+counts and pairing per session, so sessions sharing one log read separately in one
+command (issue #57).
 
 By default only **tool events** (lines with a tool name) are used, so a flood of session
 events from a server-wide bus does not drown them; the hidden event names and counts are

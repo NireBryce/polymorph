@@ -306,6 +306,53 @@ class SummaryTest(unittest.TestCase):
             self.assertIn("locations: unmarked (1)", out)
 
 
+class SummaryPerSessionTest(unittest.TestCase):
+    @staticmethod
+    def _payload(event, sid, call):
+        return json.dumps({"hook_event_name": event, "hookEventName": event,
+                           "tool_name": "Bash", "toolName": "Bash",
+                           "session_id": sid, "sessionId": sid,
+                           "tool_use_id": call, "tool_input": {"command": "echo hi"}})
+
+    def test_per_session_block_for_multi_session_logs(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            for sid, call in (("sess_aaaaaaaa", "call_1111"), ("sess_bbbbbbbb", "call_2222"),
+                              ("sess_bbbbbbbb", "call_3333")):
+                discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", sid, call)))
+                discover.log_stdin(str(f), io.StringIO(self._payload("PostToolUse", sid, call)))
+            out = discover.summarize(f)
+            self.assertIn("per session: payloads, events, pairing", out)
+            self.assertIn("sess_bbbbbbbb  4 payloads  PostToolUse 2, PreToolUse 2;  "
+                          "2 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            self.assertIn("sess_aaaaaaaa  2 payloads  PostToolUse 1, PreToolUse 1;  "
+                          "1 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            r = run_cli(["discover", "summary", str(f)])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("per session:", r.stdout)
+
+    def test_single_session_log_has_no_per_session_block(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", "sess_aaaaaaaa",
+                                                                 "call_1111")))
+            out = discover.summarize(f)
+            self.assertNotIn("per session:", out)
+
+    def test_session_without_an_id_reads_as_no_session_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", "sess_aaaaaaaa",
+                                                                 "call_1111")))
+            discover.log_stdin(str(f), io.StringIO('{"hook_event_name": "PreToolUse", '
+                                                   '"tool_name": "Bash", '
+                                                   '"tool_use_id": "call_2222"}'))
+            out = discover.summarize(f)
+            self.assertIn("<no session id>  1 payloads  PreToolUse 1", out)
+
+
 class RedactTest(unittest.TestCase):
     def test_name_and_id_patterns_match_the_whole_string(self):
         # issue #50: a `$` anchor also matches before a trailing newline, so a
