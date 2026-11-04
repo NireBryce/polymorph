@@ -29,6 +29,7 @@ CODES = {
     "mapping-untested-live": ("note", "Block semantics and ask enforcement are unproven without a live test."),
     "direct-ask-unenforceable": ("warning", "A direct-delivery mapping sets ask = false: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot observe the claim (issue #34)."),
     "deny-unenforceable": ("warning", "An adapter-delivery mapping has no way to express a deny (no payload_out.deny; exit_2_blocks and json_answers both false), so a guard deny is a NOT-checked fault and the call proceeds (issue #35)."),
+    "exit2-unhonoured": ("warning", "A mapping's deny or ask route renders as exit 2 while exit_2_blocks is false: the exit the route relies on is the one the mapping says does not block (issue #49)."),
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
     "hook-not-executable": ("error", "A hook script is not executable."),
@@ -126,6 +127,12 @@ def check_mapping(repo: Path, name: str, m: Mapping) -> list[Finding]:
                       "no payload_out.deny and both exit_2_blocks and json_answers are false: a guard "
                       "deny becomes a visible NOT-checked fault and the call proceeds, so this mapping "
                       "cannot enforce a block", _rel(repo, m.source)))
+    if m.delivery == "adapter" and (m.payload_out.get("deny") or m.payload_out.get("ask")) \
+            and not m.capabilities.get("exit_2_blocks"):
+        out.append(_f("exit2-unhonoured", name,
+                      "the payload_out deny/ask route renders as exit 2 while exit_2_blocks is false: "
+                      "the exit the route relies on is the one the mapping says does not block, so the "
+                      "call would proceed", _rel(repo, m.source)))
     return out
 
 

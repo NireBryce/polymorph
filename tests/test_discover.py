@@ -307,6 +307,20 @@ class SummaryTest(unittest.TestCase):
 
 
 class RedactTest(unittest.TestCase):
+    def test_name_and_id_patterns_match_the_whole_string(self):
+        # issue #50: a `$` anchor also matches before a trailing newline, so a
+        # value ending in one was kept verbatim as a name or an id
+        self.assertIsNone(discover._safe("Bash\n"))
+        self.assertIsNone(discover._safe("PreToolUse\n", discover._EVENT_RE))
+        self.assertFalse(discover._id_shaped("toolu_01ABC\n"))
+        self.assertEqual(discover._safe("Bash"), "Bash")
+        self.assertEqual(discover._id_shaped("toolu_01ABC"), True)
+        rec = discover._record(json.dumps({"tool_name": "Bash\n", "tool_use_id": "toolu_01ABC\n"}),
+                               redact=True)
+        self.assertEqual(rec["tool_name"], "<invalid>")
+        self.assertEqual(rec["raw"]["tool_use_id"],
+                         {"type": "string", "length": len("toolu_01ABC\n")})
+
     def test_credential_shaped_ids_are_reduced(self):
         # a credential matches the id shape class too; it must not survive as an "id".
         # the fakes carry the real token *prefixes* with flat suffixes: enough to

@@ -423,7 +423,8 @@ _CRED_VALUE = re.compile(
 
 
 def _id_shaped(value: str) -> bool:
-    return _CRED_VALUE.search(value) is None and bool(_ID_VALUE.match(value))
+    # fullmatch: a `$` anchor alone also matches before a trailing newline
+    return _CRED_VALUE.search(value) is None and bool(_ID_VALUE.fullmatch(value))
 
 # Output-like objects keep their nested key paths (depth-limited), values become descriptors.
 _OUTPUT_KEYS = (*_RESPONSE_KEYS, "output", "result", "tool_result", "toolResult")
@@ -617,7 +618,8 @@ def _top(rec: dict) -> tuple[str | None, str | None, str | None]:
 
 
 def _safe(s, pat=_TOOL_RE) -> str | None:
-    return s if isinstance(s, str) and len(s) <= 64 and pat.match(s) else None
+    # fullmatch, not match: `$` alone also matches before a trailing newline
+    return s if isinstance(s, str) and len(s) <= 64 and pat.fullmatch(s) else None
 
 
 # read-class tool_input keys worth mapping when seen: canonical field -> tool_input key names
@@ -657,7 +659,7 @@ def _ids(raw: dict) -> tuple[str | None, str | None]:
     def pick(names):
         for n in names:
             v = raw.get(n)
-            if isinstance(v, str) and _ID_VALUE.match(v):
+            if isinstance(v, str) and _ID_VALUE.fullmatch(v):
                 return v
         return None
     return pick(_CALL_ID_KEYS), pick(_MESSAGE_ID_KEYS)
