@@ -79,6 +79,8 @@ grouped by target, then a summary line.
 | `mapping-invalid` | error | Mapping fails validation or cannot be loaded. |
 | `mapping-unverified` | warning | Mapping has no `verified` field. |
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
+| `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
+| `deny-unenforceable` | warning | An `adapter` mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a deny becomes a NOT-checked fault and the call proceeds. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
 | `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |

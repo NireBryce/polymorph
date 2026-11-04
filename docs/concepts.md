@@ -129,7 +129,13 @@ The adapter only reports these; **the hook script decides what to do with them.*
 canonical example: when `GUARD_ASK_ENFORCED=0` a well-written guard should answer `deny`
 instead of `ask`, because the harness would turn `ask` into allow. polymorph does not
 rewrite the answer for you. Hooks run `direct` get no variables from polymorph, since no
-adapter runs; a script that needs them must default sensibly when they are unset.
+adapter runs; a script that needs them must default sensibly when they are unset. A direct
+mapping that also sets `ask = false` is therefore flagged by `check` as
+`direct-ask-unenforceable`: the hardening the flag promises is unobservable by the hook,
+which can only apply it if it was written for this harness and detects it itself.
+An adapter mapping that cannot express a block at all (no `payload_out.deny`, and
+`exit_2_blocks` and `json_answers` both false) is flagged as `deny-unenforceable`: a deny
+would become a visible NOT-checked fault and the call would proceed.
 
 Capabilities in a mapping are claims. Only a live test establishes them; see
 [Limits](limits.md).

@@ -146,6 +146,12 @@ deny = { exit = 2, stderr = "{reason}" }
 ask = { exit = 2, stderr = "{reason}" }
 ```
 
+An adapter-delivery mapping needs at least one way to express a block: a `deny` entry,
+`exit_2_blocks = true`, or `json_answers = true` (the canonical JSON passes a deny
+through). With none of the three, `check` warns `deny-unenforceable`: at run time a guard
+deny becomes a visible NOT-checked fault and the call proceeds, so the mapping cannot
+enforce anything.
+
 How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
 else `systemMessage` is `remind`; anything else is "no answer" (exit 0, no output). A kind

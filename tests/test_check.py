@@ -48,9 +48,12 @@ class CheckTest(unittest.TestCase):
     def test_clean_repo_exits_zero(self):
         rc, out = run("--repo", str(self.repo))
         self.assertEqual(rc, 0, out)
+        # the shipped zcode mapping is delivery = "direct" with ask = false:
+        # nothing sets GUARD_ASK_ENFORCED for a bare hook, and check says so (#34)
+        self.assertIn("direct-ask-unenforceable", out)
+        self.assertIn("0 error(s), 1 warning(s)", out)
         rc, out = run("--repo", str(self.repo), "--strict")
-        self.assertEqual(rc, 0, out)
-        self.assertIn("0 error(s), 0 warning(s)", out)
+        self.assertEqual(rc, 1, out)
 
     def test_no_targets(self):
         (self.repo / ".polymorph/basecamp/config.toml").unlink()
@@ -110,6 +113,45 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(run("--repo", str(self.repo))[0], 0)
         self.assertEqual(run("--repo", str(self.repo), "--strict")[0], 1)
         self.assertIn("mapping-untested-live", self.codes())
+
+    def test_direct_ask_false_is_reported_unenforceable(self):
+        # issue #34: the one shipped mapping with ask = false is delivery = "direct",
+        # whose hooks run bare and see no GUARD_* variables at all
+        fs = [f for f in check.run_check(self.repo) if f.code == "direct-ask-unenforceable"]
+        self.assertTrue(fs)
+        self.assertTrue(all(f.severity == "warning" and f.target == "zcode" for f in fs))
+        self.assertIn("GUARD_ASK_ENFORCED", fs[0].message)
+
+    def test_an_adapter_mapping_that_cannot_express_a_deny_is_flagged(self):
+        # issue #35: no payload_out.deny with exit_2_blocks and json_answers both false
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir(exist_ok=True)
+        base = (Path(check.BUILTIN_DIR) / "gemini.toml").read_text()
+        cases = {
+            "cannot deny": lambda t: t.replace('deny = { exit = 2, stderr = "{reason}" }\n', "")
+                                       .replace("exit_2_blocks = true", "exit_2_blocks = false")
+                                       .replace("json_answers = true", "json_answers = false"),
+            "json answers can carry the deny": lambda t: t.replace('deny = { exit = 2, stderr = "{reason}" }\n', ""),
+            "exit 2 blocks": lambda t: t,
+        }
+        for name, mut in cases.items():
+            with self.subTest(case=name):
+                for p in d.glob("gemini.toml"):
+                    p.unlink()
+                (d / "gemini.toml").write_text(mut(base))
+                fs = [f for f in check.run_check(self.repo, harnesses=["gemini"])
+                      if f.code == "deny-unenforceable"]
+                if name == "cannot deny":
+                    self.assertTrue(fs)
+                    self.assertTrue(all(f.severity == "warning" and f.target == "gemini" for f in fs))
+                    self.assertIn("NOT-checked", fs[0].message)
+                else:
+                    self.assertEqual(fs, [])
+
+    def test_a_direct_mapping_is_never_flagged_as_deny_unenforceable(self):
+        # direct delivery bypasses the adapter, so its empty payload_out expresses nothing
+        fs = [f for f in check.run_check(self.repo) if f.code == "deny-unenforceable"]
+        self.assertEqual(fs, [])
 
     def test_hook_missing_and_not_executable(self):
         hooks = self.repo / ".agents/hooks"
