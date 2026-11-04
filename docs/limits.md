@@ -32,12 +32,11 @@ The convention this project follows:
 
 - **Absent** means unverified. Drafts, the `gemini` mapping, and anything written from an
   issue report start here. `generate` warns and `check` raises `mapping-unverified`.
-- **Present** means a named person looked at a named source on a named date, and the text
-  says what and how: for example, "payload shape from a captured session on DATE" or "read
-  from hook-script comments, not a live run". The text should claim only what was checked.
-- **Verified for real use** needs a live session: the generated config loaded in the actual
-  harness, a hook seen to fire, and a deny seen to stop a tool call. Capture of payloads
-  alone is not that.
+- **Present** means a live session: the generated config loaded in the actual harness, a
+  hook seen to fire, and a deny seen to stop a tool call. Capture of payloads alone, or
+  reading hook-script comments, is not that. The text says who checked what, when and how,
+  and claims only what was checked.
+- What a mapping rests on before then goes in its header comment, not in `verified`.
 
 Things a live test needs to settle for a mapping, because payloads cannot show them: does
 exit 2 block; does a JSON decision field block, and what is its name; is `ask` enforced or
@@ -50,8 +49,8 @@ and the safe default is `false`.
 
 | Mapping | `verified` | Basis |
 |---|---|---|
-| `claude` | present | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)). Block semantics not live-tested. |
-| `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
+| `claude` | absent | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)). Block semantics not live-tested. |
+| `zcode` | absent | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
 | `gemini` | absent | A draft from an issue sketch. Every name is a guess. No fixtures. |
 
 Read the mapping's own header comment before relying on it; it states what is and is not

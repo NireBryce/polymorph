@@ -38,7 +38,7 @@ class CheckTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.repo = Path(self._tmp.name) / "repo"
         shutil.copytree(FIXTURE, self.repo)
-        # use the built-in (verified, fixture-backed) zcode mapping
+        # use the built-in (fixture-backed) zcode mapping
         shutil.rmtree(self.repo / ".polymorph/basecamp/mappings")
         generate(self.repo)
 
@@ -48,6 +48,17 @@ class CheckTest(unittest.TestCase):
     def test_clean_repo_exits_zero(self):
         rc, out = run("--repo", str(self.repo))
         self.assertEqual(rc, 0, out)
+        # no built-in mapping carries `verified`, so --strict fails on that warning alone
+        rc, out = run("--repo", str(self.repo), "--strict")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("0 error(s), 1 warning(s)", out)
+        self.assertIn("mapping-unverified", out)
+        # the same mapping with `verified` is strict-clean
+        d = self.repo / ".polymorph/basecamp/mappings"
+        d.mkdir()
+        text = (Path(check.BUILTIN_DIR) / "zcode.toml").read_text()
+        (d / "zcode.toml").write_text(text.replace('name = "zcode"\n', 'name = "zcode"\nverified = "test"\n', 1))
+        generate(self.repo)
         rc, out = run("--repo", str(self.repo), "--strict")
         self.assertEqual(rc, 0, out)
         self.assertIn("0 error(s), 0 warning(s)", out)

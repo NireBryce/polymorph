@@ -109,7 +109,7 @@ class MappingTests(Base):
             'schema = 1\nname = "other"\nconfig_path = "a.json"\nformat = "json"\ntemplate = "claude-like"\n'
             '[tools]\n[events]\n[payload_in]\n[payload_out]\n'
             '[capabilities]\nask = false\npost_event = false\nexit_2_blocks = false\n'
-            'rewrites_input = false\njson_answers = false\n')
+            'rewrites_input = false\njson_answers = true\n')
         msgs = []
         self.assertEqual(load_mapping("other", self.repo, warn=msgs.append).name, "other")
         self.assertEqual(msgs, [])

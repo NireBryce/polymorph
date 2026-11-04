@@ -14,6 +14,8 @@ EVENTS = ("session_start", "pre_tool", "post_tool")
 CAPS = ("ask", "post_event", "exit_2_blocks", "rewrites_input", "json_answers")
 OUT_KINDS = ("allow", "deny", "ask", "warn", "remind")
 OUT_FIELDS = {"exit": int, "stdout": str, "stderr": str}
+# The values the adapter fills into payload_out strings (adapter._classify); nothing else.
+OUT_PLACEHOLDERS = ("reason", "context", "message")
 
 REQUIRED = ("schema", "name", "config_path", "format", "template",
             "tools", "events", "capabilities", "payload_in", "payload_out")
@@ -27,6 +29,7 @@ _PATH = re.compile(r"^[A-Za-z_][\w-]*(\.[\w-]+)*$")
 _TOOL = re.compile(r"^[A-Za-z_][\w.*-]*$")
 _NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
 _PLACEHOLDER = re.compile(r"\{[a-z_][a-z0-9_.]*\}")
+_ANY_PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 _CODEY = re.compile(r"\$\(|\$\{|`|;|\|\||&&|\||>|<|\\|\n|\.\./")
 
 
@@ -168,4 +171,23 @@ def validate_mapping(src: Any) -> list[str]:
                         errs.append(f"payload_out.{kind}.{f} must be {want.__name__}")
                     elif isinstance(v, str) and _codey(v):
                         errs.append(f"payload_out.{kind}.{f}: code-like value {v!r}")
+                    if isinstance(v, str):
+                        for name in _ANY_PLACEHOLDER.findall(v):
+                            if name not in OUT_PLACEHOLDERS:
+                                errs.append(f"payload_out.{kind}.{f}: unknown placeholder {{{name}}} "
+                                            f"(known: {', '.join('{' + p + '}' for p in OUT_PLACEHOLDERS)})")
+    errs += deny_route_errors(m)
     return errs
+
+
+def deny_route_errors(m: dict) -> list[str]:
+    """A deny must reach the harness as something that blocks. With no payload_out.deny the
+    adapter falls back to JSON pass-through (json_answers) or exit 2 (exit_2_blocks); with
+    neither, a deny would leave as exit 0, which the harness reads as allow."""
+    caps, po = m.get("capabilities"), m.get("payload_out")
+    if not isinstance(caps, dict) or not isinstance(po, dict) or "deny" in po:
+        return []
+    if caps.get("json_answers") is True or caps.get("exit_2_blocks") is True:
+        return []
+    return ["payload_out.deny is required when neither capabilities.json_answers nor "
+            "capabilities.exit_2_blocks is true: without it a deny would leave as exit 0 (allow)"]

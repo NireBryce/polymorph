@@ -110,6 +110,13 @@ class PureTests(unittest.TestCase):
         self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, warn))
         self.assertEqual(adapter.translate_out(MAPPING, None)["exit"], 0)
 
+    def test_deny_with_no_route_is_an_error_not_an_allow(self):
+        m = {**MAPPING, "payload_out": {},
+             "capabilities": {**MAPPING["capabilities"], "json_answers": False, "exit_2_blocks": False}}
+        deny = {"hookSpecificOutput": {"permissionDecision": "deny", "permissionDecisionReason": "no"}}
+        with self.assertRaises(adapter.AdapterError):
+            adapter.translate_out(m, deny)
+
 
 class RunAdapterTests(unittest.TestCase):
     def setUp(self):

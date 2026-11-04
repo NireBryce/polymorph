@@ -27,7 +27,6 @@ Code, so almost every field is identity.
 ```toml
 schema = 1
 name = "zcode"
-verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
 config_path = ".zcode/config.json"
 format = "json"
 delivery = "direct"
@@ -40,7 +39,7 @@ skills_dir = ".agents/skills"
 |---|---|---|
 | `schema` | yes | Must be the integer `1`. |
 | `name` | yes | Harness name; `--harness zcode` and `enabled = ["zcode"]` refer to it. |
-| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, as the zcode one does ("from hook comments ... not a live run"). |
+| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Add it only after its block semantics were seen in a live session (a deny stopped a tool call), and write what was checked. Until then, put the mapping's basis in a header comment, as zcode does. No shipped mapping has it yet. |
 | `config_path` | yes | Where the harness reads hooks, relative to the repo root. No leading `/`, no `..`. |
 | `format` | yes | `json`, `toml` or `yaml` pass validation, but `generate` only writes `json`. |
 | `template` | yes | The shipped writer: `claude-settings` (`hooks.<Event>`, as Claude Code) or `claude-like` (`hooks.enabled` plus `hooks.events.<Event>`, per-hook `enabled: true`, as ZCode). Templates are named code in polymorph, never code from the mapping. A harness whose file looks like neither needs a new template, which is a code change. |
@@ -137,6 +136,10 @@ is an error. The output is built as data and JSON-encoded, never pasted into a s
 zcode has no entries because it reads Claude's answers unchanged: with none, and
 `json_answers = true`, the adapter passes the canonical answer through.
 
+A deny must have a way to block. Without `payload_out.deny`, the adapter passes it through as
+JSON (`json_answers = true`) or as exit 2 (`exit_2_blocks = true`); with neither, `validate`
+rejects the mapping, because the deny would leave as exit 0, which a harness reads as allow.
+
 A harness that blocks by exit code, like the draft `gemini` mapping, looks like this:
 
 ```toml
@@ -165,7 +168,8 @@ python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name myto
 then fix what its comments say to confirm (`config_path`, `template`, classes marked
 `guessed from name`, unclassified tools), fill in `[capabilities]` by testing, and add
 `[payload_out]` if the harness needs answers translated. A draft has empty
-`[payload_out]`, which `validate` accepts; leave `delivery` unset until you know the
+`[payload_out]` and every capability `false`, which `validate` refuses until you record how
+a deny blocks (see `[payload_out]` above); leave `delivery` unset until you know the
 harness is genuinely identity.
 
 ## Fixtures
@@ -188,7 +192,7 @@ regressions in the mapping. They live in `src/polymorph/fixtures/NAME/CASE.json`
 - `native_out`: what the adapter must emit. `stdout` is a JSON value (compared parsed), a
   string (compared verbatim), or empty/`null` for no output; `exit` is an integer.
 
-Unknown or missing keys fail with a shape error. The verified shipped mappings have at least the four
+Unknown or missing keys fail with a shape error. The shipped `claude` and `zcode` mappings have at least the four
 fixtures `deny`, `ask`, `warn`, `remind` (the draft `gemini` mapping has none, and `check`
 warns `fixtures-missing`). Replay them:
 

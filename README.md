@@ -57,8 +57,9 @@ What the tool does today, measured against that goal:
   meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
   that resolve under `.agents/hooks/`.
 - **Transliterates** through declarative TOML mappings (`schema = 1`; `delivery` is
-  `direct` or `adapter`). Shipped: `claude` and `zcode`, each with `verified` text
-  stating what its mapping rests on, and a `gemini` draft with none.
+  `direct` or `adapter`). Shipped: `claude` and `zcode`, each with a header comment
+  stating what it rests on, and a `gemini` draft; none has `verified`, since no block has
+  been seen in a live session.
 - **Generates** per-harness JSON hook configs from the `claude-settings` and
   `claude-like` templates, with `--check` for drift; repo-local mappings under
   `.polymorph/basecamp/mappings/` override the built-ins, with a warning.
@@ -78,8 +79,8 @@ The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`
   a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
-- **Not verified against live harnesses.** Every shipped mapping says in its `verified`
-  field what it actually rests on.
+- **Not verified against live harnesses.** No shipped mapping has a `verified` field; each
+  says in its header comment what it actually rests on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** polymorph's output, and the loadouts
@@ -126,6 +127,7 @@ Step 2 on a repo with a `permissions` block prints something like:
 
 ```
 [zcode] would write .zcode/config.json (DRIFT)
+  warning: zcode: mapping has no `verified` field; treat output as unverified
   unmapped setting: permissions.allow (1 entries)
 ```
 
@@ -133,8 +135,9 @@ Step 2 on a repo with a `permissions` block prints something like:
 not translate it. It is reported, never silently dropped. `check` before step 3 fails with
 `generated-drift` because the file does not exist yet; after step 3 it passes.
 
-Commit `.zcode/config.json` and run `polymorph check --strict` in CI so the two never
-disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
+Commit `.zcode/config.json` and run `polymorph check` in CI so the two never disagree.
+(`--strict` also fails on warnings, and every shipped mapping is unverified, so it fails
+until a mapping you use has `verified`.) Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
 
 ## Commands
 

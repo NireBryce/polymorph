@@ -15,6 +15,8 @@ Rules this module keeps:
   non-interactive stdin without --yes. The default answer is no.
 - A step's process group is killed only after the harness exits and the log has settled (the
   plugin's logger children live in that group and write late), or at once on a timeout or signal.
+- An interrupted run still writes its results (the report marks the step that was cut and
+  the steps not run), so the tokens already spent are not lost.
 - The report lists what the log recorded. The harness's own account of what it did is never
   captured: its stdout and stderr go to /dev/null.
 """
@@ -261,7 +263,7 @@ def build_report(driver: Driver, version: str, results: list[dict], log: Path, f
     lines += ["", "## Steps", "", "| step | result | log lines |", "|---|---|---|"]
     for r in results:
         lines.append(f"| {r['name']} | {r['status']} | {r['lines']} |")
-    silent = [r["name"] for r in results if r["lines"] == 0 and r["status"] != "skipped"]
+    silent = [r["name"] for r in results if r["lines"] == 0 and r["status"] not in ("skipped", "not run")]
     lines += ["", "## Tool calls in the log", ""]
     if calls:
         lines += ["| tool | count | input keys (present/count) |", "|---|---|---|"]
@@ -508,6 +510,7 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
     version = harness_version(driver, env, scratch)
     results: list[dict] = []
     deadline = time.monotonic() + args.total_timeout
+    interrupted: KeyboardInterrupt | None = None
     try:
         for name, prompt in steps:
             remaining = deadline - time.monotonic()
@@ -515,15 +518,29 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
                 results.append({"name": name, "status": "skipped", "lines": 0})
                 continue
             before = _line_count(log)
-            status = run_step(driver.step_argv(prompt), scratch, env, min(args.step_timeout, remaining), log)
+            try:
+                status = run_step(driver.step_argv(prompt), scratch, env,
+                                  min(args.step_timeout, remaining), log)
+            except KeyboardInterrupt:
+                results.append({"name": name, "status": "interrupted", "lines": _line_count(log) - before})
+                raise
             after = _line_count(log)   # run_step already waited for the log to settle
             results.append({"name": name, "status": status, "lines": after - before})
             print(f"{name}: {status}, {after - before} log lines", file=stdout)
+    except KeyboardInterrupt as e:
+        # Tokens already spent are not thrown away: what the log holds is written out below.
+        # Only the first signal raises (interrupt_on_signals), so this write is not cut short.
+        interrupted = e
+        done = {r["name"] for r in results}
+        results += [{"name": n, "status": "not run", "lines": 0} for n, _ in steps if n not in done]
     finally:
         driver.remove(scratch)   # the logger goes even if a step raised or was interrupted
     report = build_report(driver, version, results, log, args.full, started)
     write_results(out_dir, driver, log, report)
     print(f"results: {out_dir} (summary.txt, draft.toml, report.md, log.jsonl)", file=stdout)
+    if interrupted is not None:
+        print("interrupted: the results above are partial results", file=stdout)
+        raise interrupted
     if args.full:
         print("WARNING: --full: log.jsonl holds raw commands and file contents; do not share it", file=stderr)
     bad = [r for r in results if r["status"] != "ok"]

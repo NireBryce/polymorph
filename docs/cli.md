@@ -173,7 +173,10 @@ Output in the results directory: `summary.txt` (`discover summary`), `draft.toml
 (`discover draft`, unverified), `report.md` (polymorph version, `<harness> --version`, a row per
 step with its exit status and log lines, the tool calls from the log with counts and input key
 names, and the steps that produced no log line) and `log.jsonl`. Exit 0 if every step exited 0,
-1 if one failed, timed out or was skipped, 2 for a usage error.
+1 if one failed, timed out or was skipped, 2 for a usage error. An interrupted run (Ctrl-C,
+SIGTERM, SIGHUP) still writes these files from what the log holds, marks the step it cut as
+`interrupted` and the rest as `not run`, says the results are partial, and exits with the
+signal's status.
 
 ## `discover`
 
@@ -245,7 +248,9 @@ polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event E
 ```
 
 Prints a schema 1 mapping to stdout (redirect it to a file). It has no `verified` field,
-all capabilities `false`, and comments with evidence counts. `--include` and `--event`
+all capabilities `false`, no `payload_out.deny`, and comments with evidence counts. So it
+fails `validate` until someone has seen how the harness blocks and says so (a capability or a
+`deny` entry; see [Writing a mapping](writing-a-mapping.md#worked-example-zcode)). `--include` and `--event`
 select lines as for `summary` (tool events by default). Event names may contain `.`, `-` and
 `:`; a name ending in `before` or `after` is guessed as `pre_tool` or `post_tool` and marked
 `guessed from name`, and every other observed event name is listed in a comment under
