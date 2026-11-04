@@ -125,3 +125,46 @@ one of several ways:
 Derived for the mapping: `zcode.toml` must express deny as exit 2 with stderr as the reason
 channel; JSON-answer templates and a PostToolUse deny route have nothing to attach to; and
 nothing in this harness can assume fail-closed behavior from a broken hook.
+
+## The other hook events, wiring freeze, and timeouts (3.17.2, second probe round)
+
+Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
+`SessionStart`, `UserPromptSubmit`, `PermissionRequest` and `Stop` (behavior chosen by
+`ZCODE_PROBE_MODE` in the hook's command) alongside the first probe:
+
+- Allow + `updatedInput` on `PreToolUse` (a rewritten command handed back to the harness):
+  the call ran the original text; the mutation never reached it. **Observed.**
+- A hook sleeping 65 s: under the default timeout the call waited out the 60 s kill and then
+  proceeded; under an explicit `timeout: 2` it did not wait at all (Pre→Post deltas 60.1 s
+  and 0.12 s, from the discovery log's logger write timestamps). Nothing was surfaced either
+  time. **Observed.**
+- `SessionStart` and `UserPromptSubmit` hooks fire in a session **started after** those
+  entries were wired: one `SessionStart` and two `UserPromptSubmit` payloads, all from a
+  third session. The session where the UPS marker prompts were actually typed had started
+  before the wiring existed and produced no refusal, no injected context line, and no
+  payloads. Derived: hook wiring is read at session start; config edits land only in
+  sessions started afterwards. The trust store is the exception that is re-read (see the
+  trust-gating section). **Observed + derived.**
+- `Stop` never fired anywhere: zero payloads in the session wired from its start, and the
+  marker file that hook arms at `SessionStart` and consumes at its first fire still existed
+  untouched hours later. **Observed.**
+- `PermissionRequest`: no data — no permission prompt occurred in a session with the hook
+  wired. **Untested.**
+- Matchers are case-sensitive: a hook wired under a lowercase `bash` matcher never fired
+  against tool name `Bash` in either session; its append-only log file was never created.
+  **Observed.**
+- Removing a hook's entry from the config while an older session runs: the call that entry
+  used to block proceeded — the frozen wiring still aims at the removed script, which now
+  fails to spawn and fails open. New sessions read the clean config. **Observed**;
+  reloaded-vs-failed-open is not distinguishable from inside the session, and a positive
+  reload test would need a new entry, which is trust-gated (see the trust-gating section).
+- `discover summary` counts **tool events** by default, so `SessionStart` /
+  `UserPromptSubmit` payloads hide behind the `hidden:` line — the census above came from
+  reading the log directly (`--event EVENT` selects them). **Observed.**
+
+Derived for the mapping and the skill: `zcode.toml`'s `session_start = "SessionStart"` is
+live-evidenced as a real event name, but nothing exercised it in the session that carried
+the mapping; `UserPromptSubmit` exists as a raw event with no canonical slot in the schema.
+And `new-mapping`'s live check must start the probing session **after** the hook config is
+wired: a session opened before the wiring cannot see it, which reads exactly like a broken
+mapping.
