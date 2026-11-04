@@ -113,14 +113,5 @@ combination may cause adverse effects.
 
 [SPEC.md](SPEC.md) is the contract. Where the code does something it does not say:
 
-- The spec says discovery logs are "gitignored". Only polymorph's own repository ignores
-  `.polymorph/discovery/`; `discover init` does not edit your `.gitignore`.
-- The spec's CLI summary omits some flags that exist: `generate --mappings --trust-dir`,
-  `adapter --mappings --trust-dir`, `discover init --shape --log-dir --env-be-very-careful`,
-  `discover log --env-be-very-careful`, and `discover reload-check --event-name --matcher
-  --shape`. [CLI reference](cli.md) lists them.
-- The spec's mapping example lists `payload_in`, `payload_out`, `[tools]`, `[events]` and
-  all five capabilities as if optional; `validate` (and so `check`) requires all of them,
-  although `generate` itself loads a mapping without them.
 - The spec says fixtures cover deny, ask, warn and remind "for each mapping"; `gemini` has
   none.
