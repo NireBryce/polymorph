@@ -174,6 +174,11 @@ the provided paths the harness does not read, which it will silently ignore even
 equipping: kinds it never reads (`unsupported`), and paths it reads that are missing
 (`no-link`), a second real copy (`unlinked-copy`, the drift between `AGENTS.md` and
 `CLAUDE.md`, or `.agents/` and `.claude/`) or a symlink to somewhere else (`points-elsewhere`).
+A symlink whose resolved target is already honoured content is a pointer, not a gap:
+`.claude/skills` -> `.agents/skills` when the table honours skills at `.agents/skills`, or
+`CLAUDE.md` -> `AGENTS.md` when the table honours `AGENTS.md` -- the harness reads those
+bytes through the other path, so the report leaves them out. A real second copy stays a
+gap: the pointer rule needs a symlink.
 
 What a harness honours is the **coverage table**, `coverage/NAME.toml` -- data with the
 same character as the mappings, not the mapping's `[capabilities]` flags (those say how a

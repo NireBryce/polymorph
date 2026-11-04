@@ -156,7 +156,13 @@ or kind is an error), with `load_mapping`'s lookup rules (the repo-local file ov
 built-in with a warning; an explicit dir must be the repo's, the built-in's or trusted). A
 harness with no coverage table means nothing is known about it: the gap report claims
 nothing rather than claiming a gap. The gap report lists each provided path the table gives
-no way of honouring. Owner: `inventory.py`.
+no way of honouring. A symlink whose resolved target is already honoured content is a
+pointer, not a gap (issue #31): a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind -- `.claude/skills` -> `.agents/skills`
+when the table honours skills at `.agents/skills` -- is read by the harness through that
+other path, so it is not reported. A memory item is honoured only by resolving to a named
+memory file; a real second copy stays `unlinked-copy`, and a symlink to anything else stays
+a gap. Owner: `inventory.py`.
 
 `adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
 `CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp

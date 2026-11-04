@@ -164,6 +164,12 @@ them resolves to it, directly or through a symlink; otherwise it is a gap with a
 | `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
 | `points-elsewhere` | the harness reads a symlink that leads somewhere else |
 
+A symlink whose resolved target is already honoured content is a **pointer**, not a gap,
+and is left out of the report: a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind (`.claude/skills` -> `.agents/skills` when
+the table honours skills there). A real second copy is never a pointer: that is
+`unlinked-copy` drift.
+
 For `no-link` the `fix` text is the command that makes the link
 (`polymorph equip --harness claude links CLAUDE.md -> AGENTS.md`); `equip` and `manage adopt`
 create it. For the other reasons the `fix` text says what to do by hand.

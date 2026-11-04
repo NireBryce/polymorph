@@ -268,24 +268,51 @@ def _link_target(repo: Path, kind: str, item: Item, read: str) -> str:
     return os.path.relpath(source, (repo / read).parent)
 
 
+def _honoured_target(repo: Path, cap: Coverage, kind: str, item: Item) -> bool:
+    """True when the item is a symlink whose resolved target is honoured content: a pointer,
+    not a gap, because the harness reads those bytes through the other path (issue #31).
+
+    A path is honoured when it is a memory file the table names, or lies inside (or is) a
+    directory the table honours for some kind -- `.claude/skills` -> `.agents/skills` when
+    the table reads skills there. A memory item counts as honoured only through `_reached`,
+    which already compares resolved paths; a memory symlink pointing anywhere else (or at a
+    file only honoured as another kind) stays a gap.
+    """
+    if item.target is None or kind == "memory":
+        return False
+    t = (repo / item.target).resolve()
+    if any(_same(repo / item.target, repo / r) for r in cap.memory):
+        return True
+    for src in (cap.skills, cap.rules, cap.claude_dir):
+        if src:
+            base = (repo / src).resolve()
+            if t == base or base in t.parents:
+                return True
+    return False
+
+
 def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
     """Provided paths the harness will not read, with the reason.
 
     A harness reads fixed paths (the coverage table). An item is reached when one of them
-    resolves to it, directly or through a symlink. Otherwise the reason says what stands
-    there instead: nothing (`no-link`), a second real copy (`unlinked-copy`, the usual
-    source of drift between CLAUDE.md and AGENTS.md or .claude/ and .agents/), or a symlink
-    to something else (`points-elsewhere`). A kind the harness has no path for is `unsupported`.
+    resolves to it, directly or through a symlink. A symlink whose resolved target is
+    honoured content is a pointer, not a gap (`_honoured_target`). Otherwise the reason says
+    what stands there instead: nothing (`no-link`), a second real copy (`unlinked-copy`, the
+    usual source of drift between CLAUDE.md and AGENTS.md or .claude/ and .agents/), or a
+    symlink to something else (`points-elsewhere`). A kind the harness has no path for is
+    `unsupported`.
     """
     repo = Path(repo)
     out: list[Gap] = []
     for kind in KINDS:
         reads = _read_paths(cap, kind)
         for item in inv.kind(kind):
+            if any(_reached(repo, kind, item, r) for r in reads):
+                continue
+            if _honoured_target(repo, cap, kind, item):
+                continue
             if not reads:
                 out.append(Gap(cap.name, kind, item.path, UNSUPPORTED))
-                continue
-            if any(_reached(repo, kind, item, r) for r in reads):
                 continue
             present = [r for r in reads if (repo / r).exists() or (repo / r).is_symlink()]
             if not present:
