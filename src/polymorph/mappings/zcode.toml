@@ -29,8 +29,9 @@
 #
 # Second probe round (2026-11-04, docs/observed-zcode-session.md): the other
 # events dispatch -- SessionStart, UserPromptSubmit and Stop logged payloads in
-# a session started after the wiring (PermissionRequest never dispatched in any
-# session) -- but no action from any hook answer is honored: allow +
+# a session started after the wiring (PermissionRequest stayed silent through the
+# probe; the shared log later caught one dispatch, for an AskUserQuestion call) --
+# but no action from any hook answer is honored: allow +
 # updatedInput ran the original command, a UserPromptSubmit block marker
 # reached the model, stdout context injection did not land, and a Stop exit-2
 # continuation never happened. Hook wiring is read at session start: config
