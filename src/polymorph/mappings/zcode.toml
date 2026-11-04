@@ -6,25 +6,39 @@
 # snake_case and the table below is the Claude one; the camelCase fields that
 # differ (hookEventName, transcriptPath) only exist as the ZCode detection
 # signal, which this schema has no key for -- hooks detect it themselves.
+# Confirmed live 2026-11-04 (docs/observed-zcode-session.md).
+#
+# Answers are NOT the Claude protocol there (live probe rounds, 2026-11-04,
+# issue #56): JSON permissionDecision answers are ignored -- a JSON deny ran
+# the call with no denial text, a JSON ask drew no prompt. Only exit codes
+# gate calls: exit 2 blocked, and blocked non-Bash tools too, with the stderr
+# line surfaced as the whole tool result; exit-1 stderr and PostToolUse
+# exit-2 stderr never reached the model; a 65s hook drew no timeout message.
+# A guard script that answers JSON deny therefore fails open here: the deny
+# route a zcode hook can rely on is exit 2. fixtures/zcode/deny.json still
+# teaches the JSON route (#56 tracks the exit-2 answer shape for direct
+# delivery).
 #
 # ask=false: ZCode treats permissionDecision "ask" as allow (nixos-configs
-# #448/#458). The hardening can only live in the hook, and this mapping is
+# #448/#458; consistent with the live session: a JSON ask ran with no
+# prompt). The hardening can only live in the hook, and this mapping is
 # delivery = "direct": no adapter runs, so nothing sets GUARD_ASK_ENFORCED and
 # a shared guard script cannot read it. Only a hook written for zcode itself
 # (detecting hookEventName/transcriptPath, as the nixos-configs ones do) can
 # default correctly. `manage check` reports this shape as
 # direct-ask-unenforceable.
 #
-# `verified` covers only what those hook files state (payload shape, ask-as-allow,
-# config layout). NOT verified by them, so not claimed: rewrites_input,
-# exit_2_blocks, post_event behaviour, skills_dir, context_file. Values for those
-# are the best guess and need a live check (see the report-harness skill).
+# `verified` covers the nixos-configs hook comments (payload shape,
+# ask-as-allow, config layout) and the 2026-11-04 live probe (payload shape,
+# exit 2 blocks, JSON answers ignored, post event fires). NOT verified, still
+# best guess: rewrites_input, skills_dir, context_file (see the report-harness
+# skill).
 schema = 1
 name = "zcode"
-verified = "2026-10-30, from nixos-configs hook comments (payload shape, ask-as-allow); not a live run"
+verified = "2026-11-04, live probe session (payload shape, exit 2 blocks, JSON answers ignored, post event fires, ask drew no prompt); 2026-10-30, nixos-configs hook comments (payload shape, ask-as-allow)"
 config_path = ".zcode/config.json"
 format = "json"
-delivery = "direct"   # speaks the canonical protocol: hooks run bare, no adapter
+delivery = "direct"   # hooks run bare, no adapter; payload is canonical, answers are not (see header)
 template = "claude-like"
 context_file = "AGENTS.md"
 skills_dir = ".agents/skills"
@@ -40,11 +54,11 @@ pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
 
 [capabilities]
-ask = false
-post_event = true
-exit_2_blocks = true
-rewrites_input = false
-json_answers = true
+ask = false            # nixos-configs #448/#458; live: a JSON ask ran with no prompt
+post_event = true      # live: PostToolUse fires and logs; its exit-2 stderr does not reach the model
+exit_2_blocks = true   # live: exit 2 blocked Bash and Edit; JSON deny did not block
+rewrites_input = false # still best guess; live payloads carried tool_input.command verbatim
+json_answers = false   # live 2026-11-04: JSON permissionDecision answers are ignored (#56)
 
 [payload_in]
 tool_name = "tool_name"
@@ -58,5 +72,6 @@ cwd = "cwd"
 session_id = "session_id"
 
 [payload_out]
-# No entries: the adapter passes the canonical answer through unchanged
-# (this harness speaks the Claude hook protocol).
+# No entries: the adapter passes the canonical answer through unchanged.
+# The payload is Claude-shaped; the answers are not honoured as JSON (see
+# the header): a JSON deny fails open, exit 2 is the only gate observed.
