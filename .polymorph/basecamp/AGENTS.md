@@ -133,3 +133,12 @@ a new test or fixture silently does not exist. Do not pipe a check into
 
 Plain prose: say what a thing does and what you saw; no hedging adverbs, no
 "robust", "seamless" or "comprehensive".
+
+Names read at skimming speed. A function's name is its behavior, a variable's
+name is its content: someone skimming a diff should never need to open a
+function to know what a line does. No one-letter names in code you write
+(`duration_seconds`, not `d`; `flag_results`, not `caps`), unless the letter
+is the idiom of the code right beside it (`rc` for a return code, `i, rec`
+in this repo's existing loops). A name that needs a comment to be decoded
+gets a better name instead. Full code style — comments, renames, shipped
+templates, recorded declines — is in `wiki/code-style.md`.
