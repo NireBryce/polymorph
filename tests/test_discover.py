@@ -877,6 +877,51 @@ class NoisyLogTest(unittest.TestCase):
         self.assertIn("drafted from 4 observed payloads", r.stdout)
 
 
+class SlowestDeltasTest(unittest.TestCase):
+    """The slowest pre->post deltas block: fail-open hook latency, one command to see."""
+
+    def setUp(self):
+        self._d = tempfile.TemporaryDirectory()
+        self.addCleanup(self._d.cleanup)
+        log_entries = [
+            # the 60 s fail-open shape: a hook awaited out to its timeout kill
+            _oc("execute.before", 100.0, "call_slow", "m1", tool="shell", input=SHELL_IN),
+            _oc("execute.after", 160.1, "call_slow", "m1", tool="shell", output=RESULT),
+            _oc("execute.before", 200.0, "call_fast", "m1", tool="read", input={"path": "/f"}),
+            _oc("execute.after", 200.12, "call_fast", "m1", tool="read", output={"output": "x"}),
+            _oc("execute.before", 300.0, "call_un", "m1", tool="shell", input=SHELL_IN),
+            # post landed before pre: no delta, the pairing line counts it
+            _oc("execute.before", 400.0, "call_rev", "m1", tool="shell", input=SHELL_IN),
+            _oc("execute.after", 399.0, "call_rev", "m1", tool="shell", output=RESULT),
+        ]
+        self.f = _mk_ts(self._d.name, log_entries)
+
+    def test_descending_with_tool_and_call_id(self):
+        out = discover.summarize(self.f)
+        self.assertIn("slowest pre->post deltas (logger write time; includes the hook wait):", out)
+        self.assertIn("  60.100s  shell  call_slow", out)
+        self.assertIn("  0.120s  read  call_fast", out)
+        self.assertLess(out.index("60.100s"), out.index("0.120s"))
+        self.assertNotIn("call_un", out)     # before without after: no delta
+        self.assertNotIn("call_rev", out)    # post before pre: counted on the pairing line
+
+    def test_capped_at_five(self):
+        log_entries = []
+        for pair_number in range(7):
+            call_id = f"c{pair_number}"
+            log_entries.append(_oc("execute.before", 10.0 * pair_number, call_id, "m1",
+                                   tool="shell", input=SHELL_IN))
+            log_entries.append(_oc("execute.after", 10.0 * pair_number + pair_number + 1, call_id,
+                                   "m1", tool="shell", output=RESULT))
+        out = discover.summarize(_mk_ts(self._d.name, log_entries))
+        self.assertEqual(out.count("s  shell  c"), 5)
+
+    def test_absent_without_pairing(self):
+        only_before = [_oc("execute.before", 1.0, "call_x", "m1", tool="shell", input=SHELL_IN)]
+        out = discover.summarize(_mk_ts(self._d.name, only_before))
+        self.assertNotIn("slowest", out)
+
+
 class OutputKeyPathsTest(unittest.TestCase):
     def test_nested_output_keys_kept_values_hidden(self):
         with tempfile.TemporaryDirectory() as d:
