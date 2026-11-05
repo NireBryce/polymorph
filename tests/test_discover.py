@@ -352,6 +352,22 @@ class SummaryPerSessionTest(unittest.TestCase):
             out = discover.summarize(f)
             self.assertIn("<no session id>  1 payloads  PreToolUse 1", out)
 
+    def test_old_format_log_session_id_is_not_printed_raw(self):
+        # a log line with only `raw` (older logs, hand edits) skips the write-time id check;
+        # the summary must not print a newline or escape from it
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            with open(f, "w") as fh:
+                for sid in ("a1", "b2\nFORGED LINE\x1b[31m"):
+                    fh.write(json.dumps({"raw": {"hook_event_name": "PreToolUse",
+                                                 "tool_name": "Bash", "session_id": sid,
+                                                 "tool_input": {}}}) + "\n")
+            out = discover.summarize(f)
+            self.assertNotIn("FORGED", out)
+            self.assertNotIn("\x1b", out)
+            self.assertIn("<invalid>  1 payloads  PreToolUse 1", out)
+
     def test_pairs_by_toolCallId_when_tool_use_id_is_absent(self):
         # zcode names its call id toolCallId; a payload carrying only that used to
         # redact it and pair nothing, reporting every line "without an id"

@@ -965,7 +965,9 @@ def summarize(log: str | Path, include=(), events=()) -> str:
         out.append("pairing by call id and message id: " + _pairing_text(pairing))
     per_session: dict[str, list[tuple[int, dict]]] = {}
     for i, rec in sel:
-        sid = _top(rec)[2] or "<no session id>"
+        sid = _top(rec)[2]
+        # old-format lines (only `raw`) skip the write-time id check, so check here
+        sid = "<no session id>" if sid is None else (sid if _id_shaped(sid) else INVALID)
         per_session.setdefault(sid, []).append((i, rec))
     if len(per_session) > 1:
         out.append("per session: payloads, events, pairing")
