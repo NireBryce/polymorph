@@ -254,6 +254,42 @@ Guard rails, whoever does it:
 - This spends model credits and may auto-approve tool calls; keep the prompts exactly as
   written.
 
+### Capability probes and a decode file
+
+The prompts above wire a logger and capture payload shapes. Answer semantics need a
+second pass: one probe script, one marker command per decision route, run in a live
+session started **after** the probe wiring exists (a running session's wiring is frozen
+at its start, so config edits land only in sessions begun afterwards), with each result
+recorded observed, derived or untested — see the capability-probe pattern in
+[the observed zcode session](observed-zcode-session.md).
+
+The log cannot tell you which payload carried which marker: values are redacted to
+`{type, length}`, so it answers shape questions, not content questions. Have each probe
+branch write its own decode line to a side file next to the log — the marker, the event,
+the call id, and the answer the branch chose:
+
+```sh
+printf '%s %s %s %s\n' "$marker" "$event" "$answer" \
+  "$(printf '%s' "$input" | grep -o '"toolCallId":[^,}]*' | head -1)" \
+  >> "${LOG%.jsonl}-decode.log"
+```
+
+Join on the call id: the allowlist keeps ids, so marker → call id → payload shape reads
+straight across, and Pre→Post deltas in the log then measure what the harness did with
+the answer (a 2 s kill under an explicit `timeout`, a 60 s kill under the default)
+without guessing from gaps between rows.
+
+- The side file carries marker names, ids and the probe's own chosen answers — never
+  payload values. The hook reads the payload before redaction and writes only what you
+  choose; the redaction allowlist is not bypassed.
+- The side-file write happens inside the hook, not through a tool call, so a
+  payload-matching probe cannot self-block on it. Do name markers to avoid colliding
+  with any matcher already wired — write them from parts if the probe's own matcher must
+  not see a marker's full text in a payload (the zcode probe denied the very call that
+  installed a new marker).
+- Delete the side file with the log when you are done; it is discovery data and stays
+  untracked.
+
 ## What to send
 
 Open an issue from the **Harness report** form
