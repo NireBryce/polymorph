@@ -101,9 +101,9 @@ def read_claude(repo: str | Path) -> Canon:
         if key == "hooks":
             continue
         if key == "permissions" and isinstance(val, dict):
-            for sub, items in val.items():
-                n = len(items) if isinstance(items, list) else 1
-                unmapped.append(f"permissions.{sub} ({n} entries)")
+            for perm_key, items in val.items():
+                count = len(items) if isinstance(items, list) else 1
+                unmapped.append(f"permissions.{perm_key} ({count} entries)")
         else:
             unmapped.append(key)
 
@@ -115,15 +115,15 @@ def read_claude(repo: str | Path) -> Canon:
                 continue
             for group in groups:
                 classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
-                for h in group.get("hooks", []):
-                    if h.get("type", "command") != "command":
-                        unmapped.append(f"hooks.{event}[type={h.get('type')}]")
+                for hook_entry in group.get("hooks", []):
+                    if hook_entry.get("type", "command") != "command":
+                        unmapped.append(f"hooks.{event}[type={hook_entry.get('type')}]")
                         continue
-                    script = resolve_script(h.get("command", ""), repo)
-                    t = h.get("timeout")
-                    if t is not None and (isinstance(t, bool) or int(t) <= 0):
-                        raise ReaderError(f"hook {script}: timeout must be a positive number of seconds, got {t!r}")
-                    hooks.append(Hook(canon_event, classes, script, int(t) if t is not None else None))
+                    script = resolve_script(hook_entry.get("command", ""), repo)
+                    timeout = hook_entry.get("timeout")
+                    if timeout is not None and (isinstance(timeout, bool) or int(timeout) <= 0):
+                        raise ReaderError(f"hook {script}: timeout must be a positive number of seconds, got {timeout!r}")
+                    hooks.append(Hook(canon_event, classes, script, int(timeout) if timeout is not None else None))
     except (AttributeError, TypeError, ValueError) as e:
         # a malformed entry is a settings problem, not a crash: check reports
         # settings-invalid and keeps going, generate exits 2 with the message

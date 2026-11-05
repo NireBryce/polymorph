@@ -5,8 +5,8 @@ the draft only copies back values that match strict name patterns (tool names, k
 names), never command text or paths.
 
 Tool-name heuristics (case-insensitive, first match wins, checked in this order):
-  shell: bash, shell, sh, terminal, command, exec, run_command
-  edit:  edit, write, patch, replace, create, multiedit, str_replace, apply_patch
+  shell: bash, shell, terminal, command, exec, sh
+  edit:  edit, write, patch, replace, create
   read:  read, grep, glob, search, find, list, view, cat
 Anything else (including mcp tools) is left out of [tools], not guessed.
 """
@@ -137,8 +137,8 @@ def log_command(harness: str, log_dir: str | Path | None = None, redact: bool = 
     if out is None:
         out = Path(log_dir or Path.cwd() / DISCOVERY_DIR).resolve() / f"{harness}.jsonl"
     flag = ("" if redact else " --full") + (" --env-be-very-careful" if env else "")
-    pre = f"env PYTHONPATH={shlex.quote(str(pythonpath))} " if pythonpath else ""
-    return (f"{pre}{shlex.quote(sys.executable)} -m polymorph discover log{flag} "
+    pythonpath_prefix = f"env PYTHONPATH={shlex.quote(str(pythonpath))} " if pythonpath else ""
+    return (f"{pythonpath_prefix}{shlex.quote(sys.executable)} -m polymorph discover log{flag} "
             f"--out {shlex.quote(str(Path(out).resolve()))}")
 
 
@@ -148,19 +148,19 @@ def _check_harness(harness: str) -> None:
 
 
 def _resolve(config_path: str, base: str | Path) -> Path:
-    p = Path(config_path)
-    return p if p.is_absolute() else Path(base) / p
+    path = Path(config_path)
+    return path if path.is_absolute() else Path(base) / path
 
 
-def _load_doc(p: Path) -> dict:
+def _load_doc(config_file: Path) -> dict:
     doc: dict = {}
-    if p.is_file():
+    if config_file.is_file():
         try:
-            doc = json.loads(p.read_text())
+            doc = json.loads(config_file.read_text())
         except json.JSONDecodeError as e:
-            raise ValueError(f"{p}: existing config is not valid JSON ({e}); refusing to touch the file") from e
+            raise ValueError(f"{config_file}: existing config is not valid JSON ({e}); refusing to touch the file") from e
         if not isinstance(doc, dict):
-            raise ValueError(f"{p}: existing config is not a JSON object")
+            raise ValueError(f"{config_file}: existing config is not a JSON object")
     return doc
 
 
@@ -186,7 +186,7 @@ def _hooks_tables(doc: dict, shape: str, event_name: str) -> tuple[dict, dict, l
     if groups is None:
         groups = []
     if not isinstance(groups, list) or not all(
-            isinstance(g, dict) and isinstance(g.get("hooks", []), list) for g in groups):
+            isinstance(group, dict) and isinstance(group.get("hooks", []), list) for group in groups):
         raise ValueError(f"existing hooks for {event_name!r} are not a list of matcher groups; "
                          "refusing to touch the file")
     return hooks, table, groups
@@ -203,9 +203,9 @@ def _merge_hook(doc: dict, shape: str, event_name: str, matcher: str, entry: dic
     hooks, table, groups = _hooks_tables(doc, shape, event_name)
     removed = 0
     if marker:
-        scratch = {"hooks": {event_name: groups}}
-        removed = _strip_marker(scratch, marker)
-        groups = scratch["hooks"][event_name]
+        marker_doc = {"hooks": {event_name: groups}}
+        removed = _strip_marker(marker_doc, marker)
+        groups = marker_doc["hooks"][event_name]
     group = {"matcher": matcher, "hooks": [entry]}
     if shape == "claude-like":
         entry["enabled"] = True
@@ -215,11 +215,11 @@ def _merge_hook(doc: dict, shape: str, event_name: str, matcher: str, entry: dic
     return removed
 
 
-def _write_doc(p: Path, doc: dict) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".polymorph-tmp")
+def _write_doc(config_file: Path, doc: dict) -> None:
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = config_file.with_name(config_file.name + ".polymorph-tmp")
     tmp.write_text(json.dumps(doc, indent=2) + "\n")
-    os.replace(tmp, p)
+    os.replace(tmp, config_file)
 
 
 def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
@@ -231,16 +231,16 @@ def init_config(harness: str, config_path: str, event_name: str = "PreToolUse",
     if shape is not None and shape not in ("claude-settings", "claude-like"):
         raise ValueError(f"unknown shape {shape!r}")
     _check_harness(harness)
-    p = _resolve(config_path, base)
-    doc = _load_doc(p)
+    config_file = _resolve(config_path, base)
+    doc = _load_doc(config_file)
     if shape is None:
         shape = _detect_shape(doc)   # installing where the harness never fires logs nothing
     entry: dict = {"type": "command", "command": log_command(harness, log_dir, redact, env=env, pythonpath=pythonpath)}
     # the logger's own entry is recognised by its --out file; the user's hooks stay
     _merge_hook(doc, shape, event_name, matcher, entry,
                 marker=("-m polymorph discover log", f"/{harness}.jsonl"))
-    _write_doc(p, doc)
-    return p
+    _write_doc(config_file, doc)
+    return config_file
 
 
 # ---- reload-check -----------------------------------------------------------
@@ -254,110 +254,110 @@ def _sha(b: bytes) -> str:
 
 
 def _detect_shape(doc: dict) -> str:
-    h = doc.get("hooks")
-    return "claude-like" if isinstance(h, dict) and isinstance(h.get("events"), dict) else "claude-settings"
+    hooks = doc.get("hooks")
+    return "claude-like" if isinstance(hooks, dict) and isinstance(hooks.get("events"), dict) else "claude-settings"
 
 
 def reload_check_start(config_path: str, scratch_log: str, event_name: str = "PreToolUse",
                        matcher: str = "*", base: str | Path = ".", shape: str | None = None) -> str:
     """Add a temporary extra hook (distinct out file); return instructions for the user."""
-    p = _resolve(config_path, base).resolve()
-    scratch = Path(scratch_log).resolve()
-    st = _state_path(scratch)
-    if st.exists():
-        raise ValueError(f"{st} exists: a reload check is already open; run it with --finish first")
-    original = p.read_bytes() if p.is_file() else None
-    doc = _load_doc(p)
-    entry = {"type": "command", "command": log_command("reload-check", out=scratch)}
+    config_file = _resolve(config_path, base).resolve()
+    scratch_log_path = Path(scratch_log).resolve()
+    state_path = _state_path(scratch_log_path)
+    if state_path.exists():
+        raise ValueError(f"{state_path} exists: a reload check is already open; run it with --finish first")
+    original = config_file.read_bytes() if config_file.is_file() else None
+    doc = _load_doc(config_file)
+    entry = {"type": "command", "command": log_command("reload-check", out=scratch_log_path)}
     _merge_hook(doc, shape or _detect_shape(doc), event_name, matcher, entry)
     # state first: if the config write fails midway, finish can still clean up
-    scratch.parent.mkdir(parents=True, exist_ok=True)
-    state = {"config": str(p), "existed": original is not None,
+    scratch_log_path.parent.mkdir(parents=True, exist_ok=True)
+    state = {"config": str(config_file), "existed": original is not None,
              "original_b64": base64.b64encode(original or b"").decode()}
-    st.write_text(json.dumps(state))
+    state_path.write_text(json.dumps(state))
     try:
-        _write_doc(p, doc)
+        _write_doc(config_file, doc)
     except Exception:
-        _restore(p, state)
-        st.unlink(missing_ok=True)
+        _restore(config_file, state)
+        state_path.unlink(missing_ok=True)
         raise
-    state["written_sha256"] = _sha(p.read_bytes())
-    st.write_text(json.dumps(state))
+    state["written_sha256"] = _sha(config_file.read_bytes())
+    state_path.write_text(json.dumps(state))
     return "\n".join([
-        f"Temporary hook added to {p} ({event_name}), logging to {scratch}.",
+        f"Temporary hook added to {config_file} ({event_name}), logging to {scratch_log_path}.",
         "Do NOT restart the harness or reload its config. In the already-running session:",
         "  1. have the agent make exactly one tool call (e.g. run `true` with the shell tool),",
         "  2. then run:",
-        f"     python -m polymorph discover reload-check --finish --config-path {shlex.quote(str(p))}"
-        f" --scratch-log {shlex.quote(str(scratch))}",
+        f"     python -m polymorph discover reload-check --finish --config-path {shlex.quote(str(config_file))}"
+        f" --scratch-log {shlex.quote(str(scratch_log_path))}",
         "The finish step reports whether the running harness picked up the edit and removes the hook.",
     ])
 
 
-def _restore(p: Path, state: dict) -> None:
+def _restore(config_file: Path, state: dict) -> None:
     if state["existed"]:
-        p.write_bytes(base64.b64decode(state["original_b64"]))
+        config_file.write_bytes(base64.b64decode(state["original_b64"]))
     else:
-        p.unlink(missing_ok=True)
+        config_file.unlink(missing_ok=True)
 
 
 def _strip_marker(doc: dict, marker: str | tuple[str, ...]) -> int:
     """Remove hook entries whose command carries every marker (one, or a tuple of all)."""
     markers = (marker,) if isinstance(marker, str) else tuple(marker)
-    n = 0
+    removed_count = 0
 
-    def groups(lst):
-        nonlocal n
+    def strip_groups(group_list):
+        nonlocal removed_count
         out = []
-        for g in lst:
-            if isinstance(g, dict) and isinstance(g.get("hooks"), list):
-                keep = [h for h in g["hooks"]
-                        if not (isinstance(h, dict) and all(m in str(h.get("command", "")) for m in markers))]
-                n += len(g["hooks"]) - len(keep)
+        for group in group_list:
+            if isinstance(group, dict) and isinstance(group.get("hooks"), list):
+                keep = [hook for hook in group["hooks"]
+                        if not (isinstance(hook, dict) and all(marker_part in str(hook.get("command", "")) for marker_part in markers))]
+                removed_count += len(group["hooks"]) - len(keep)
                 if not keep:
                     continue
-                g = {**g, "hooks": keep}
-            out.append(g)
+                group = {**group, "hooks": keep}
+            out.append(group)
         return out
 
-    h = doc.get("hooks")
-    if isinstance(h, dict):
-        tables = [h] + ([h["events"]] if isinstance(h.get("events"), dict) else [])
-        for t in tables:
-            for k, v in list(t.items()):
+    hooks_table = doc.get("hooks")
+    if isinstance(hooks_table, dict):
+        tables = [hooks_table] + ([hooks_table["events"]] if isinstance(hooks_table.get("events"), dict) else [])
+        for table in tables:
+            for k, v in list(table.items()):
                 if isinstance(v, list):
-                    t[k] = groups(v)
-    return n
+                    table[k] = strip_groups(v)
+    return removed_count
 
 
 def reload_check_finish(config_path: str, scratch_log: str, base: str | Path = ".") -> tuple[bool, str]:
     """Remove the temporary hook and report whether the scratch log got a line."""
-    p = _resolve(config_path, base).resolve()
-    scratch = Path(scratch_log).resolve()
-    st = _state_path(scratch)
-    seen = scratch.is_file() and any(l.strip() for l in scratch.read_text(errors="replace").splitlines())
+    config_file = _resolve(config_path, base).resolve()
+    scratch_log_path = Path(scratch_log).resolve()
+    state_path = _state_path(scratch_log_path)
+    seen = scratch_log_path.is_file() and any(line.strip() for line in scratch_log_path.read_text(errors="replace").splitlines())
     notes = []
-    if st.is_file():
-        state = json.loads(st.read_text())
-        cur = p.read_bytes() if p.is_file() else None
-        if cur is not None and _sha(cur) == state.get("written_sha256"):
-            _restore(p, state)
-            notes.append(f"{p} restored byte-for-byte")
-        elif cur is None:
-            notes.append(f"{p} is gone; nothing to clean up")
+    if state_path.is_file():
+        state = json.loads(state_path.read_text())
+        current_bytes = config_file.read_bytes() if config_file.is_file() else None
+        if current_bytes is not None and _sha(current_bytes) == state.get("written_sha256"):
+            _restore(config_file, state)
+            notes.append(f"{config_file} restored byte-for-byte")
+        elif current_bytes is None:
+            notes.append(f"{config_file} is gone; nothing to clean up")
         else:
-            doc = _load_doc(p)
-            removed = _strip_marker(doc, str(scratch))
+            doc = _load_doc(config_file)
+            removed = _strip_marker(doc, str(scratch_log_path))
             if removed:
-                _write_doc(p, doc)
-            notes.append(f"{p} changed since the check began; removed {removed} temporary hook(s) "
+                _write_doc(config_file, doc)
+            notes.append(f"{config_file} changed since the check began; removed {removed} temporary hook(s) "
                          "by marker instead of restoring")
-        st.unlink(missing_ok=True)
+        state_path.unlink(missing_ok=True)
     else:
-        doc = _load_doc(p)
-        removed = _strip_marker(doc, str(scratch))
+        doc = _load_doc(config_file)
+        removed = _strip_marker(doc, str(scratch_log_path))
         if removed:
-            _write_doc(p, doc)
+            _write_doc(config_file, doc)
         notes.append(f"no state file; removed {removed} temporary hook(s) by marker")
     verdict = ("RELOADED: the running harness picked up the config edit without a restart"
                if seen else
@@ -433,13 +433,13 @@ _SHAPE_MAX_KEYS = 64
 
 
 def _shape(v, depth: int = _SHAPE_DEPTH):
-    """Nested key paths of an object with every leaf a descriptor; odd key names are dropped."""
+    """Nested key paths of an object with every leaf a descriptor; odd key names become <invalid key>."""
     if not isinstance(v, dict) or depth <= 0:
         return _descriptor(v)
     out = {}
-    for k, vv in list(v.items())[:_SHAPE_MAX_KEYS]:
+    for k, child in list(v.items())[:_SHAPE_MAX_KEYS]:
         k = str(k)
-        out[k if _safe(k, _KEY_RE) else "<invalid key>"] = _shape(vv, depth - 1)
+        out[k if _safe(k, _KEY_RE) else "<invalid key>"] = _shape(child, depth - 1)
     return out
 
 
@@ -454,11 +454,12 @@ def _safe_text(key: str, value: str) -> bool:
         return _safe(value, _EVENT_RE) is not None
     if key in ("tool_name", "toolName"):
         return _safe(value) is not None
-    return _id_shaped(value)   # permission_mode, effort, source
+    return _id_shaped(value)   # permission_mode, effort, source, duration_ms
 
 
 def _redact_payload(raw):
-    """Keys kept; only _SAFE_VALUES survive verbatim, the rest become {type, length}."""
+    """Keys kept. Surviving verbatim: _SAFE_VALUES names that look like names, id-shaped values
+    under the id keys, and output-like objects shaped to depth 3; everything else becomes {type, length}."""
     if not isinstance(raw, dict):
         return _descriptor(raw)
     out = {}
@@ -501,7 +502,7 @@ def _record(text: str, redact: bool = True, env: bool = False,
         keys = sorted(_safe(str(k), _KEY_RE) or "<invalid key>" for k in raw)
         for k in _INPUT_KEYS:
             if isinstance(raw.get(k), dict):
-                tool_input_keys = sorted(_safe(str(x), _KEY_RE) or "<invalid key>" for x in raw[k])
+                tool_input_keys = sorted(_safe(str(input_key), _KEY_RE) or "<invalid key>" for input_key in raw[k])
                 break
         event = _first_str(raw, _EVENT_KEYS)
         tool_name = _first_str(raw, _TOOL_NAME_KEYS)
@@ -523,19 +524,19 @@ def _record(text: str, redact: bool = True, env: bool = False,
         "keys": keys,
         "tool_input_keys": tool_input_keys,
     }
-    pv, loc = _provenance_mark(plugin_version), _provenance_mark(location)
-    if pv:
-        rec["plugin_version"] = pv
-    if loc:
-        rec["location"] = loc
+    version_mark, location_mark = _provenance_mark(plugin_version), _provenance_mark(location)
+    if version_mark:
+        rec["plugin_version"] = version_mark
+    if location_mark:
+        rec["location"] = location_mark
     return rec
 
 
 def _log_error(out: str, what: str) -> None:
     """Sidecar <name>.errors.jsonl beside the log; best effort, never raises."""
     try:
-        p = Path(out)
-        side = p.with_name(p.stem + ".errors.jsonl")
+        log_path = Path(out)
+        side = log_path.with_name(log_path.stem + ".errors.jsonl")
         side.parent.mkdir(parents=True, exist_ok=True)
         with open(side, "a", encoding="utf-8") as f:
             f.write(json.dumps({"ts": time.time(), "error": what}) + "\n")
@@ -551,16 +552,16 @@ def log_stdin(out: str, stream=None, redact: bool = True, env: bool = False,
         text = stream.read()
         rec = _record(text, redact, env, plugin_version, location)
         try:
-            is_obj = isinstance(json.loads(text), dict)
+            stdin_is_object = isinstance(json.loads(text), dict)
             why = "stdin JSON is not an object"
         except (ValueError, RecursionError):
-            is_obj, why = False, "stdin is not JSON"
-        if not is_obj:
+            stdin_is_object, why = False, "stdin is not JSON"
+        if not stdin_is_object:
             _log_error(out, f"{why} ({len(text)} chars)")
         line = json.dumps(rec, ensure_ascii=False)
-        p = Path(out)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "a", encoding="utf-8") as f:
+        log_path = Path(out)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception as e:
         _log_error(out, f"{type(e).__name__}: {e}")
@@ -576,12 +577,12 @@ def _first_key(d: dict, names) -> str | None:
 
 
 def classify_tool(name: str) -> str | None:
-    low = name.lower()
-    if low.startswith("mcp"):
+    name_lower = name.lower()
+    if name_lower.startswith("mcp"):
         return None
-    for cls, words in _HEURISTICS:
-        if any(w == low or low.startswith(w) or low.endswith(w) for w in words):
-            return cls
+    for tool_class, words in _HEURISTICS:
+        if any(word == name_lower or name_lower.startswith(word) or name_lower.endswith(word) for word in words):
+            return tool_class
     return None
 
 
@@ -590,19 +591,19 @@ def _load_records(path: str | Path) -> tuple[list[dict], int, int]:
     recs, other, broken = [], 0, 0
     for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
         try:
-            r = json.loads(line)
+            rec = json.loads(line)
         except ValueError:
             broken += 1
             continue
-        if not isinstance(r, dict):
+        if not isinstance(rec, dict):
             other += 1
             continue
-        for f in ("keys", "tool_input_keys"):
-            v = r.get(f)
-            if v is not None and not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
-                del r[f]   # untrusted shape: treated as absent rather than crashing summary
-        if isinstance(r.get("raw"), dict):
-            recs.append(r)
+        for field_name in ("keys", "tool_input_keys"):
+            field_value = rec.get(field_name)
+            if field_value is not None and not (isinstance(field_value, list) and all(isinstance(key_name, str) for key_name in field_value)):
+                del rec[field_name]   # untrusted shape: treated as absent rather than crashing summary
+        if isinstance(rec.get("raw"), dict):
+            recs.append(rec)
         else:
             other += 1
     return recs, other, broken
@@ -641,54 +642,54 @@ def _select(recs: list[dict], include=(), events=()) -> tuple[list[tuple[int, di
     """
     keep, hidden = [], {}
     for i, rec in enumerate(recs):
-        ev, tn, _ = _top(rec)
+        event_name, tool_name, _ = _top(rec)
         if events:
-            wanted = ev in events
+            wanted = event_name in events
         else:
-            wanted = tn is not None
-        if wanted or ev in include:
+            wanted = tool_name is not None
+        if wanted or event_name in include:
             keep.append((i, rec))
         else:
-            name = _safe(ev, _EVENT_RE) or ("<none>" if ev is None else "<invalid>")
+            name = _safe(event_name, _EVENT_RE) or ("<none>" if event_name is None else "<invalid>")
             hidden[name] = hidden.get(name, 0) + 1
-    keep.sort(key=lambda t: (_num(t[1].get("ts")), t[0]))
+    keep.sort(key=lambda entry: (_num(entry[1].get("ts")), entry[0]))
     return keep, hidden
 
 
 def _ids(raw: dict) -> tuple[str | None, str | None]:
     def pick(names):
-        for n in names:
-            v = raw.get(n)
-            if isinstance(v, str) and _ID_VALUE.fullmatch(v):
-                return v
+        for key_name in names:
+            value = raw.get(key_name)
+            if isinstance(value, str) and _ID_VALUE.fullmatch(value):
+                return value
         return None
     return pick(_CALL_ID_KEYS), pick(_MESSAGE_ID_KEYS)
 
 
 def _pairing(sel: list[tuple[int, dict]]) -> dict[str, int] | None:
     """Pair pre_tool and post_tool lines by (call id, message id); None if there are none."""
-    seen: dict[tuple, dict[str, int]] = {}
+    positions_by_pair: dict[tuple, dict[str, int]] = {}
     no_id = 0
-    any_pp = False
+    any_pre_or_post = False
     for i, rec in sel:
-        ev = _top(rec)[0]
-        kind = _event_kind(ev)[0] if ev and _EVENT_RE.match(ev) else None
+        event_name = _top(rec)[0]
+        kind = _event_kind(event_name)[0] if event_name and _EVENT_RE.match(event_name) else None
         if kind not in ("pre_tool", "post_tool"):
             continue
-        any_pp = True
-        call, msg = _ids(rec["raw"])
-        if call is None:
+        any_pre_or_post = True
+        call_id, message_id = _ids(rec["raw"])
+        if call_id is None:
             no_id += 1
             continue
-        seen.setdefault((call, msg), {}).setdefault(kind, i)
-    if not any_pp:
+        positions_by_pair.setdefault((call_id, message_id), {}).setdefault(kind, i)
+    if not any_pre_or_post:
         return None
-    paired = [v for v in seen.values() if len(v) == 2]
+    paired = [positions for positions in positions_by_pair.values() if len(positions) == 2]
     return {
         "paired": len(paired),
-        "out_of_order": sum(1 for v in paired if v["post_tool"] < v["pre_tool"]),
-        "before_only": sum(1 for v in seen.values() if set(v) == {"pre_tool"}),
-        "after_only": sum(1 for v in seen.values() if set(v) == {"post_tool"}),
+        "out_of_order": sum(1 for positions in paired if positions["post_tool"] < positions["pre_tool"]),
+        "before_only": sum(1 for positions in positions_by_pair.values() if set(positions) == {"pre_tool"}),
+        "after_only": sum(1 for positions in positions_by_pair.values() if set(positions) == {"post_tool"}),
         "no_id": no_id,
     }
 
@@ -741,9 +742,9 @@ def _leaf_paths(v, prefix: str, depth: int = _SHAPE_DEPTH + 1):
     if _is_descriptor(v):
         yield prefix, v["type"]
     elif isinstance(v, dict) and depth > 0:
-        for k, vv in v.items():
+        for k, child in v.items():
             if _safe(k, _KEY_RE):
-                yield from _leaf_paths(vv, f"{prefix}.{k}", depth - 1)
+                yield from _leaf_paths(child, f"{prefix}.{k}", depth - 1)
     elif isinstance(v, dict):
         yield prefix, "object"
     else:
@@ -757,112 +758,112 @@ def _is_bool(v) -> bool:
 def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
     if not re.match(r"^[a-z][a-z0-9_-]*$", name):
         raise ValueError(f"name {name!r} must match [a-z][a-z0-9_-]*")
-    all_recs, _, _ = _load_records(log)
-    sel, _ = _select(all_recs, include, events)
-    recs = [r for _, r in sel]
-    total = len(recs)
+    all_records, _, _ = _load_records(log)
+    selected, _ = _select(all_records, include, events)
+    records = [rec for _, rec in selected]
+    total = len(records)
     tools: dict[str, list[str]] = {}
     tool_calls: dict[str, int] = {}        # safe tool name -> payloads
     skipped: dict[str, str] = {}           # safe tool name -> reason
     unnamed_bad = 0
-    events: dict[str, str] = {}
+    event_names: dict[str, str] = {}
     event_counts: dict[str, int] = {}
     event_guessed: dict[str, bool] = {}
     seen_events: dict[str, int] = {}       # every safe event name -> payloads
-    payload: dict[str, str] = {}
+    payload_in_paths: dict[str, str] = {}
     # canonical key -> {tool or "*": [present, seen]}
     evidence: dict[str, dict[str, int]] = {}
-    basic: dict[str, int] = {}
+    presence_counts: dict[str, int] = {}
     claude_style = False
     flags: dict[str, dict[str, int]] = {}  # tool -> boolean tool_input key -> payloads
     out_paths: dict[str, dict[str, int]] = {}  # output-like path -> {type: payloads}
     out_total = 0
-    for rec in all_recs:
-        ev0 = _top(rec)[0]
-        if ev0 is not None and len(ev0) <= 64 and _EVENT_RE.match(ev0):
-            seen_events[ev0] = seen_events.get(ev0, 0) + 1
+    for rec in all_records:
+        census_event = _top(rec)[0]
+        if census_event is not None and len(census_event) <= 64 and _EVENT_RE.match(census_event):
+            seen_events[census_event] = seen_events.get(census_event, 0) + 1
 
-    def setp(k: str, v: str):
-        payload.setdefault(k, v)
+    def set_payload(key: str, path: str):
+        payload_in_paths.setdefault(key, path)
 
-    def count(k: str, tool: str):
-        evidence.setdefault(k, {})
-        evidence[k][tool] = evidence[k].get(tool, 0) + 1
+    def count_evidence(key: str, tool_name: str):
+        evidence.setdefault(key, {})
+        evidence[key][tool_name] = evidence[key].get(tool_name, 0) + 1
 
-    for rec in recs:
+    for rec in records:
         raw = rec["raw"]
-        ev, tn, sid = _top(rec)
-        tool = _safe(tn)
-        if tn is not None and tool is None:
+        event_name, tool_name, session_id = _top(rec)
+        tool = _safe(tool_name)
+        if tool_name is not None and tool is None:
             unnamed_bad += 1
-        tk = _first_key(raw, _TOOL_NAME_KEYS)
-        if tk and _KEY_RE.match(tk) and tn is not None:
-            setp("tool_name", tk)
-            basic["tool_name"] = basic.get("tool_name", 0) + 1
-        cls = None
-        if tool and len(tool) <= 64:
+        tool_key = _first_key(raw, _TOOL_NAME_KEYS)
+        if tool_key and _KEY_RE.match(tool_key) and tool_name is not None:
+            set_payload("tool_name", tool_key)
+            presence_counts["tool_name"] = presence_counts.get("tool_name", 0) + 1
+        tool_class = None
+        if tool:
             tool_calls[tool] = tool_calls.get(tool, 0) + 1
-            cls = classify_tool(tool)
-            if cls:
-                if tool not in tools.setdefault(cls, []):
-                    tools[cls].append(tool)
+            tool_class = classify_tool(tool)
+            if tool_class:
+                if tool not in tools.setdefault(tool_class, []):
+                    tools[tool_class].append(tool)
             else:
                 skipped[tool] = ("mcp tool: not classified, no name heuristic applies"
                                  if tool.lower().startswith("mcp")
                                  else "no name heuristic matched")
-        ik = _first_key(raw, _INPUT_KEYS)
-        if cls and ik and isinstance(raw[ik], dict) and _KEY_RE.match(ik):
-            inp = raw[ik]
-            for kk, vv in inp.items():
+        input_key = _first_key(raw, _INPUT_KEYS)
+        if tool_class and input_key and isinstance(raw[input_key], dict) and _KEY_RE.match(input_key):
+            tool_input = raw[input_key]
+            for kk, vv in tool_input.items():
                 if _safe(str(kk), _KEY_RE) and _is_bool(vv):
                     flags.setdefault(tool, {})
                     flags[tool][kk] = flags[tool].get(kk, 0) + 1
-            if cls == "shell":
-                ck = _first_key(inp, _COMMAND_KEYS)
-                if ck and _KEY_RE.match(ck):
-                    setp("shell.command", f"{ik}.{ck}")
-                    count("shell.command", tool)
-            elif cls == "edit":
-                pk = _first_key(inp, _PATH_KEYS)
-                if pk and _KEY_RE.match(pk):
-                    setp("edit.file_path", f"{ik}.{pk}")
-                    count("edit.file_path", tool)
+            if tool_class == "shell":
+                command_key = _first_key(tool_input, _COMMAND_KEYS)
+                if command_key and _KEY_RE.match(command_key):
+                    set_payload("shell.command", f"{input_key}.{command_key}")
+                    count_evidence("shell.command", tool)
+            elif tool_class == "edit":
+                path_key = _first_key(tool_input, _PATH_KEYS)
+                if path_key and _KEY_RE.match(path_key):
+                    set_payload("edit.file_path", f"{input_key}.{path_key}")
+                    count_evidence("edit.file_path", tool)
             else:
                 for canon, names in _READ_FIELDS:
-                    kk = _first_key(inp, names)
-                    if kk and _KEY_RE.match(kk):
-                        setp(canon, f"{ik}.{kk}")
-                        count(canon, tool)
-        ok = _first_key(raw, _OUTPUT_KEYS)
-        if ok and _KEY_RE.match(ok) and isinstance(raw[ok], dict):
+                    read_input_key = _first_key(tool_input, names)
+                    if read_input_key and _KEY_RE.match(read_input_key):
+                        set_payload(canon, f"{input_key}.{read_input_key}")
+                        count_evidence(canon, tool)
+        output_key = _first_key(raw, _OUTPUT_KEYS)
+        if output_key and _KEY_RE.match(output_key) and isinstance(raw[output_key], dict):
             out_total += 1
-            for path, typ in _leaf_paths(raw[ok], ok):
-                d = out_paths.setdefault(path, {})
-                d[typ] = d.get(typ, 0) + 1
+            for path, type_name in _leaf_paths(raw[output_key], output_key):
+                type_counts = out_paths.setdefault(path, {})
+                type_counts[type_name] = type_counts.get(type_name, 0) + 1
         if "cwd" in raw:
-            setp("cwd", "cwd")
-            basic["cwd"] = basic.get("cwd", 0) + 1
-        if sid is not None:
-            setp("session_id", "session_id" if "session_id" in raw else
-                 _first_key(raw, _SESSION_KEYS) or "session_id")
-            basic["session_id"] = basic.get("session_id", 0) + 1
-        if ev is not None and len(ev) <= 64 and _EVENT_RE.match(ev):
-            canon, guessed = _event_kind(ev)
-            if canon and events.setdefault(canon, ev) == ev:
+            set_payload("cwd", "cwd")
+            presence_counts["cwd"] = presence_counts.get("cwd", 0) + 1
+        if session_id is not None:
+            set_payload("session_id", "session_id" if "session_id" in raw else
+                        _first_key(raw, _SESSION_KEYS) or "session_id")
+            presence_counts["session_id"] = presence_counts.get("session_id", 0) + 1
+        if event_name is not None and len(event_name) <= 64 and _EVENT_RE.match(event_name):
+            canon, guessed = _event_kind(event_name)
+            if canon and event_names.setdefault(canon, event_name) == event_name:
                 event_guessed[canon] = guessed
                 event_counts[canon] = event_counts.get(canon, 0) + 1
         if "hook_event_name" in raw and "cwd" in raw:
             claude_style = True
 
-    def ev_str(key: str) -> str:
-        if key in basic:
-            return f"{basic[key]}/{total} payloads"
+    def evidence_text(key: str) -> str:
+        if key in presence_counts:
+            return f"{presence_counts[key]}/{total} payloads"
         parts = []
-        for t, n in sorted(evidence.get(key, {}).items()):
-            parts.append(f"{n}/{tool_calls.get(t, n)} {t}")
+        for tool_name, count in sorted(evidence.get(key, {}).items()):
+            parts.append(f"{count}/{tool_calls.get(tool_name, count)} {tool_name}")
         return ", ".join(parts)
 
-    q = lambda s: json.dumps(s)
+    quote = lambda s: json.dumps(s)
     out = [
         f"# DRAFT mapping for {name}, drafted from {total} observed payloads. UNVERIFIED.",
         "# Produced by `polymorph discover draft`. Tool classes come from name heuristics;",
@@ -870,7 +871,7 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
         "# from the log are included. Review before use; `verified` is deliberately absent.",
         "# Counts in comments are present/observed over the payloads of that tool.",
         "schema = 1",
-        f"name = {q(name)}",
+        f"name = {quote(name)}",
     ]
     if claude_style:
         out += [
@@ -885,27 +886,28 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
             'template = "claude-like"   # unknown: assumed from the discovery logger shape',
         ]
     out += ["", "[tools]"]
-    for cls in ("shell", "edit", "read"):
-        if cls in tools:
-            n = sum(tool_calls.get(t, 0) for t in tools[cls])
-            out.append(f"{cls} = [{', '.join(q(t) for t in tools[cls])}]   # guessed from name ({n} calls)")
+    for tool_class in ("shell", "edit", "read"):
+        if tool_class in tools:
+            call_count = sum(tool_calls.get(tool_name, 0) for tool_name in tools[tool_class])
+            out.append(f"{tool_class} = [{', '.join(quote(tool_name) for tool_name in tools[tool_class])}]   # guessed from name ({call_count} calls)")
     if skipped or unnamed_bad:
         out.append("# Not classified (left out, not guessed):")
-        for t, why in sorted(skipped.items()):
-            out.append(f"#   {t} ({tool_calls[t]} calls): {why}")
+        for tool_name, reason in sorted(skipped.items()):
+            out.append(f"#   {tool_name} ({tool_calls[tool_name]} calls): {reason}")
         if unnamed_bad:
             out.append(f"#   {unnamed_bad} payload(s) with a tool name that fails the name pattern: ignored")
     out += ["", "[events]"]
     for canon, _ in _EVENT_CANON:
-        if canon in events:
-            n = f"{event_counts[canon]}/{total} payloads"
-            out.append(f"{canon} = {q(events[canon])}   # " +
-                       (f"guessed from name ({n})" if event_guessed[canon] else n))
-    rest = {e: n for e, n in seen_events.items() if e not in events.values()}
+        if canon in event_names:
+            count_text = f"{event_counts[canon]}/{total} payloads"
+            out.append(f"{canon} = {quote(event_names[canon])}   # " +
+                       (f"guessed from name ({count_text})" if event_guessed[canon] else count_text))
+    rest = {event_name: payload_count for event_name, payload_count in seen_events.items()
+            if event_name not in event_names.values()}
     if rest:
         out.append("# Other event names observed (not mapped):")
-        for e, n in sorted(rest.items(), key=lambda kv: (-kv[1], kv[0])):
-            out.append(f"#   {e} ({n} payloads)")
+        for event_name, payload_count in sorted(rest.items(), key=lambda item: (-item[1], item[0])):
+            out.append(f"#   {event_name} ({payload_count} payloads)")
     out += [
         "",
         "[capabilities]",
@@ -915,19 +917,20 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
         "",
         "[payload_in]",
     ]
-    for k, v in payload.items():
-        e = ev_str(k)
-        out.append(f"{q(k) if '.' in k else k} = {q(v)}" + (f"   # {e}" if e else ""))
+    for key, path in payload_in_paths.items():
+        key_evidence = evidence_text(key)
+        out.append(f"{quote(key) if '.' in key else key} = {quote(path)}" + (f"   # {key_evidence}" if key_evidence else ""))
     if flags:
         out.append("# Observed tool_input flags (boolean keys; present/observed over the tool's payloads):")
-        for t in sorted(flags):
-            ks = ", ".join(f"{kk} {n}/{tool_calls.get(t, n)}" for kk, n in sorted(flags[t].items()))
-            out.append(f"#   {t}: {ks}")
+        for tool_name in sorted(flags):
+            flags_text = ", ".join(f"{flag_key} {flag_count}/{tool_calls.get(tool_name, flag_count)}"
+                                   for flag_key, flag_count in sorted(flags[tool_name].items()))
+            out.append(f"#   {tool_name}: {flags_text}")
     out += ["", "[payload_out]"]
     if out_paths:
         out.append(f"# Output-like keys observed (values hidden by redaction; {out_total} payloads):")
         for path in sorted(out_paths):
-            types = ", ".join(f"{t} {n}" for t, n in sorted(out_paths[path].items()))
+            types = ", ".join(f"{type_name} {count}" for type_name, count in sorted(out_paths[path].items()))
             out.append(f"#   {path}: {types}")
     out.append("")
     return "\n".join(out)
@@ -936,9 +939,9 @@ def draft_mapping(log: str | Path, name: str, include=(), events=()) -> str:
 # ---- summary ----------------------------------------------------------------
 
 def summarize(log: str | Path, include=(), events=()) -> str:
-    all_recs, other, broken = _load_records(log)
-    sel, hidden = _select(all_recs, include, events)
-    recs = [r for _, r in sel]
+    all_records, non_object_count, broken = _load_records(log)
+    selected, hidden = _select(all_records, include, events)
+    records = [rec for _, rec in selected]
     by_event: dict[str, dict] = {}
     by_tool: dict[str, dict] = {}
     sessions: set = set()
@@ -946,80 +949,80 @@ def summarize(log: str | Path, include=(), events=()) -> str:
     def bucket(table, key):
         return table.setdefault(key, {"n": 0, "keys": {}})
 
-    def add(b, keys):
-        b["n"] += 1
+    def add(bucket_entry, keys):
+        bucket_entry["n"] += 1
         for k in keys:
             k = _safe(str(k), _KEY_RE) or "<invalid key>"
-            b["keys"][k] = b["keys"].get(k, 0) + 1
+            bucket_entry["keys"][k] = bucket_entry["keys"].get(k, 0) + 1
 
-    for rec in recs:
-        ev, tn, sid = _top(rec)
-        add(bucket(by_event, _safe(ev, _EVENT_RE) or ("<none>" if ev is None else "<invalid>")),
+    for rec in records:
+        event_name, tool_name, session_id = _top(rec)
+        add(bucket(by_event, _safe(event_name, _EVENT_RE) or ("<none>" if event_name is None else "<invalid>")),
             rec.get("keys") or rec["raw"])
-        add(bucket(by_tool, _safe(tn) or ("<none>" if tn is None else "<invalid>")),
+        add(bucket(by_tool, _safe(tool_name) or ("<none>" if tool_name is None else "<invalid>")),
             rec.get("tool_input_keys") or [])
-        if sid is not None:
-            sessions.add(sid)
+        if session_id is not None:
+            sessions.add(session_id)
 
-    def table(title, t):
+    def table(title, buckets):
         lines = [f"{title}", f"  {'name':<24} {'count':>5}  keys (present/count)"]
-        for k, b in sorted(t.items(), key=lambda kv: (-kv[1]["n"], kv[0])):
-            ks = ", ".join(f"{kk} {n}/{b['n']}" for kk, n in sorted(b["keys"].items()))
-            lines.append(f"  {k:<24} {b['n']:>5}  {ks}")
+        for name, bucket in sorted(buckets.items(), key=lambda item: (-item[1]["n"], item[0])):
+            keys_text = ", ".join(f"{kk} {count}/{bucket['n']}" for kk, count in sorted(bucket["keys"].items()))
+            lines.append(f"  {name:<24} {bucket['n']:>5}  {keys_text}")
         return lines
 
     def marks(key: str) -> dict[str, int]:
         """Value counts for a provenance key; anything missing or odd-shaped reads as unmarked."""
         counts: dict[str, int] = {}
-        for r in all_recs:
-            v = r.get(key)
-            ok = (isinstance(v, int) and not isinstance(v, bool)) if key == "schema" \
-                else (isinstance(v, str) and bool(v))
-            m = str(v) if ok else "unmarked"
-            counts[m] = counts.get(m, 0) + 1
+        for record in all_records:
+            value = record.get(key)
+            ok = (isinstance(value, int) and not isinstance(value, bool)) if key == "schema" \
+                else (isinstance(value, str) and bool(value))
+            mark = str(value) if ok else "unmarked"
+            counts[mark] = counts.get(mark, 0) + 1
         return counts
 
     def mark_line(label: str, key: str) -> str:
-        return label + " " + ", ".join(f"{m} ({n})" for m, n in sorted(marks(key).items()))
+        return label + " " + ", ".join(f"{mark} ({count})" for mark, count in sorted(marks(key).items()))
 
-    out = [f"payloads: {len(recs)}   non-object lines: {other}   sessions: {len(sessions)}"]
+    out = [f"payloads: {len(records)}   non-object lines: {non_object_count}   sessions: {len(sessions)}"]
     if broken:
         out.append(f"unparseable lines: {broken} (truncated or corrupt; not counted as payloads)")
     out.append(mark_line("log line schema:", "schema"))
     out.append(mark_line("plugin versions:", "plugin_version"))
     out.append(mark_line("locations:", "location"))
     if hidden:
-        out.append("hidden: " + ", ".join(f"{k} {n}" for k, n in
-                                          sorted(hidden.items(), key=lambda kv: (-kv[1], kv[0])))
+        out.append("hidden: " + ", ".join(f"{event_name} {count}" for event_name, count in
+                                          sorted(hidden.items(), key=lambda item: (-item[1], item[0])))
                    + "   (--include EVENT adds, --event EVENT selects)")
-    pairing = _pairing(sel)
+    pairing = _pairing(selected)
     if pairing:
         out.append("pairing by call id and message id: " + _pairing_text(pairing))
-    deltas = _slowest(sel)
+    deltas = _slowest(selected)
     if deltas:
         out.append("slowest pre->post deltas (logger write time; includes the hook wait):")
         for duration_seconds, tool_name, call_id in deltas:
             out.append(f"  {duration_seconds:.3f}s  {tool_name}  {call_id}")
     per_session: dict[str, list[tuple[int, dict]]] = {}
-    for i, rec in sel:
-        sid = _top(rec)[2]
+    for i, rec in selected:
+        session_key = _top(rec)[2]
         # old-format lines (only `raw`) skip the write-time id check, so check here
-        sid = "<no session id>" if sid is None else (sid if _id_shaped(sid) else INVALID)
-        per_session.setdefault(sid, []).append((i, rec))
+        session_key = "<no session id>" if session_key is None else (session_key if _id_shaped(session_key) else INVALID)
+        per_session.setdefault(session_key, []).append((i, rec))
     if len(per_session) > 1:
         out.append("per session: payloads, events, pairing")
-        for sid, group in sorted(per_session.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        for session_key, group in sorted(per_session.items(), key=lambda item: (-len(item[1]), item[0])):
             counts: dict[str, int] = {}
             for _, rec in group:
                 name = _safe(_top(rec)[0], _EVENT_RE) \
                     or ("<none>" if _top(rec)[0] is None else "<invalid>")
                 counts[name] = counts.get(name, 0) + 1
-            events_text = ", ".join(f"{k} {n}" for k, n in
-                                    sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
-            line = f"  {sid}  {len(group)} payloads  {events_text}"
-            p = _pairing(group)
-            if p:
-                line += ";  " + _pairing_text(p)
+            events_text = ", ".join(f"{event_name} {count}" for event_name, count in
+                                    sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+            line = f"  {session_key}  {len(group)} payloads  {events_text}"
+            pairing = _pairing(group)
+            if pairing:
+                line += ";  " + _pairing_text(pairing)
             out.append(line)
     out.append("")
     out += table("per event: top-level keys", by_event) + [""]

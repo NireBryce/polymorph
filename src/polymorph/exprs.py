@@ -37,10 +37,10 @@ def assign(obj: dict, path: str, value: Any) -> None:
     parts = path.split(".")
     cur = obj
     for part in parts[:-1]:
-        nxt = cur.get(part)
-        if not isinstance(nxt, dict):
-            nxt = cur[part] = {}
-        cur = nxt
+        child = cur.get(part)
+        if not isinstance(child, dict):
+            child = cur[part] = {}
+        cur = child
     cur[parts[-1]] = value
 
 
@@ -56,8 +56,7 @@ def substitute(template: str, values: dict[str, Any]) -> str:
         name = m.group(1)
         if name not in values:
             raise ExprError(f"unknown placeholder {{{name}}}")
-        v = values[name]
-        return v if isinstance(v, str) else str(v)
+        return str(values[name])
 
     return _PLACEHOLDER.sub(repl, template)
 

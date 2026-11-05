@@ -72,17 +72,17 @@ class OpenCodeDriver(Driver):
         # the logger's whole environment
         args = ["-m", "polymorph", "discover", "log", *(["--full"] if full else []),
                 "--out", str(self.log_path(scratch).resolve())]
-        consts = (f"const POLYMORPH_CMD = {json.dumps(sys.executable)}\n"
+        constants_block = (f"const POLYMORPH_CMD = {json.dumps(sys.executable)}\n"
                   f"const POLYMORPH_ARGS = {json.dumps(args)}\n"
                   f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': PACKAGE_PARENT})}\n"
                   # provenance: the plugin sends it with every line (--plugin-version)
                   f"const PLUGIN_VERSION = {json.dumps(__version__)}")
-        return template.replace(_CONSTANTS_MARK, consts)
+        return template.replace(_CONSTANTS_MARK, constants_block)
 
     def install(self, scratch: Path, full: bool) -> None:
-        d = self._plugin_dir(scratch)
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "index.js").write_text(self.render_plugin(scratch, full), encoding="utf-8")
+        plugin_dir = self._plugin_dir(scratch)
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (plugin_dir / "index.js").write_text(self.render_plugin(scratch, full), encoding="utf-8")
 
     def step_argv(self, prompt: str) -> list[str]:
         return [self.binary, "run", "--standalone", "--auto", prompt]
@@ -111,9 +111,9 @@ class ClaudeDriver(Driver):
                "log nothing. Until it is confirmed live, use `polymorph capture --print-prompts`")
 
     def install(self, scratch: Path, full: bool) -> None:
-        cfg = ".claude/settings.json"
+        config_file = ".claude/settings.json"
         for event in ("PreToolUse", "PostToolUse"):
-            discover.init_config("claude", cfg, event, "*", base=scratch,
+            discover.init_config("claude", config_file, event, "*", base=scratch,
                                  log_dir=self.log_path(scratch).parent, redact=not full,
                                  pythonpath=PACKAGE_PARENT)
 

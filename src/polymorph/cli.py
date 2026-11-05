@@ -10,126 +10,126 @@ from .canon import Canon  # noqa: F401  (re-export convenience)
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="polymorph")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    parser = argparse.ArgumentParser(prog="polymorph")
+    sub = parser.add_subparsers(dest="cmd", required=True)
 
-    m = sub.add_parser("manage", help="maintainer half: keep the basecamp and generate harness configs")
-    ms = m.add_subparsers(dest="mcmd", required=True)
+    manage_parser = sub.add_parser("manage", help="maintainer half: keep the basecamp and generate harness configs")
+    manage_subparsers = manage_parser.add_subparsers(dest="mcmd", required=True)
 
-    mg = ms.add_parser("generate", help="write harness configs from .agents/settings.json")
-    mg.add_argument("--repo", default=".", help="repository root (default .)")
-    mg.add_argument("--harness", action="append", default=None, help="harness to generate for; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
-    mg.add_argument("--check", action="store_true", help="exit 1 on drift, write nothing")
-    mg.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
-    mg.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
+    generate_parser = manage_subparsers.add_parser("generate", help="write harness configs from .agents/settings.json")
+    generate_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    generate_parser.add_argument("--harness", action="append", default=None, help="harness to generate for; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
+    generate_parser.add_argument("--check", action="store_true", help="exit 1 on drift, write nothing")
+    generate_parser.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
+    generate_parser.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
 
-    mk = ms.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
-    mk.add_argument("--repo", default=".", help="repository root (default .)")
-    mk.add_argument("--harness", action="append", default=None, help="harness to check; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
-    mk.add_argument("--format", choices=["text", "json", "sarif"], default="text", help="output format (default text)")
-    mk.add_argument("--strict", action="store_true", help="warnings also fail the run")
+    check_parser = manage_subparsers.add_parser("check", help="static analysis of the repo's agent config (runs nothing, writes nothing)")
+    check_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    check_parser.add_argument("--harness", action="append", default=None, help="harness to check; repeatable (default: those enabled in .polymorph/basecamp/config.toml)")
+    check_parser.add_argument("--format", choices=["text", "json", "sarif"], default="text", help="output format (default text)")
+    check_parser.add_argument("--strict", action="store_true", help="warnings also fail the run")
 
-    mv = ms.add_parser("validate", help="validate a mapping file")
-    mv.add_argument("file", help="path of the mapping TOML to validate")
+    validate_parser = manage_subparsers.add_parser("validate", help="validate a mapping file")
+    validate_parser.add_argument("file", help="path of the mapping TOML to validate")
 
-    mc = ms.add_parser("conformance", help="run fixtures against mappings")
-    mc.add_argument("--harness", default=None, help="replay only this harness's fixtures (default: all)")
+    conformance_parser = manage_subparsers.add_parser("conformance", help="run fixtures against mappings")
+    conformance_parser.add_argument("--harness", default=None, help="replay only this harness's fixtures (default: all)")
 
-    md = ms.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
-    md.add_argument("--repo", default=".", help="repository root (default .)")
-    md.add_argument("--dry-run", action="store_true", help="report what would move and link; write nothing")
-    md.add_argument("--no-links", action="store_true",
+    adopt_parser = manage_subparsers.add_parser("adopt", help="move agent files at rest into the basecamp store and symlink them back")
+    adopt_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    adopt_parser.add_argument("--dry-run", action="store_true", help="report what would move and link; write nothing")
+    adopt_parser.add_argument("--no-links", action="store_true",
                     help="do not create the symlinks harnesses need (CLAUDE.md, .claude/skills, .claude/rules)")
 
-    q = sub.add_parser("equip", help="the onboarding run: write the loadout and report honoured surface, gaps and the env contract")
-    q.add_argument("--repo", default=".", help="repository root (default .)")
-    q.add_argument("--harness", required=True, help="harness to equip")
-    q.add_argument("--dry-run", action="store_true", help="write nothing; report what equip would do")
-    q.add_argument("--no-links", action="store_true",
+    equip_parser = sub.add_parser("equip", help="the onboarding run: write the loadout and report honoured surface, gaps and the env contract")
+    equip_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    equip_parser.add_argument("--harness", required=True, help="harness to equip")
+    equip_parser.add_argument("--dry-run", action="store_true", help="write nothing; report what equip would do")
+    equip_parser.add_argument("--no-links", action="store_true",
                    help="report gaps only; do not create the symlinks this harness needs")
-    q.add_argument("--gitignore", action="store_true",
+    equip_parser.add_argument("--gitignore", action="store_true",
                    help="contributor posture: append the marked regenerable-artifacts section to .gitignore")
 
-    a = sub.add_parser("adapter", help="run a hook script through a harness adapter")
-    a.add_argument("--harness", required=True, help="harness whose mapping translates the payload")
-    a.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
-    a.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
-    a.add_argument("--repo", default=None, help="repository root (default: the nearest directory above the working directory with .agents/)")
-    a.add_argument("--timeout", type=float, default=None,
+    adapter_parser = sub.add_parser("adapter", help="run a hook script through a harness adapter")
+    adapter_parser.add_argument("--harness", required=True, help="harness whose mapping translates the payload")
+    adapter_parser.add_argument("--mappings", default=None, help="directory of mappings to load; must be trusted (see --trust-dir)")
+    adapter_parser.add_argument("--trust-dir", action="append", default=[], help="additional directory mappings may be loaded from; repeatable")
+    adapter_parser.add_argument("--repo", default=None, help="repository root (default: the nearest directory above the working directory with .agents/)")
+    adapter_parser.add_argument("--timeout", type=float, default=None,
                    help="seconds before the hook is killed (default 60); a killed hook is NOT checked, never a deny")
-    a.add_argument("script", nargs="+", help="after `--`: hook script (and args)")
+    adapter_parser.add_argument("script", nargs="+", help="after `--`: hook script (and args)")
 
-    i = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
-    i.add_argument("--repo", default=".", help="repository root (default .)")
-    i.add_argument("--harness", action="append", default=None, metavar="NAME",
+    inventory_parser = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
+    inventory_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    inventory_parser.add_argument("--harness", action="append", default=None, metavar="NAME",
                    help="coverage tables to report (default: every table found)")
-    i.add_argument("--json", dest="as_json", action="store_true", help="machine-readable output")
+    inventory_parser.add_argument("--json", dest="as_json", action="store_true", help="machine-readable output")
 
-    e = sub.add_parser("env", help="emit the env contract from .polymorph/basecamp/env.toml, or run a command under it")
-    e.add_argument("--repo", default=".", help="repository root (default .)")
-    e.add_argument("--harness", default=None, metavar="NAME", help="harness whose session markers to emit")
-    e.add_argument("--exec", dest="exec_cmd", default=None, metavar="CMD",
+    env_parser = sub.add_parser("env", help="emit the env contract from .polymorph/basecamp/env.toml, or run a command under it")
+    env_parser.add_argument("--repo", default=".", help="repository root (default .)")
+    env_parser.add_argument("--harness", default=None, metavar="NAME", help="harness whose session markers to emit")
+    env_parser.add_argument("--exec", dest="exec_cmd", default=None, metavar="CMD",
                    help="run CMD under sh -c with the contract applied, and exit with its status")
 
     from .capture import build_parser as _capture_parser
     _capture_parser(sub)
 
-    d = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
-    ds = d.add_subparsers(dest="dcmd", required=True)
-    di = ds.add_parser("init", help="add a catch-all logger hook to a config, keeping the hooks already there")
-    di.add_argument("--harness", required=True, help="harness name; names the log file")
-    di.add_argument("--config-path", required=True, help="the harness config file to add the logger hook to")
-    di.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
-    di.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
-    di.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
+    discover_parser = sub.add_parser("discover", help="log a harness's hook payloads and draft a mapping")
+    discover_subparsers = discover_parser.add_subparsers(dest="dcmd", required=True)
+    init_parser = discover_subparsers.add_parser("init", help="add a catch-all logger hook to a config, keeping the hooks already there")
+    init_parser.add_argument("--harness", required=True, help="harness name; names the log file")
+    init_parser.add_argument("--config-path", required=True, help="the harness config file to add the logger hook to")
+    init_parser.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
+    init_parser.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
+    init_parser.add_argument("--shape", default="claude-settings", choices=["claude-settings", "claude-like"],
                     help="claude-settings: hooks.<Event> (Claude Code, its SDK); claude-like: ZCode")
-    di.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph/discovery; required with --full)")
-    di.add_argument("--env-be-very-careful", dest="env", action="store_true", help="WARNING: makes the logger read the process environment and record the NAMES (never values) of PROJECT/WORKSPACE/HARNESS-like variables, visibly baked into the hook command")
-    di.add_argument("--full", action="store_true",
+    init_parser.add_argument("--log-dir", default=None, help="absolute log directory (default ./.polymorph/discovery; required with --full)")
+    init_parser.add_argument("--env-be-very-careful", dest="env", action="store_true", help="WARNING: makes the logger read the process environment and record the NAMES (never values) of PROJECT/WORKSPACE/HARNESS-like variables, visibly baked into the hook command")
+    init_parser.add_argument("--full", action="store_true",
                     help="log raw payloads (commands, paths, contents); default is redacted. Needs --log-dir "
                          "and the long flag below, then asks you to type yes")
-    di.add_argument("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo",
+    init_parser.add_argument("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo",
                     dest="raw_in_repo", action="store_true",
                     help="required with --full: accept a plain-text raw log (then type yes when asked)")
-    dl = ds.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
-    dl.add_argument("--out", required=True, help="JSONL file to append one line to")
-    dl.add_argument("--env-be-very-careful", dest="env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
-    dl.add_argument("--full", action="store_true",
+    log_parser = discover_subparsers.add_parser("log", help="append stdin to a JSONL log (always exits 0, silent)")
+    log_parser.add_argument("--out", required=True, help="JSONL file to append one line to")
+    log_parser.add_argument("--env-be-very-careful", dest="env", action="store_true", help="log names (never values) of PROJECT/WORKSPACE/HARNESS-like env vars")
+    log_parser.add_argument("--full", action="store_true",
                     help="log raw payloads; default replaces values with {type, length}")
-    dl.add_argument("--plugin-version", default=None, metavar="V",
+    log_parser.add_argument("--plugin-version", default=None, metavar="V",
                     help="provenance: the calling plugin's version; kept verbatim when short and shell-free, else <invalid>")
-    dl.add_argument("--location", default=None, metavar="LOC",
+    log_parser.add_argument("--location", default=None, metavar="LOC",
                     help="provenance: where the calling session runs (e.g. ctx.location); same rule")
-    dr = ds.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
-    dr.add_argument("--config-path", required=True, help="the harness config file under test")
-    dr.add_argument("--scratch-log", required=True, help="log file the temporary hook writes to")
-    dr.add_argument("--finish", action="store_true", help="report, then remove the temporary hook")
-    dr.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
-    dr.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
-    dr.add_argument("--shape", default=None, choices=["claude-settings", "claude-like"],
+    reload_check_parser = discover_subparsers.add_parser("reload-check", help="test whether a running harness re-reads hook edits")
+    reload_check_parser.add_argument("--config-path", required=True, help="the harness config file under test")
+    reload_check_parser.add_argument("--scratch-log", required=True, help="log file the temporary hook writes to")
+    reload_check_parser.add_argument("--finish", action="store_true", help="report, then remove the temporary hook")
+    reload_check_parser.add_argument("--event-name", default="PreToolUse", help="native event to hook (default PreToolUse)")
+    reload_check_parser.add_argument("--matcher", default="*", help="tool matcher for the hook (default *)")
+    reload_check_parser.add_argument("--shape", default=None, choices=["claude-settings", "claude-like"],
                     help="default: detected from the existing file")
-    dm = ds.add_parser("summary", help="table of keys, tools and counts in a discovery log")
-    dd = ds.add_parser("draft", help="print a draft mapping from a discovery log")
-    dd.add_argument("--name", required=True, help="name of the drafted mapping")
-    for sp in (dm, dd):
-        sp.add_argument("file", help="discovery log (JSONL)")
-        sp.add_argument("--include", action="append", default=[], metavar="EVENT",
+    summary_parser = discover_subparsers.add_parser("summary", help="table of keys, tools and counts in a discovery log")
+    draft_parser = discover_subparsers.add_parser("draft", help="print a draft mapping from a discovery log")
+    draft_parser.add_argument("--name", required=True, help="name of the drafted mapping")
+    for listed_parser in (summary_parser, draft_parser):
+        listed_parser.add_argument("file", help="discovery log (JSONL)")
+        listed_parser.add_argument("--include", action="append", default=[], metavar="EVENT",
                         help="also use lines of this event (repeatable); default is tool events only")
-        sp.add_argument("--event", action="append", default=[], metavar="EVENT",
+        listed_parser.add_argument("--event", action="append", default=[], metavar="EVENT",
                         help="use only lines of this event (repeatable), replacing the tool-event default")
-    dp = ds.add_parser("probe", help="drive a scripted session to observe capability flags live")
+    probe_parser = discover_subparsers.add_parser("probe", help="drive a scripted session to observe capability flags live")
     from .probe import DEFAULT_STEP_TIMEOUT, DEFAULT_TOTAL_TIMEOUT
-    dp.add_argument("--harness", required=True, help="driver name with a probe adapter (see docs)")
-    dp.add_argument("--into", default=None, metavar="DRAFT.toml",
+    probe_parser.add_argument("--harness", required=True, help="driver name with a probe adapter (see docs)")
+    probe_parser.add_argument("--into", default=None, metavar="DRAFT.toml",
                     help="replace the [capabilities] block of this draft (default: print only)")
-    dp.add_argument("--yes", action="store_true", help="skip the question (required when stdin is not a terminal)")
-    dp.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
-    dp.add_argument("--full", action="store_true", help="log raw payloads; default is redacted. Needs --keep")
-    dp.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS",
+    probe_parser.add_argument("--yes", action="store_true", help="skip the question (required when stdin is not a terminal)")
+    probe_parser.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
+    probe_parser.add_argument("--full", action="store_true", help="log raw payloads; default is redacted. Needs --keep")
+    probe_parser.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS",
                     help="kill a probe run after this many seconds (default %(default)s)")
-    dp.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS",
+    probe_parser.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS",
                     help="skip the remaining probe runs after this many seconds (default %(default)s)")
-    return p
+    return parser
 
 
 def _cmd_discover(args) -> int:
@@ -143,9 +143,9 @@ def _cmd_discover(args) -> int:
         if args.full:
             discover.require_out_for_full(True, args.log_dir is not None, "--log-dir")
             discover.confirm_full(args.log_dir, args.raw_in_repo, "--log-dir")
-        p = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
-                                shape=args.shape, log_dir=args.log_dir, redact=not args.full, env=args.env)
-        print(f"wrote {p}")
+        written_config = discover.init_config(args.harness, args.config_path, args.event_name, args.matcher,
+                                              shape=args.shape, log_dir=args.log_dir, redact=not args.full, env=args.env)
+        print(f"wrote {written_config}")
         return 0
     if args.dcmd == "summary":
         print(discover.summarize(args.file, args.include, args.event), end="")
@@ -155,8 +155,8 @@ def _cmd_discover(args) -> int:
         return probe.run(args)
     if args.dcmd == "reload-check":
         if args.finish:
-            seen, msg = discover.reload_check_finish(args.config_path, args.scratch_log)
-            print(msg)
+            seen, report_text = discover.reload_check_finish(args.config_path, args.scratch_log)
+            print(report_text)
             return 0 if seen else 1
         print(discover.reload_check_start(args.config_path, args.scratch_log, args.event_name,
                                           args.matcher, shape=args.shape))
@@ -180,30 +180,30 @@ def _cmd_generate(args) -> int:
 
     drift = False
     pending = 0
-    for r in results:
-        if r.undecided:
-            pending += len(r.undecided)
-            print(f"[{r.harness}] NOT WRITTEN {r.path}: {len(r.undecided)} undecided")
+    for result in results:
+        if result.undecided:
+            pending += len(result.undecided)
+            print(f"[{result.harness}] NOT WRITTEN {result.path}: {len(result.undecided)} undecided")
         else:
-            state = "DRIFT" if r.drift else "ok"
-            verb = "would write" if (args.check and r.drift) else ("wrote" if r.drift else "unchanged")
-            print(f"[{r.harness}] {verb} {r.path} ({state})")
+            state = "DRIFT" if result.drift else "ok"
+            verb = "would write" if (args.check and result.drift) else ("wrote" if result.drift else "unchanged")
+            print(f"[{result.harness}] {verb} {result.path} ({state})")
             if not args.check:
                 print(f"  warning: {_RUNNING_SESSIONS_WARNING}")
-        for w in r.warnings:
-            print(f"  warning: {w}")
-        for mm in r.undecided:
-            for line in format_question(r.harness, mm, r.native_events):
+        for warning in result.warnings:
+            print(f"  warning: {warning}")
+        for undecided_item in result.undecided:
+            for line in format_question(result.harness, undecided_item, result.native_events):
                 print(line)
-        for a in r.applied:
-            print(f"  {'weakened' if a.weakening else 'decided'}: {a.id} = {a.choice}: {a.text}")
-        for sid in r.stale:
-            print(f"  warning: stale decision {sid} (matches nothing now)")
-        for n in r.notes:
-            print(f"  note: {n}")
-        for u in r.unmapped:
-            print(f"  unmapped setting: {u}")
-        drift = drift or r.drift
+        for applied_decision in result.applied:
+            print(f"  {'weakened' if applied_decision.weakening else 'decided'}: {applied_decision.id} = {applied_decision.choice}: {applied_decision.text}")
+        for stale_id in result.stale:
+            print(f"  warning: stale decision {stale_id} (matches nothing now)")
+        for note in result.notes:
+            print(f"  note: {note}")
+        for unmapped_setting in result.unmapped:
+            print(f"  unmapped setting: {unmapped_setting}")
+        drift = drift or result.drift
     if pending:
         print(f"{pending} undecided item(s): nothing written for the targets above; answer them and run again")
         return 3
@@ -225,68 +225,68 @@ def _cmd_inventory(args) -> int:
     from . import inventory
 
     repo = Path(args.repo)
-    inv = inventory.read_inventory(repo)
+    repo_inventory = inventory.read_inventory(repo)
     names = args.harness if args.harness else inventory.available_tables(repo)
     tables: dict[str, dict | None] = {}
     gaps: list[dict] = []
     for name in names:
-        cap = inventory.load_coverage(name, repo)
-        if cap is None:
+        coverage = inventory.load_coverage(name, repo)
+        if coverage is None:
             tables[name] = None
             continue
-        tables[name] = {"skills": cap.skills, "rules": cap.rules,
-                        "memory": list(cap.memory), "claude_dir": cap.claude_dir}
-        for g in inventory.gaps(inv, cap, repo):
-            gaps.append({"harness": g.harness, "kind": g.kind, "path": g.path,
-                         "reason": g.reason, "reads": list(g.reads), "fix": g.fix})
+        tables[name] = {"skills": coverage.skills, "rules": coverage.rules,
+                        "memory": list(coverage.memory), "claude_dir": coverage.claude_dir}
+        for gap in inventory.gaps(repo_inventory, coverage, repo):
+            gaps.append({"harness": gap.harness, "kind": gap.kind, "path": gap.path,
+                         "reason": gap.reason, "reads": list(gap.reads), "fix": gap.fix})
     if args.as_json:
         import json
 
         print(json.dumps({
-            "inventory": {kind: [{"path": i.path, "target": i.target} for i in inv.kind(kind)]
+            "inventory": {kind: [{"path": entry.path, "target": entry.target} for entry in repo_inventory.kind(kind)]
                           for kind in inventory.KINDS},
             "gaps": gaps,
         }, indent=2))
         return 0
     for kind in inventory.KINDS:
-        entries = inv.kind(kind)
+        entries = repo_inventory.kind(kind)
         print(f"{kind}: {len(entries)}")
-        for i in entries:
-            suffix = f" -> {i.target}" if i.target else ""
-            print(f"  - {i.path}{suffix}")
+        for entry in entries:
+            suffix = f" -> {entry.target}" if entry.target else ""
+            print(f"  - {entry.path}{suffix}")
     for name in names:
         if tables[name] is None:
             print(f"gaps for {name}: no coverage table; nothing is known")
             continue
-        found = [g for g in gaps if g["harness"] == name]
+        found = [gap for gap in gaps if gap["harness"] == name]
         print(f"gaps for {name}: {len(found)}")
-        for g in found:
-            print(_gap_line(g["kind"], g["path"], g["reason"], g["fix"]))
+        for gap in found:
+            print(_gap_line(gap["kind"], gap["path"], gap["reason"], gap["fix"]))
     return 0
 
 
 def _cmd_adopt(args) -> int:
     from .adopt import adopt
 
-    r = adopt(args.repo, args.dry_run, not args.no_links)
+    result = adopt(args.repo, args.dry_run, not args.no_links)
     verb = "would move" if args.dry_run else "moved"
-    for a in r.moved:
-        print(f"{verb} [{a.kind}] {a.path} -> {a.store}")
-    for kind, path, points in r.already:
+    for moved_entry in result.moved:
+        print(f"{verb} [{moved_entry.kind}] {moved_entry.path} -> {moved_entry.store}")
+    for kind, path, points in result.already:
         print(f"already [{kind}] {path} -> {points}")
-    for kind, path in r.absent:
+    for kind, path in result.absent:
         print(f"absent [{kind}] {path}")
-    for kind, path, reason in r.refused:
+    for kind, path, reason in result.refused:
         print(f"refused [{kind}] {path}: {reason}")
-    lverb = "would link" if args.dry_run else "linked"
-    for l in r.linked:
-        print(f"{lverb} [{l.harness}] {l.path} -> {l.target}")
-    for harness, path, reason in r.link_refused:
+    link_verb = "would link" if args.dry_run else "linked"
+    for link in result.linked:
+        print(f"{link_verb} [{link.harness}] {link.path} -> {link.target}")
+    for harness, path, reason in result.link_refused:
         print(f"link refused [{harness}] {path}: {reason}")
-    n = len(r.moved)
-    print(f"{n} moved, {len(r.already)} already adopted, {len(r.absent)} absent, {len(r.refused)} refused, "
-          f"{len(r.linked)} linked, {len(r.link_refused)} link(s) refused")
-    return 0 if r.ok() else 1
+    moved_count = len(result.moved)
+    print(f"{moved_count} moved, {len(result.already)} already adopted, {len(result.absent)} absent, {len(result.refused)} refused, "
+          f"{len(result.linked)} linked, {len(result.link_refused)} link(s) refused")
+    return 0 if result.ok() else 1
 
 
 def _cmd_env(args) -> int:
@@ -307,47 +307,47 @@ def _cmd_env(args) -> int:
 def _cmd_equip(args) -> int:
     from .equip import equip
 
-    r = equip(args.repo, args.harness, args.dry_run, args.gitignore, not args.no_links)
+    result = equip(args.repo, args.harness, args.dry_run, args.gitignore, not args.no_links)
     verb = "would write" if args.dry_run else "wrote"
-    for p in r.written:
-        print(f"[{r.harness}] {verb} {p}")
-    for p in r.unchanged:
-        print(f"[{r.harness}] unchanged {p}")
-    for p in r.not_written:
-        print(f"[{r.harness}] NOT WRITTEN {p}: {r.undecided} undecided (polymorph manage generate prints the questions)")
-    if not args.dry_run and (r.written or r.unchanged):
-        print(f"[{r.harness}] warning: {_RUNNING_SESSIONS_WARNING}")
-    lverb = "would link" if r.dry_run else "linked"
-    for l in r.linked:
-        print(f"[{r.harness}] {lverb} {l.path} -> {l.target}")
-    for harness, path, reason in r.link_refused:
-        print(f"[{r.harness}] link refused {path}: {reason}")
-    if r.coverage_known:
-        print(f"[{r.harness}] honoured surface:")
-        for kind, path in r.honoured:
+    for path in result.written:
+        print(f"[{result.harness}] {verb} {path}")
+    for path in result.unchanged:
+        print(f"[{result.harness}] unchanged {path}")
+    for path in result.not_written:
+        print(f"[{result.harness}] NOT WRITTEN {path}: {result.undecided} undecided (polymorph manage generate prints the questions)")
+    if not args.dry_run and (result.written or result.unchanged):
+        print(f"[{result.harness}] warning: {_RUNNING_SESSIONS_WARNING}")
+    link_verb = "would link" if result.dry_run else "linked"
+    for link in result.linked:
+        print(f"[{result.harness}] {link_verb} {link.path} -> {link.target}")
+    for harness, path, reason in result.link_refused:
+        print(f"[{result.harness}] link refused {path}: {reason}")
+    if result.coverage_known:
+        print(f"[{result.harness}] honoured surface:")
+        for kind, path in result.honoured:
             print(f"  - {kind} {path}")
-        print(f"[{r.harness}] gaps (will be silently ignored): {len(r.gaps)}")
-        for g in r.gaps:
-            print(_gap_line(g.kind, g.path, g.reason, g.fix))
+        print(f"[{result.harness}] gaps (will be silently ignored): {len(result.gaps)}")
+        for gap in result.gaps:
+            print(_gap_line(gap.kind, gap.path, gap.reason, gap.fix))
     else:
-        print(f"[{r.harness}] coverage: no coverage table; nothing is known about what this harness honours")
-    if r.env_error:
-        print(f"[{r.harness}] env: env.toml is invalid, no env contract emitted: {r.env_error}")
-    elif r.env_lines is None:
-        print(f"[{r.harness}] env: no env.toml; no env contract emitted")
+        print(f"[{result.harness}] coverage: no coverage table; nothing is known about what this harness honours")
+    if result.env_error:
+        print(f"[{result.harness}] env: env.toml is invalid, no env contract emitted: {result.env_error}")
+    elif result.env_lines is None:
+        print(f"[{result.harness}] env: no env.toml; no env contract emitted")
     else:
-        print(f"[{r.harness}] env contract:")
-        for line in r.env_lines:
+        print(f"[{result.harness}] env contract:")
+        for line in result.env_lines:
             print(f"  {line}")
-    if r.manifest_written:
-        print(f"[{r.harness}] manifest: .polymorph/basecamp/loadout.toml")
-    print(f"[{r.harness}] posture: {r.posture}")
-    if r.gitignore_suggested and not r.gitignore_appended:
-        print(f"[{r.harness}] gitignore: issued artifacts are regenerable; pass --gitignore to append:")
-        for line in r.gitignore_suggested:
+    if result.manifest_written:
+        print(f"[{result.harness}] manifest: .polymorph/basecamp/loadout.toml")
+    print(f"[{result.harness}] posture: {result.posture}")
+    if result.gitignore_suggested and not result.gitignore_appended:
+        print(f"[{result.harness}] gitignore: issued artifacts are regenerable; pass --gitignore to append:")
+        for line in result.gitignore_suggested:
             print(f"  {line}")
-    if r.gitignore_appended:
-        print(f"[{r.harness}] gitignore: appended the marked regenerable-artifacts section")
+    if result.gitignore_appended:
+        print(f"[{result.harness}] gitignore: appended the marked regenerable-artifacts section")
     return 0
 
 
@@ -369,8 +369,8 @@ def _cmd_adapter(args) -> int:
         argv += ["--repo", args.repo]
     if args.timeout is not None:
         argv += ["--timeout", str(args.timeout)]
-    for d in args.trust_dir:
-        argv += ["--trust-dir", d]
+    for trust_dir_path in args.trust_dir:
+        argv += ["--trust-dir", trust_dir_path]
     argv += ["--", *args.script]
     return int(run_adapter(argv) or 0)
 
@@ -391,8 +391,8 @@ def _cmd_conformance(args) -> int:
     from .conformance import run_fixtures
 
     passed, failures = run_fixtures(args.harness)
-    for f in failures:
-        print(f"FAIL: {f}", file=sys.stderr)
+    for failure in failures:
+        print(f"FAIL: {failure}", file=sys.stderr)
     print(f"{passed} passed, {len(failures)} failed")
     return 1 if failures else 0
 

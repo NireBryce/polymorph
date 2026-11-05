@@ -49,7 +49,7 @@ class Artifact:
 @dataclass
 class EquipResult:
     harness: str
-    written: list[str] = field(default_factory=list)
+    written: list[str] = field(default_factory=list)        # dry run: what would be written
     unchanged: list[str] = field(default_factory=list)
     not_written: list[str] = field(default_factory=list)   # undecided decisions
     undecided: int = 0
@@ -80,14 +80,12 @@ def _posture(repo: Path) -> str:
 
     contributor: it is not (artifacts are regenerable and belong in .gitignore).
     """
-    p = _git(repo, "ls-files", "--", ".polymorph/basecamp/config.toml")
-    if p.returncode != 0:
+    proc = _git(repo, "ls-files", "--", ".polymorph/basecamp/config.toml")
+    if proc.returncode != 0:
         return "unknown"
-    return "maintainer" if p.stdout.strip() else "contributor"
+    return "maintainer" if proc.stdout.strip() else "contributor"
 
 
-def _read_manifest(repo: Path) -> list[Artifact]:
-    return manifest_entries(repo)
 
 
 def write_manifest(repo: Path, artifacts: list[Artifact], links: list[Link]) -> None:
@@ -101,32 +99,32 @@ def write_manifest(repo: Path, artifacts: list[Artifact], links: list[Link]) -> 
 
 def record_links(repo: Path, made: list[Link]) -> None:
     """Add `made` to the manifest, keeping every artifact and every other link."""
-    keys = {(l.harness, l.path) for l in made}
-    kept = [l for l in manifest_links(repo) if (l.harness, l.path) not in keys]
-    write_manifest(repo, _read_manifest(repo), [*kept, *made])
+    keys = {(link.harness, link.path) for link in made}
+    kept = [link for link in manifest_links(repo) if (link.harness, link.path) not in keys]
+    write_manifest(repo, manifest_entries(repo), [*kept, *made])
 
 
 def _loadout_lines(artifacts: list[Artifact], links: list[Link] = ()) -> str:
     out = ["# Written by polymorph equip: provenance of the issued loadout.", "schema = 1", ""]
     by_harness: dict[str, list[Artifact]] = {}
-    for a in artifacts:
-        by_harness.setdefault(a.harness, []).append(a)
+    for artifact in artifacts:
+        by_harness.setdefault(artifact.harness, []).append(artifact)
     for harness in sorted(by_harness):
         out.append(f"[harness.{harness}]")
-        for a in sorted(by_harness[harness], key=lambda x: x.path):
-            entry = f'hash = {json.dumps(a.hash)}, source = {json.dumps(a.source)}'
-            if a.mapping_path and a.mapping_hash:
-                entry += (f', mapping-path = {json.dumps(a.mapping_path)}'
-                          f', mapping-hash = {json.dumps(a.mapping_hash)}')
-            out.append(f'{json.dumps(a.path)} = {{{entry}}}')
+        for artifact in sorted(by_harness[harness], key=lambda artifact: artifact.path):
+            entry = f'hash = {json.dumps(artifact.hash)}, source = {json.dumps(artifact.source)}'
+            if artifact.mapping_path and artifact.mapping_hash:
+                entry += (f', mapping-path = {json.dumps(artifact.mapping_path)}'
+                          f', mapping-hash = {json.dumps(artifact.mapping_hash)}')
+            out.append(f'{json.dumps(artifact.path)} = {{{entry}}}')
         out.append("")
     by_link: dict[str, list[Link]] = {}
-    for l in links:
-        by_link.setdefault(l.harness, []).append(l)
+    for link in links:
+        by_link.setdefault(link.harness, []).append(link)
     for harness in sorted(by_link):
         out.append(f"[links.{harness}]")
-        for l in sorted(by_link[harness], key=lambda x: x.path):
-            out.append(f'{json.dumps(l.path)} = {{target = {json.dumps(l.target)}, kind = {json.dumps(l.kind)}}}')
+        for link in sorted(by_link[harness], key=lambda link: link.path):
+            out.append(f'{json.dumps(link.path)} = {{target = {json.dumps(link.target)}, kind = {json.dumps(link.kind)}}}')
         out.append("")
     return "\n".join(out)
 
@@ -138,55 +136,56 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
     repo = Path(repo).resolve()
     result = EquipResult(harness=harness, dry_run=dry_run)
 
-    gen = generate(repo, [harness], check=dry_run)
-    if not gen:
-        raise EquipError(f"nothing to equip for {harness!r}: no targets (is {harness} in .polymorph/basecamp/config.toml, or pass a mapping?)")
-    r = gen[0]
-    if r.undecided:
-        result.not_written = [r.path]
-        result.undecided = len(r.undecided)
+    generated = generate(repo, [harness], check=dry_run)
+    if not generated:
+        raise EquipError(f"nothing to equip for {harness!r}: no targets (is {harness} in .polymorph/basecamp/config.toml, or pass artifact mapping?)")
+    target_result = generated[0]
+    if target_result.undecided:
+        result.not_written = [target_result.path]
+        result.undecided = len(target_result.undecided)
     else:
-        if r.drift:
-            result.written.append(r.path)
+        if target_result.drift:
+            result.written.append(target_result.path)
         else:
-            result.unchanged.append(r.path)
-        if not dry_run and r.path:
-            dest = repo / r.path
+            result.unchanged.append(target_result.path)
+        if not dry_run and target_result.path:
+            dest = repo / target_result.path
             if dest.is_file():
                 from .mapping import load_mapping
 
-                m = load_mapping(harness, repo)
-                msrc = Path(m.source)
-                artifact = Artifact(harness=harness, path=r.path, hash=_sha256(dest),
-                                    source=f"generated from .agents/settings.json via mapping {harness}",
-                                    mapping_path=str(msrc), mapping_hash=_sha256(msrc))
+                mapping = load_mapping(harness, repo)
+                mapping_source = Path(mapping.source)
+                new_artifact = Artifact(harness=harness, path=target_result.path, hash=_sha256(dest),
+                                        source=f"generated from .agents/settings.json via mapping {harness}",
+                                        mapping_path=str(mapping_source), mapping_hash=_sha256(mapping_source))
                 # every harness's entries stay; this run replaces only its own artifact's
-                kept = [a for a in _read_manifest(repo)
-                        if (a.harness, a.path) != (artifact.harness, artifact.path)]
-                write_manifest(repo, [*kept, artifact], manifest_links(repo))
+                kept = [artifact for artifact in manifest_entries(repo)
+                        if (artifact.harness, artifact.path)
+                        != (new_artifact.harness, new_artifact.path)]
+                write_manifest(repo, [*kept, new_artifact], manifest_links(repo))
                 result.manifest_written = True
 
-    inv = read_inventory(repo)
-    cap: Coverage | None = load_coverage(harness, repo)
-    result.coverage_known = cap is not None
-    if cap is not None and make_links:
-        lp = linkmod.plan(repo, [cap], inv)
-        result.link_refused = list(lp.refused)
+    inventory = read_inventory(repo)
+    coverage: Coverage | None = load_coverage(harness, repo)
+    result.coverage_known = coverage is not None
+    if coverage is not None and make_links:
+        link_plan = linkmod.plan(repo, [coverage], inventory)
+        result.link_refused = list(link_plan.refused)
         if dry_run:
-            result.linked = lp.create
+            result.linked = link_plan.create
         else:
-            result.linked, failed = linkmod.apply(repo, lp.create)
+            result.linked, failed = linkmod.apply(repo, link_plan.create)
             result.link_refused += failed
             if result.linked:
                 record_links(repo, result.linked)
                 result.manifest_written = True
-                inv = read_inventory(repo)
-    if cap is not None:
+                inventory = read_inventory(repo)
+    if coverage is not None:
         from .inventory import KINDS, gaps as compute_gaps
 
-        found = {(g.kind, g.path): g for g in compute_gaps(inv, cap, repo)}
+        found = {(gap.kind, gap.path): gap for gap in compute_gaps(inventory, coverage, repo)}
         for kind in KINDS:
-            for item in inv.kind(kind):
+            for item in inventory.kind(kind):
                 if (kind, item.path) in found:
                     result.gaps.append(found[(kind, item.path)])
                 else:
@@ -203,13 +202,13 @@ def equip(repo: str | Path = ".", harness: str = "", dry_run: bool = False,
 
     result.posture = _posture(repo)
     if result.posture == "contributor" and (result.written or result.unchanged):
-        result.gitignore_suggested = [r.path] if r.path else []
+        result.gitignore_suggested = [target_result.path] if target_result.path else []
         if gitignore and not dry_run:
-            gi = repo / ".gitignore"
-            current = gi.read_text() if gi.is_file() else ""
+            gitignore_path = repo / ".gitignore"
+            current = gitignore_path.read_text() if gitignore_path.is_file() else ""
             if GITIGNORE_MARK not in current:
                 block = GITIGNORE_MARK + "\n" + "\n".join(sorted(set(result.gitignore_suggested))) + "\n"
-                gi.write_text(current + ("\n" if current and not current.endswith("\n") else "") + block)
+                gitignore_path.write_text(current + ("\n" if current and not current.endswith("\n") else "") + block)
                 result.gitignore_appended = True
     return result
 
@@ -225,8 +224,8 @@ def manifest_links(repo: str | Path = ".", harness: str | None = None) -> list[L
     for name, entries in tomllib.loads(path.read_text()).get("links", {}).items():
         if harness is not None and name != harness:
             continue
-        for p, v in sorted(entries.items()):
-            out.append(Link(harness=name, path=p, target=v["target"], kind=v.get("kind", "")))
+        for link_path, entry in sorted(entries.items()):
+            out.append(Link(harness=name, path=link_path, target=entry["target"], kind=entry.get("kind", "")))
     return out
 
 
@@ -244,18 +243,18 @@ def manifest_entries(repo: str | Path = ".", harness: str | None = None) -> list
             continue
         if not isinstance(entries, dict):
             raise EquipError(f"{MANIFEST}: [harness.{name}] must be a table of artifact entries")
-        for p, v in sorted(entries.items()):
-            if not isinstance(v, dict) or not isinstance(v.get("hash"), str) \
-                    or not isinstance(v.get("source"), str):
-                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(p)} must be a table '
+        for artifact_path, entry in sorted(entries.items()):
+            if not isinstance(entry, dict) or not isinstance(entry.get("hash"), str) \
+                    or not isinstance(entry.get("source"), str):
+                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(artifact_path)} must be a table '
                                  "with string `hash` and `source`")
-            mp, mh = v.get("mapping-path"), v.get("mapping-hash")
-            if mp is None and mh is None:
-                out.append(Artifact(harness=name, path=p, hash=v["hash"], source=v["source"]))
-            elif isinstance(mp, str) and isinstance(mh, str):
-                out.append(Artifact(harness=name, path=p, hash=v["hash"], source=v["source"],
-                                    mapping_path=mp, mapping_hash=mh))
+            mapping_path, mapping_hash = entry.get("mapping-path"), entry.get("mapping-hash")
+            if mapping_path is None and mapping_hash is None:
+                out.append(Artifact(harness=name, path=artifact_path, hash=entry["hash"], source=entry["source"]))
+            elif isinstance(mapping_path, str) and isinstance(mapping_hash, str):
+                out.append(Artifact(harness=name, path=artifact_path, hash=entry["hash"], source=entry["source"],
+                                    mapping_path=mapping_path, mapping_hash=mapping_hash))
             else:
-                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(p)}: mapping-path and '
+                raise EquipError(f'{MANIFEST}: [harness.{name}] {json.dumps(artifact_path)}: mapping-path and '
                                  "mapping-hash must be strings together")
     return out

@@ -91,51 +91,51 @@ def parse_env(raw: dict, source: str = "") -> EnvFacts:
 
     key = None
     if "key" in raw:
-        t = raw["key"]
-        if not isinstance(t, dict):
+        table = raw["key"]
+        if not isinstance(table, dict):
             raise EnvError(f"{source}: [key] must be a table")
-        bad = sorted(set(t) - {"path", "scope"})
-        if bad:
-            raise EnvError(f"{source}: unknown [key] entry(ies) {', '.join(bad)}")
-        if "path" not in t:
+        unknown_keys = sorted(set(table) - {"path", "scope"})
+        if unknown_keys:
+            raise EnvError(f"{source}: unknown [key] entry(ies) {', '.join(unknown_keys)}")
+        if "path" not in table:
             raise EnvError(f"{source}: [key] needs path")
-        key = KeyFacts(path=_key_path(t["path"], source),
-                       scope=_one_line(t["scope"], "[key] scope", source) if "scope" in t else None)
+        key = KeyFacts(path=_key_path(table["path"], source),
+                       scope=_one_line(table["scope"], "[key] scope", source) if "scope" in table else None)
 
     unset: tuple[str, ...] = ()
     if "vault" in raw:
-        t = raw["vault"]
-        if not isinstance(t, dict):
+        table = raw["vault"]
+        if not isinstance(table, dict):
             raise EnvError(f"{source}: [vault] must be a table")
-        bad = sorted(set(t) - {"unset"})
-        if bad:
-            raise EnvError(f"{source}: unknown [vault] entry(ies) {', '.join(bad)}")
-        names = t.get("unset", [])
-        if not isinstance(names, list) or not all(isinstance(n, str) and _ENV_NAME.match(n) for n in names):
+        unknown_keys = sorted(set(table) - {"unset"})
+        if unknown_keys:
+            raise EnvError(f"{source}: unknown [vault] entry(ies) {', '.join(unknown_keys)}")
+        names = table.get("unset", [])
+        if not isinstance(names, list) or not all(isinstance(var_name, str) and _ENV_NAME.match(var_name) for var_name in names):
             raise EnvError(f"{source}: [vault] unset must be a list of environment variable names")
         unset = tuple(names)
 
     harness: dict[str, tuple[str, ...]] = {}
     if "harness" in raw:
-        t = raw["harness"]
-        if not isinstance(t, dict):
+        table = raw["harness"]
+        if not isinstance(table, dict):
             raise EnvError(f"{source}: [harness] must be a table")
-        for name, table in sorted(t.items()):
+        for name, table in sorted(table.items()):
             if not isinstance(name, str) or not _HARNESS_NAME.match(name):
                 raise EnvError(f"{source}: [harness.{name}] is not a harness name")
             if not isinstance(table, dict):
                 raise EnvError(f"{source}: [harness.{name}] must be a table")
-            bad = sorted(set(table) - {"exports"})
-            if bad:
-                raise EnvError(f"{source}: unknown [harness.{name}] entry(ies) {', '.join(bad)}")
+            unknown_keys = sorted(set(table) - {"exports"})
+            if unknown_keys:
+                raise EnvError(f"{source}: unknown [harness.{name}] entry(ies) {', '.join(unknown_keys)}")
             exports = table.get("exports", [])
             if not isinstance(exports, list):
                 raise EnvError(f"{source}: [harness.{name}] exports must be a list of NAME=value strings")
-            for e in exports:
-                if not isinstance(e, str) or "=" not in e or not _ENV_NAME.match(e.split("=", 1)[0]):
-                    raise EnvError(f"{source}: [harness.{name}] export {e!r} is not NAME=value")
-                var = e.split("=", 1)[0]
-                if "\n" in e:
+            for export in exports:
+                if not isinstance(export, str) or "=" not in export or not _ENV_NAME.match(export.split("=", 1)[0]):
+                    raise EnvError(f"{source}: [harness.{name}] export {export!r} is not NAME=value")
+                var = export.split("=", 1)[0]
+                if "\n" in export:
                     raise EnvError(f"{source}: [harness.{name}] export {var} must be one line")
                 if var in _UNSAFE_EXPORT_NAMES or var.startswith(_UNSAFE_EXPORT_PREFIXES):
                     raise EnvError(f"{source}: [harness.{name}] refuses to export {var}: "
@@ -163,10 +163,10 @@ def contract_lines(facts: EnvFacts, harness: str | None = None) -> list[str]:
     if facts.unset:
         lines.append("unset " + " ".join(sorted(facts.unset)))
     if facts.key:
-        cmd = _ssh_command(facts.key.path)
-        lines.append(f"export GIT_SSH_COMMAND={shlex.quote(cmd)}")
-    for e in sorted(facts.exports_for(harness)):
-        name, value = e.split("=", 1)
+        ssh_command = _ssh_command(facts.key.path)
+        lines.append(f"export GIT_SSH_COMMAND={shlex.quote(ssh_command)}")
+    for export in sorted(facts.exports_for(harness)):
+        name, value = export.split("=", 1)
         lines.append(f"export {name}={shlex.quote(value)}")
     return lines
 
@@ -194,7 +194,7 @@ def run_exec(repo: str | Path, harness: str | None, cmd: str) -> int:
         env.pop(name, None)
     if facts.key:
         env["GIT_SSH_COMMAND"] = _ssh_command(facts.key.path)
-    for e in facts.exports_for(harness):
-        name, value = e.split("=", 1)
+    for export in facts.exports_for(harness):
+        name, value = export.split("=", 1)
         env[name] = value
     return subprocess.run(["sh", "-c", cmd], env=env).returncode
