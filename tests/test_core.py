@@ -210,13 +210,20 @@ class CliTests(Base):
         return rc, out.getvalue(), err.getvalue()
 
     def test_generate_then_check(self):
-        rc, _, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
+        rc, out, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
         self.assertEqual(rc, 1)
+        self.assertNotIn("warning: sessions already running", out)
         rc, out, _ = self.run_cli("manage", "generate", "--repo", str(self.repo))
         self.assertEqual(rc, 0)
         self.assertIn("unmapped setting: attribution", out)
-        rc, _, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
+        self.assertIn("warning: sessions already running will not load the new hooks", out)
+        rc, out, _ = self.run_cli("manage", "generate", "--repo", str(self.repo))
         self.assertEqual(rc, 0)
+        self.assertIn("unchanged .zcode/config.json", out)
+        self.assertIn("warning: sessions already running", out)
+        rc, out, _ = self.run_cli("manage", "generate", "--repo", str(self.repo), "--check")
+        self.assertEqual(rc, 0)
+        self.assertNotIn("warning: sessions already running", out)
 
     def test_missing_mapping_is_error(self):
         rc, _, err = self.run_cli("manage", "generate", "--repo", str(self.repo), "--harness", "nope")

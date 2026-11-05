@@ -150,6 +150,10 @@ def _cmd_discover(args) -> int:
     return 0
 
 
+_RUNNING_SESSIONS_WARNING = ("sessions already running will not load the new hooks; restart the session "
+                             "(observed on zcode 2026-11-04; other harnesses may differ)")
+
+
 def _cmd_generate(args) -> int:
     from .generate import generate
 
@@ -169,6 +173,8 @@ def _cmd_generate(args) -> int:
             state = "DRIFT" if r.drift else "ok"
             verb = "would write" if (args.check and r.drift) else ("wrote" if r.drift else "unchanged")
             print(f"[{r.harness}] {verb} {r.path} ({state})")
+            if not args.check:
+                print(f"  warning: {_RUNNING_SESSIONS_WARNING}")
         for w in r.warnings:
             print(f"  warning: {w}")
         for mm in r.undecided:
@@ -294,6 +300,8 @@ def _cmd_equip(args) -> int:
         print(f"[{r.harness}] unchanged {p}")
     for p in r.not_written:
         print(f"[{r.harness}] NOT WRITTEN {p}: {r.undecided} undecided (polymorph manage generate prints the questions)")
+    if not args.dry_run and (r.written or r.unchanged):
+        print(f"[{r.harness}] warning: {_RUNNING_SESSIONS_WARNING}")
     lverb = "would link" if r.dry_run else "linked"
     for l in r.linked:
         print(f"[{r.harness}] {lverb} {l.path} -> {l.target}")

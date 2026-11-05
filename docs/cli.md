@@ -35,6 +35,10 @@ Output, per target: `[NAME] wrote|would write|unchanged PATH (DRIFT|ok)`, then i
 lines:
 
 - `warning:` the mapping has no `verified` field.
+- `warning: sessions already running will not load the new hooks; restart the session` --
+  printed under the `wrote` and `unchanged` lines of a run that wrote or found the config
+  already generated (`--check` prints nothing: it writes nothing). Hook wiring is read when a
+  session starts, so a session opened before the config landed never sees the new hooks.
 - `question:` an undecided mismatch (see below); the target is then `NOT WRITTEN`.
 - `decided:` / `weakened:` a recorded decision that was applied; `weakened` for `run-empty` and for a `substitute` that moves the hook to a different event.
 - `warning: stale decision` a decision whose id matches nothing now.
@@ -116,6 +120,10 @@ Output, per harness:
 - `wrote|would write|unchanged .zcode/config.json` -- the generated config (`--dry-run`
   writes nothing). An undecided mismatch prints `NOT WRITTEN` with a count;
   `manage generate` prints the questions.
+- `warning: sessions already running will not load the new hooks; restart the session` --
+  printed once by an equip that wrote or found the config already generated (`--dry-run`
+  prints nothing; a `NOT WRITTEN` target prints nothing either). Hook wiring is read when a
+  session starts, so a session opened before the config landed never sees the new hooks.
 - `honoured surface:` the discover-and-report kinds the coverage table says the harness
   honours. With no coverage table: `coverage: no coverage table; nothing is known` --
   nothing is claimed.
