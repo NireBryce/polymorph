@@ -51,7 +51,7 @@ and the safe default is `false`.
 | Mapping | `verified` | Basis |
 |---|---|---|
 | `claude` | absent | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)) and a live VS Code session whose payloads matched `payload_in`. No deny seen to stop a call, so no `verified`. |
-| `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
+| `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow), plus two live probe rounds on 2026-11-04 (see [observed-zcode-session.md](observed-zcode-session.md)): exit 2 blocks, JSON answers are ignored, the post event fires, input rewrites are not honoured. `skills_dir` and `context_file` are best guesses. |
 | `gemini` | absent | A draft from an issue sketch. Every name is a guess. No fixtures. |
 
 Read the mapping's own header comment before relying on it; it states what is and is not
