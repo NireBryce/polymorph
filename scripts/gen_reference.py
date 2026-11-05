@@ -65,56 +65,56 @@ def commands(parser: argparse.ArgumentParser, prefix: tuple[str, ...] = ()):
     sub = _sub_action(parser)
     if sub is None:
         return
-    helps = {a.dest: a.help for a in sub._choices_actions}
+    help_by_dest = {action.dest: action.help for action in sub._choices_actions}
     for name, child in sub.choices.items():
         words = (*prefix, name)
-        yield words, child, helps.get(name) or ""
+        yield words, child, help_by_dest.get(name) or ""
         yield from commands(child, words)
 
 
-def _takes_value(a: argparse.Action) -> bool:
-    return a.nargs != 0
+def _takes_value(action: argparse.Action) -> bool:
+    return action.nargs != 0
 
 
-def _metavar(a: argparse.Action) -> str:
-    if a.metavar:
-        return a.metavar if isinstance(a.metavar, str) else " ".join(a.metavar)
-    if a.choices:
-        return "{" + ",".join(map(str, a.choices)) + "}"
-    return a.dest.upper().replace("-", "_")
+def _metavar(action: argparse.Action) -> str:
+    if action.metavar:
+        return action.metavar if isinstance(action.metavar, str) else " ".join(action.metavar)
+    if action.choices:
+        return "{" + ",".join(map(str, action.choices)) + "}"
+    return action.dest.upper().replace("-", "_")
 
 
 def options(parser: argparse.ArgumentParser):
     """Option actions (not -h, not the subcommand chooser)."""
-    return [a for a in parser._actions
-            if a.option_strings and not isinstance(a, argparse._HelpAction)]
+    return [action for action in parser._actions
+            if action.option_strings and not isinstance(action, argparse._HelpAction)]
 
 
 def positionals(parser: argparse.ArgumentParser):
-    return [a for a in parser._actions
-            if not a.option_strings and not isinstance(a, argparse._SubParsersAction)]
+    return [action for action in parser._actions
+            if not action.option_strings and not isinstance(action, argparse._SubParsersAction)]
 
 
-def _flag(a: argparse.Action) -> str:
-    name = max(a.option_strings, key=len)
-    return f"{name} {_metavar(a)}" if _takes_value(a) else name
+def _flag(action: argparse.Action) -> str:
+    name = max(action.option_strings, key=len)
+    return f"{name} {_metavar(action)}" if _takes_value(action) else name
 
 
 def usage_line(words: tuple[str, ...], parser: argparse.ArgumentParser) -> str:
     parts = ["polymorph", *words]
-    for a in options(parser):
-        text = _flag(a) + (" ..." if isinstance(a, argparse._AppendAction) else "")
-        parts.append(text if a.required else f"[{text}]")
+    for action in options(parser):
+        text = _flag(action) + (" ..." if isinstance(action, argparse._AppendAction) else "")
+        parts.append(text if action.required else f"[{text}]")
     if _sub_action(parser) is not None:
         parts.append("COMMAND")
-    for a in positionals(parser):
-        name = a.metavar or a.dest
-        parts.append(f"{name}..." if a.nargs in ("+", "*") else name)
+    for action in positionals(parser):
+        name = action.metavar or action.dest
+        parts.append(f"{name}..." if action.nargs in ("+", "*") else name)
     return " ".join(parts)
 
 
-def _help(a: argparse.Action) -> str:
-    return (a.help or "").replace("%(default)s", str(a.default))
+def _help(action: argparse.Action) -> str:
+    return (action.help or "").replace("%(default)s", str(action.default))
 
 
 # ---- markdown ---------------------------------------------------------------
@@ -132,18 +132,18 @@ def usage_md() -> str:
         "[The CLI reference](cli.md) explains what they do.",
         "",
     ]
-    for words, p, helptext in commands(parser):
+    for words, subparser, helptext in commands(parser):
         out += [f"## polymorph {' '.join(words)}", ""]
         if helptext:
             out += [helptext[0].upper() + helptext[1:] + ("" if helptext.endswith(".") else "."), ""]
-        out += ["```", usage_line(words, p), "```", ""]
-        pos, opts = positionals(p), options(p)
-        if pos or opts:
+        out += ["```", usage_line(words, subparser), "```", ""]
+        positional_actions, option_actions = positionals(subparser), options(subparser)
+        if positional_actions or option_actions:
             out += ["| Argument | Meaning |", "|---|---|"]
-            for a in pos:
-                out.append(f"| `{a.metavar or a.dest}` | {_help(a).replace('|', '/')} |")
-            for a in opts:
-                out.append(f"| `{_flag(a)}` | {_help(a).replace('|', '/')} |")
+            for action in positional_actions:
+                out.append(f"| `{action.metavar or action.dest}` | {_help(action).replace('|', '/')} |")
+            for action in option_actions:
+                out.append(f"| `{_flag(action)}` | {_help(action).replace('|', '/')} |")
             out.append("")
     return "\n".join(out).rstrip() + "\n"
 
@@ -165,19 +165,19 @@ def man_page() -> str:
         "polymorph \\- write hook configs for other coding harnesses from a repository's Claude Code config",
         ".SH SYNOPSIS",
     ]
-    for words, p, _ in cmds:
-        if _sub_action(p) is None:
-            out += [".br", esc(usage_line(words, p))]
+    for words, subparser, _ in cmds:
+        if _sub_action(subparser) is None:
+            out += [".br", esc(usage_line(words, subparser))]
     out += [".SH DESCRIPTION", esc(DESCRIPTION), ".PP", ".B " + esc(NOTICE), ".SH COMMANDS"]
-    for words, p, helptext in cmds:
+    for words, subparser, helptext in cmds:
         out += [f".SS polymorph {esc(' '.join(words))}"]
         if helptext:
             out.append(esc(helptext[0].upper() + helptext[1:] + ("" if helptext.endswith(".") else ".")))
             out.append(".PP")
-        out += [".nf", esc(usage_line(words, p)), ".fi"]
-        for a in [*positionals(p), *options(p)]:
-            label = a.metavar or a.dest if not a.option_strings else _flag(a)
-            out += [".TP", ".B " + esc(label), esc(_help(a))]
+        out += [".nf", esc(usage_line(words, subparser)), ".fi"]
+        for action in [*positionals(subparser), *options(subparser)]:
+            label = action.metavar or action.dest if not action.option_strings else _flag(action)
+            out += [".TP", ".B " + esc(label), esc(_help(action))]
     out += [".SH FILES"]
     for path, what in FILES:
         out += [".TP", ".I " + esc(path), esc(what)]

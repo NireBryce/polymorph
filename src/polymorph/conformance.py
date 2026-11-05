@@ -21,25 +21,25 @@ def fixture_files(harness: str | None = None, root: Path = DATA_ROOT) -> list[Pa
     return [f for d in dirs if d.is_dir() for f in sorted(d.glob("*.json"))]
 
 
-def check_shape(fx: object) -> list[str]:
-    if not isinstance(fx, dict):
+def check_shape(fixture: object) -> list[str]:
+    if not isinstance(fixture, dict):
         return ["fixture must be an object"]
-    errs = [f"missing key {k!r}" for k in sorted(FIXTURE_KEYS - fx.keys())]
-    errs += [f"unknown key {k!r}" for k in sorted(fx.keys() - FIXTURE_KEYS)]
+    errors = [f"missing key {k!r}" for k in sorted(FIXTURE_KEYS - fixture.keys())]
+    errors += [f"unknown key {k!r}" for k in sorted(fixture.keys() - FIXTURE_KEYS)]
     for k in ("native_in", "canonical_in"):
-        if k in fx and not isinstance(fx[k], dict):
-            errs.append(f"{k} must be an object")
-    if "hook_answer" in fx and fx["hook_answer"] is not None and not isinstance(fx["hook_answer"], dict):
-        errs.append("hook_answer must be an object or null")
-    no = fx.get("native_out")
-    if "native_out" in fx:
-        if not isinstance(no, dict) or "exit" not in no or "stdout" not in no:
-            errs.append("native_out must be an object with stdout and exit")
-        elif not isinstance(no["exit"], int) or isinstance(no["exit"], bool):
-            errs.append("native_out.exit must be an integer")
-        if isinstance(no, dict) and "stderr" in no and not isinstance(no["stderr"], str):
-            errs.append("native_out.stderr must be a string when present")
-    return errs
+        if k in fixture and not isinstance(fixture[k], dict):
+            errors.append(f"{k} must be an object")
+    if "hook_answer" in fixture and fixture["hook_answer"] is not None and not isinstance(fixture["hook_answer"], dict):
+        errors.append("hook_answer must be an object or null")
+    native_out = fixture.get("native_out")
+    if "native_out" in fixture:
+        if not isinstance(native_out, dict) or "exit" not in native_out or "stdout" not in native_out:
+            errors.append("native_out must be an object with stdout and exit")
+        elif not isinstance(native_out["exit"], int) or isinstance(native_out["exit"], bool):
+            errors.append("native_out.exit must be an integer")
+        if isinstance(native_out, dict) and "stderr" in native_out and not isinstance(native_out["stderr"], str):
+            errors.append("native_out.stderr must be a string when present")
+    return errors
 
 
 def _same_stdout(want, got) -> bool:
@@ -56,41 +56,41 @@ def _same_stdout(want, got) -> bool:
 def run_fixtures(harness: str | None = None, root: Path = DATA_ROOT):
     """Return (passed, failures); failures is a list of strings."""
     try:
-        from polymorph import adapter  # lazy: owned by another worker
+        from polymorph import adapter  # lazy: so shape checks work without the adapter installed
     except ImportError as e:
         return 0, [f"adapter unavailable ({e}); fixtures not run"]
     passed, failures = 0, []
-    for f in fixture_files(harness, root):
-        label = f"{f.parent.name}/{f.stem}"
+    for fixture_path in fixture_files(harness, root):
+        label = f"{fixture_path.parent.name}/{fixture_path.stem}"
         try:
-            fx = json.loads(f.read_text())
+            fixture = json.loads(fixture_path.read_text())
         except ValueError as e:
             failures.append(f"{label}: bad JSON: {e}")
             continue
-        errs = check_shape(fx)
-        if errs:
-            failures.append(f"{label}: shape: {'; '.join(errs)}")
+        errors = check_shape(fixture)
+        if errors:
+            failures.append(f"{label}: shape: {'; '.join(errors)}")
             continue
         try:
-            with open(root / "mappings" / f"{f.parent.name}.toml", "rb") as mf:
-                mapping = tomllib.load(mf)
-            got_in = adapter.translate_in(mapping, fx["native_in"])
-            bad = []
-            if got_in != fx["canonical_in"]:
-                bad.append(f"translate_in: want {fx['canonical_in']!r}, got {got_in!r}")
-            out = adapter.translate_out(mapping, fx["hook_answer"])
-            want = fx["native_out"]
+            with open(root / "mappings" / f"{fixture_path.parent.name}.toml", "rb") as mapping_file:
+                mapping = tomllib.load(mapping_file)
+            got_in = adapter.translate_in(mapping, fixture["native_in"])
+            mismatches = []
+            if got_in != fixture["canonical_in"]:
+                mismatches.append(f"translate_in: want {fixture['canonical_in']!r}, got {got_in!r}")
+            out = adapter.translate_out(mapping, fixture["hook_answer"])
+            want = fixture["native_out"]
             if out.get("exit") != want["exit"]:
-                bad.append(f"exit: want {want['exit']!r}, got {out.get('exit')!r}")
+                mismatches.append(f"exit: want {want['exit']!r}, got {out.get('exit')!r}")
             if not _same_stdout(want["stdout"], out.get("stdout")):
-                bad.append(f"stdout: want {want['stdout']!r}, got {out.get('stdout')!r}")
+                mismatches.append(f"stdout: want {want['stdout']!r}, got {out.get('stdout')!r}")
             if "stderr" in want and out.get("stderr") != want["stderr"]:
-                bad.append(f"stderr: want {want['stderr']!r}, got {out.get('stderr')!r}")
+                mismatches.append(f"stderr: want {want['stderr']!r}, got {out.get('stderr')!r}")
         except Exception as e:  # report, never crash the run
             failures.append(f"{label}: {type(e).__name__}: {e}")
             continue
-        if bad:
-            failures.append(f"{label}: " + "; ".join(bad))
+        if mismatches:
+            failures.append(f"{label}: " + "; ".join(mismatches))
         else:
             passed += 1
     return passed, failures

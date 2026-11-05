@@ -79,7 +79,7 @@ def decisions_path(repo: Path, name: str) -> Path:
 
 
 def parse_decisions(raw: object, native_events: set[str]) -> tuple[dict[str, Decision], list[str]]:
-    """Valid entries and one error string per problem; a bad entry is dropped, the rest kept."""
+    """Valid entries and one error string per problem; a invalid entry is dropped, the rest kept."""
     errs: list[str] = []
     out: dict[str, Decision] = {}
     if not isinstance(raw, dict):
@@ -91,36 +91,36 @@ def parse_decisions(raw: object, native_events: set[str]) -> tuple[dict[str, Dec
     table = raw.get("decisions", {})
     if not isinstance(table, dict):
         return out, errs + ["decisions must be a table"]
-    for did, e in table.items():
-        m = _ID.match(did)
-        if not m or m["kind"] not in KINDS:
-            errs.append(f"decision id {did!r} must be <hook-script>:<event>:<kind>, "
+    for decision_id, entry in table.items():
+        match = _ID.match(decision_id)
+        if not match or match["kind"] not in KINDS:
+            errs.append(f"decision id {decision_id!r} must be <hook-script>:<event>:<kind>, "
                         f"event one of {', '.join(EVENTS)}, kind one of {', '.join(KINDS)}")
             continue
-        if m["event"] not in EVENTS:
-            errs.append(f"decision id {did!r}: event {m['event']!r} is not a canonical event "
+        if match["event"] not in EVENTS:
+            errs.append(f"decision id {decision_id!r}: event {match['event']!r} is not a canonical event "
                         f"({', '.join(EVENTS)})")
             continue
-        if not isinstance(e, dict):
-            errs.append(f"{did}: must be a table")
+        if not isinstance(entry, dict):
+            errs.append(f"{decision_id}: must be a table")
             continue
-        bad = False
-        for k in sorted(set(e) - ENTRY_KEYS):
-            errs.append(f"{did}: unknown key {k!r}")
-            bad = True
-        choice, date, note = e.get("choice"), e.get("date"), e.get("note")
+        invalid = False
+        for k in sorted(set(entry) - ENTRY_KEYS):
+            errs.append(f"{decision_id}: unknown key {k!r}")
+            invalid = True
+        choice, date, note = entry.get("choice"), entry.get("date"), entry.get("note")
         if not isinstance(choice, str):
-            errs.append(f"{did}: choice must be a string")
-            bad = True
+            errs.append(f"{decision_id}: choice must be a string")
+            invalid = True
         else:
             head, _, arg = choice.partition(":")
-            if head not in KINDS[m["kind"]] or (arg and head != "substitute") or (head == "substitute" and not arg):
-                errs.append(f"{did}: choice {choice!r} is not one of {', '.join(options_for(m['kind'], native_events))}")
-                bad = True
+            if head not in KINDS[match["kind"]] or (arg and head != "substitute") or (head == "substitute" and not arg):
+                errs.append(f"{decision_id}: choice {choice!r} is not one of {', '.join(options_for(match['kind'], native_events))}")
+                invalid = True
             elif head == "substitute" and (not _NATIVE.match(arg) or arg not in native_events):
-                errs.append(f"{did}: {arg!r} is not a native event of this mapping "
+                errs.append(f"{decision_id}: {arg!r} is not a native event of this mapping "
                             f"({', '.join(sorted(native_events)) or 'none'})")
-                bad = True
+                invalid = True
         if isinstance(date, datetime.date):
             date = date.isoformat()
         try:
@@ -128,23 +128,23 @@ def parse_decisions(raw: object, native_events: set[str]) -> tuple[dict[str, Dec
                 raise ValueError
             datetime.date.fromisoformat(date)
         except ValueError:
-            errs.append(f"{did}: date must be YYYY-MM-DD")
-            bad = True
+            errs.append(f"{decision_id}: date must be YYYY-MM-DD")
+            invalid = True
         if note is not None and not isinstance(note, str):
-            errs.append(f"{did}: note must be a string")
-            bad = True
-        if not bad:
-            out[did] = Decision(did, choice, date, note)
+            errs.append(f"{decision_id}: note must be a string")
+            invalid = True
+        if not invalid:
+            out[decision_id] = Decision(decision_id, choice, date, note)
     return out, errs
 
 
 def load_decisions(repo: Path, name: str, native_events: set[str]) -> tuple[dict[str, Decision], list[str]]:
     """(decisions, errors). A missing file is no decisions and no errors."""
-    p = decisions_path(repo, name)
-    if not p.is_file():
+    path = decisions_path(repo, name)
+    if not path.is_file():
         return {}, []
     try:
-        raw = tomllib.loads(p.read_text())
+        raw = tomllib.loads(path.read_text())
     except (OSError, tomllib.TOMLDecodeError) as e:
         return {}, [f"cannot read: {e}"]
     return parse_decisions(raw, native_events)
@@ -152,25 +152,25 @@ def load_decisions(repo: Path, name: str, native_events: set[str]) -> tuple[dict
 
 def options_for(kind: str, native_events: set[str] | None = None) -> tuple[str, ...]:
     out = []
-    for c in KINDS[kind]:
-        if c == "substitute":
+    for choice in KINDS[kind]:
+        if choice == "substitute":
             out.append("substitute:<native event>")
         else:
-            out.append(c)
+            out.append(choice)
     return tuple(out)
 
 
-def format_question(target: str, mm: Mismatch, native_events: list[str]) -> list[str]:
+def format_question(target: str, mismatch: Mismatch, native_events: list[str]) -> list[str]:
     """One undecided item as a fixed-shape block, readable by an agent relaying it to its user."""
-    opts = " | ".join(mm.options)
-    if "substitute:<native event>" in mm.options:
-        opts += f"   (native events: {', '.join(native_events)})"
-    cls = f", classes {','.join(mm.classes)}" if mm.classes else ""
+    options_text = " | ".join(mismatch.options)
+    if "substitute:<native event>" in mismatch.options:
+        options_text += f"   (native events: {', '.join(native_events)})"
+    classes_text = f", classes {','.join(mismatch.classes)}" if mismatch.classes else ""
     return [
-        f"  question: {mm.id}",
-        f"    hook:    {mm.script} ({mm.event}{cls})",
-        f"    problem: {mm.detail}",
-        f"    options: {opts}",
+        f"  question: {mismatch.id}",
+        f"    hook:    {mismatch.script} ({mismatch.event}{classes_text})",
+        f"    problem: {mismatch.detail}",
+        f"    options: {options_text}",
         "    default: skip",
-        f'    answer:  in {DECISIONS_DIR}/{target}.toml add [decisions."{mm.id}"] with choice = "<option>", date = "YYYY-MM-DD"',
+        f'    answer:  in {DECISIONS_DIR}/{target}.toml add [decisions."{mismatch.id}"] with choice = "<option>", date = "YYYY-MM-DD"',
     ]

@@ -61,19 +61,14 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _dirty(repo: Path, rel: str) -> str | None:
     """A reason string when git shows uncommitted changes for rel, else None."""
-    p = _git(repo, "status", "--porcelain", "--ignored", "--", rel)
-    if p.returncode != 0:
-        return f"git status failed ({p.stderr.strip() or 'not a git repository'}); refusing without a safety net"
-    if any(line.startswith("!!") for line in p.stdout.splitlines()):
+    status_proc = _git(repo, "status", "--porcelain", "--ignored", "--", rel)
+    if status_proc.returncode != 0:
+        return f"git status failed ({status_proc.stderr.strip() or 'not a git repository'}); refusing without a safety net"
+    if any(line.startswith("!!") for line in status_proc.stdout.splitlines()):
         return "ignored by git (no committed copy to fall back on)"
-    if p.stdout.strip():
+    if status_proc.stdout.strip():
         return "uncommitted changes"
     return None
-
-
-def _rel_symlink(repo: Path, link: Path, store_rel: str) -> str:
-    target_abs = repo / store_rel
-    return os.path.relpath(target_abs, link.parent)
 
 
 def _link_harnesses(repo: Path, result: AdoptResult, dry_run: bool) -> None:
@@ -81,13 +76,13 @@ def _link_harnesses(repo: Path, result: AdoptResult, dry_run: bool) -> None:
     from .equip import record_links
     from .inventory import available_tables, load_coverage, read_inventory
 
-    caps = [c for n in available_tables(repo) if (c := load_coverage(n, repo)) is not None]
-    lp = linkmod.plan(repo, caps, read_inventory(repo))
-    result.link_refused = list(lp.refused)
+    coverage_tables = [coverage for name in available_tables(repo) if (coverage := load_coverage(name, repo)) is not None]
+    link_plan = linkmod.plan(repo, coverage_tables, read_inventory(repo))
+    result.link_refused = list(link_plan.refused)
     if dry_run:
-        result.linked = lp.create
+        result.linked = link_plan.create
         return
-    result.linked, failed = linkmod.apply(repo, lp.create)
+    result.linked, failed = linkmod.apply(repo, link_plan.create)
     result.link_refused += failed
     if result.linked:
         record_links(repo, result.linked)
@@ -100,15 +95,15 @@ def adopt(repo: str | Path = ".", dry_run: bool = False, make_links: bool = True
     store = repo / STORE
     result = AdoptResult(dry_run=dry_run)
     for kind, at_rest, store_rel in CANDIDATES:
-        src = repo / at_rest
-        dst = store / store_rel
-        if not src.exists() and not src.is_symlink():
+        at_rest_path = repo / at_rest
+        store_path = store / store_rel
+        if not at_rest_path.exists() and not at_rest_path.is_symlink():
             result.absent.append((kind, at_rest))
             continue
-        if src.is_symlink():
-            result.already.append((kind, at_rest, os.readlink(src)))
+        if at_rest_path.is_symlink():
+            result.already.append((kind, at_rest, os.readlink(at_rest_path)))
             continue
-        if dst.exists() or dst.is_symlink():
+        if store_path.exists() or store_path.is_symlink():
             result.refused.append((kind, at_rest, f"both copies exist: {STORE}/{store_rel} and {at_rest}"))
             continue
         reason = _dirty(repo, at_rest)
@@ -118,10 +113,10 @@ def adopt(repo: str | Path = ".", dry_run: bool = False, make_links: bool = True
         if dry_run:
             result.moved.append(Action(kind=kind, path=at_rest, store=f"{STORE}/{store_rel}"))
             continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
-        link = os.path.relpath(dst, src.parent)
-        os.symlink(link, src)
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(at_rest_path), str(store_path))
+        link = os.path.relpath(store_path, at_rest_path.parent)
+        os.symlink(link, at_rest_path)
         result.moved.append(Action(kind=kind, path=at_rest, store=f"{STORE}/{store_rel}"))
     if make_links:
         _link_harnesses(repo, result, dry_run)

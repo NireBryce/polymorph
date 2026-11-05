@@ -48,32 +48,32 @@ def _unsafe(repo: Path, rel: str) -> str | None:
     parts = Path(rel).parts
     if parts[0] in PROTECTED:
         return f"{parts[0]}/ is never a link location"
-    here = repo
+    ancestor = repo
     root = repo.resolve()
     for part in parts[:-1]:
-        here = here / part
-        if here.is_symlink() and not Path(os.path.realpath(here)).is_relative_to(root):
-            return f"{here.relative_to(repo).as_posix()} is a symlink that leaves the repository"
-        if os.path.lexists(here) and not here.is_dir():
-            return f"{here.relative_to(repo).as_posix()} is not a directory"
+        ancestor = ancestor / part
+        if ancestor.is_symlink() and not Path(os.path.realpath(ancestor)).is_relative_to(root):
+            return f"{ancestor.relative_to(repo).as_posix()} is a symlink that leaves the repository"
+        if os.path.lexists(ancestor) and not ancestor.is_dir():
+            return f"{ancestor.relative_to(repo).as_posix()} is not a directory"
     return None
 
 
-def plan(repo: str | Path, caps: list[Coverage], inv: Inventory) -> LinkPlan:
+def plan(repo: str | Path, coverages: list[Coverage], inv: Inventory) -> LinkPlan:
     """The links that would close every `no-link` gap of the given harnesses."""
     repo = Path(repo)
     out = LinkPlan()
     wanted: list[Link] = []
-    for cap in caps:
-        for g in gaps(inv, cap, repo):
-            if g.reason != NO_LINK or not g.link_to or not g.reads:
+    for coverage in coverages:
+        for gap in gaps(inv, coverage, repo):
+            if gap.reason != NO_LINK or not gap.link_to or not gap.reads:
                 continue
-            link = Link(cap.name, g.reads[0], g.link_to, g.kind)
-            if not _builtin(cap):
-                out.refused.append((cap.name, link.path,
+            link = Link(coverage.name, gap.reads[0], gap.link_to, gap.kind)
+            if not _builtin(coverage):
+                out.refused.append((coverage.name, link.path,
                                     "the coverage table is repo-local; links come only from built-in tables"))
             elif (why := _unsafe(repo, link.path)):
-                out.refused.append((cap.name, link.path, why))
+                out.refused.append((coverage.name, link.path, why))
             elif link not in wanted:
                 wanted.append(link)
     targets: dict[str, set[str]] = {}

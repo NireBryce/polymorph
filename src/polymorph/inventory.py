@@ -111,10 +111,10 @@ def _item(repo: Path, kind: str, path: Path) -> Item:
 
 
 def _children(repo: Path, source: str) -> list[Path]:
-    d = repo / source
-    if not d.is_dir():
+    source_path = repo / source
+    if not source_path.is_dir():
         return []
-    return sorted(d.iterdir(), key=lambda p: p.name)
+    return sorted(source_path.iterdir(), key=lambda entry: entry.name)
 
 
 def read_inventory(repo: str | Path = ".") -> Inventory:
@@ -127,13 +127,13 @@ def read_inventory(repo: str | Path = ".") -> Inventory:
     repo = Path(repo)
 
     def items(kind: str, entries: list[Path]) -> tuple[Item, ...]:
-        return tuple(_item(repo, kind, p) for p in entries)
+        return tuple(_item(repo, kind, entry) for entry in entries)
 
     return Inventory(
         skills=items("skills", _children(repo, SKILLS_SOURCE)),
-        rules=items("rules", sum((_children(repo, s) for s in RULES_SOURCES), [])),
-        memory=items("memory", [repo / n for n in MEMORY_FILES
-                                if (repo / n).is_symlink() or (repo / n).is_file()]),
+        rules=items("rules", sum((_children(repo, rules_source) for rules_source in RULES_SOURCES), [])),
+        memory=items("memory", [repo / filename for filename in MEMORY_FILES
+                                if (repo / filename).is_symlink() or (repo / filename).is_file()]),
         claude_dir=items("claude_dir", _children(repo, CLAUDE_DIR)),
     )
 
@@ -142,9 +142,9 @@ def _path_ok(value: str) -> bool:
     if not isinstance(value, str) or not value or value.startswith("/"):
         return False
     parts = PurePosixPath(value).parts
-    if ".." in parts or any(p in ("", ".") for p in parts):
+    if ".." in parts or any(part in ("", ".") for part in parts):
         return False
-    return not any(ch in p for p in parts for ch in "$`\\\"'<>|;&*?!")
+    return not any(char in part for part in parts for char in "$`\\\"'<>|;&*?!")
 
 
 def parse_coverage(raw: dict, source: str = "") -> Coverage:
@@ -158,27 +158,27 @@ def parse_coverage(raw: dict, source: str = "") -> Coverage:
     name = raw.get("name")
     if not isinstance(name, str) or not name:
         raise InventoryError(f"{source}: name must be a non-empty string")
-    inv = raw.get("inventory", {})
-    if not isinstance(inv, dict):
+    inventory_table = raw.get("inventory", {})
+    if not isinstance(inventory_table, dict):
         raise InventoryError(f"{source}: [inventory] must be a table")
-    bad = sorted(set(inv) - set(CAP_KEYS))
-    if bad:
-        raise InventoryError(f"{source}: unknown inventory kind(s) {', '.join(bad)}")
-    memory = inv.get("memory", [])
+    unknown_kinds = sorted(set(inventory_table) - set(CAP_KEYS))
+    if unknown_kinds:
+        raise InventoryError(f"{source}: unknown inventory kind(s) {', '.join(unknown_kinds)}")
+    memory = inventory_table.get("memory", [])
     if isinstance(memory, str):
         raise InventoryError(f"{source}: memory must be a list of file names")
-    for m in memory:
-        if not isinstance(m, str) or not m or not all(c.isalnum() or c in "._-" for c in m):
-            raise InventoryError(f"{source}: memory entry {m!r} is not a plain file name")
+    for memory_file in memory:
+        if not isinstance(memory_file, str) or not memory_file or not all(char.isalnum() or char in "._-" for char in memory_file):
+            raise InventoryError(f"{source}: memory entry {memory_file!r} is not a plain file name")
     for key in ("skills", "rules", "claude_dir"):
-        if key in inv and not _path_ok(inv[key]):
-            raise InventoryError(f"{source}: inventory.{key} {inv[key]!r} is not a plain relative path")
+        if key in inventory_table and not _path_ok(inventory_table[key]):
+            raise InventoryError(f"{source}: inventory.{key} {inventory_table[key]!r} is not a plain relative path")
     return Coverage(
         name=name,
-        skills=inv.get("skills"),
-        rules=inv.get("rules"),
+        skills=inventory_table.get("skills"),
+        rules=inventory_table.get("rules"),
         memory=tuple(memory),
-        claude_dir=inv.get("claude_dir"),
+        claude_dir=inventory_table.get("claude_dir"),
         source=source,
     )
 
@@ -201,29 +201,29 @@ def load_coverage(name: str, repo: str | Path = ".", coverage_dir: str | None = 
     if warn is None:
         warn = _warn_stderr
 
-    if not name or not all(c.isalnum() or c in "_-" for c in name):
+    if not name or not all(char.isalnum() or char in "_-" for char in name):
         raise InventoryError(f"bad harness name {name!r}")
     repo = Path(repo)
     builtin = COVERAGE_DIR
     repo_dir = repo / REPO_DIR
     sources: list[Path] = []
     if coverage_dir:
-        d = Path(coverage_dir)
-        allowed = (repo_dir.resolve(), builtin.resolve(), *(Path(t).resolve() for t in trust_dirs))
-        if d.resolve() not in allowed:
+        coverage_path = Path(coverage_dir)
+        allowed = (repo_dir.resolve(), builtin.resolve(), *(Path(trust_dir).resolve() for trust_dir in trust_dirs))
+        if coverage_path.resolve() not in allowed:
             raise InventoryError(f"--coverage {coverage_dir} is outside trusted dirs")
-        sources.append(d / f"{name}.toml")
+        sources.append(coverage_path / f"{name}.toml")
     sources.append(repo_dir / f"{name}.toml")
     sources.append(builtin / f"{name}.toml")
     for path in sources:
         if path.is_file():
             raw = tomllib.loads(path.read_text())
-            cap = parse_coverage(raw, str(path))
-            if cap.name != name:
-                raise InventoryError(f"{path}: name {cap.name!r} does not match {name!r}")
+            coverage = parse_coverage(raw, str(path))
+            if coverage.name != name:
+                raise InventoryError(f"{path}: name {coverage.name!r} does not match {name!r}")
             if path.is_relative_to(repo_dir):
                 warn(f"warning: {path} overrides the built-in '{name}' coverage table")
-            return cap
+            return coverage
     return None
 
 
@@ -232,10 +232,10 @@ def available_tables(repo: str | Path = ".") -> list[str]:
     repo = Path(repo)
     builtin = COVERAGE_DIR
     names: dict[str, None] = {}
-    for d in (repo / REPO_DIR, builtin):
-        if d.is_dir():
-            for p in sorted(d.glob("*.toml")):
-                names.setdefault(p.stem, None)
+    for table_dir in (repo / REPO_DIR, builtin):
+        if table_dir.is_dir():
+            for table_path in sorted(table_dir.glob("*.toml")):
+                names.setdefault(table_path.stem, None)
     return sorted(names)
 
 
@@ -280,18 +280,18 @@ def _honoured_target(repo: Path, cap: Coverage, kind: str, item: Item) -> bool:
     """
     if item.target is None or kind == "memory":
         return False
-    t = (repo / item.target).resolve()
-    if any(_same(repo / item.target, repo / r) for r in cap.memory):
+    resolved_target = (repo / item.target).resolve()
+    if any(_same(repo / item.target, repo / memory_read) for memory_read in cap.memory):
         return True
-    for src in (cap.skills, cap.rules, cap.claude_dir):
-        if src:
-            base = (repo / src).resolve()
-            if t == base or base in t.parents:
+    for honoured_dir in (cap.skills, cap.rules, cap.claude_dir):
+        if honoured_dir:
+            resolved_dir = (repo / honoured_dir).resolve()
+            if resolved_target == resolved_dir or resolved_dir in resolved_target.parents:
                 return True
     return False
 
 
-def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
+def gaps(inventory: Inventory, coverage: Coverage, repo: str | Path) -> list[Gap]:
     """Provided paths the harness will not read, with the reason.
 
     A harness reads fixed paths (the coverage table). An item is reached when one of them
@@ -305,32 +305,33 @@ def gaps(inv: Inventory, cap: Coverage, repo: str | Path) -> list[Gap]:
     repo = Path(repo)
     out: list[Gap] = []
     for kind in KINDS:
-        reads = _read_paths(cap, kind)
-        for item in inv.kind(kind):
-            if any(_reached(repo, kind, item, r) for r in reads):
+        reads = _read_paths(coverage, kind)
+        for item in inventory.kind(kind):
+            if any(_reached(repo, kind, item, candidate_read) for candidate_read in reads):
                 continue
-            if _honoured_target(repo, cap, kind, item):
+            if _honoured_target(repo, coverage, kind, item):
                 continue
             if not reads:
-                out.append(Gap(cap.name, kind, item.path, UNSUPPORTED))
+                out.append(Gap(coverage.name, kind, item.path, UNSUPPORTED))
                 continue
-            present = [r for r in reads if (repo / r).exists() or (repo / r).is_symlink()]
+            present = [candidate_read for candidate_read in reads
+                       if (repo / candidate_read).exists() or (repo / candidate_read).is_symlink()]
             if not present:
                 reason = NO_LINK
-            elif any((repo / r).is_symlink() for r in present):
+            elif any((repo / candidate_read).is_symlink() for candidate_read in present):
                 reason = POINTS_ELSEWHERE
             else:
                 reason = UNLINKED_COPY
-            links = [r for r in present if (repo / r).is_symlink()]
-            read = (links or present or list(reads))[0]
-            here = item.path if kind == "memory" else PurePosixPath(item.path).parent.as_posix()
+            links = [candidate_read for candidate_read in present if (repo / candidate_read).is_symlink()]
+            read_path = (links or present or list(reads))[0]
+            item_location = item.path if kind == "memory" else PurePosixPath(item.path).parent.as_posix()
             link_to = ""
             if reason == NO_LINK:
-                link_to = _link_target(repo, kind, item, read)
-                fix = f"polymorph equip --harness {cap.name} links {read} -> {link_to}"
+                link_to = _link_target(repo, kind, item, read_path)
+                fix = f"polymorph equip --harness {coverage.name} links {read_path} -> {link_to}"
             elif reason == UNLINKED_COPY:
-                fix = f"{read} and {here} are separate copies: merge them into one and link the other to it"
+                fix = f"{read_path} and {item_location} are separate copies: merge them into one and link the other to it"
             else:
-                fix = f"{read} is a symlink to {os.readlink(repo / read)}, not to {here}"
-            out.append(Gap(cap.name, kind, item.path, reason, reads=reads, fix=fix, link_to=link_to))
+                fix = f"{read_path} is a symlink to {os.readlink(repo / read_path)}, not to {item_location}"
+            out.append(Gap(coverage.name, kind, item.path, reason, reads=reads, fix=fix, link_to=link_to))
     return out

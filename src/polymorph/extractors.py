@@ -29,7 +29,7 @@ def apply_patch_paths(native: dict) -> dict[str, Any]:
     for field in _PATCH_FIELDS:
         text = lookup(native, field, None)
         if isinstance(text, list):
-            text = "\n".join(str(t) for t in text)
+            text = "\n".join(str(line) for line in text)
         if isinstance(text, str) and "*** " in text:
             paths = list(dict.fromkeys(_PATCH_FILE.findall(text)))
             if not paths:

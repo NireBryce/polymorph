@@ -56,15 +56,15 @@ def translate_in(mapping: dict, native: Any) -> dict:
         raise AdapterError("native payload is not a JSON object")
     canonical: dict[str, Any] = {}
     try:
-        for ckey, npath in (mapping.get("payload_in") or {}).items():
-            if ckey == "extractor":
+        for canon_key, native_path in (mapping.get("payload_in") or {}).items():
+            if canon_key == "extractor":
                 continue
-            if not isinstance(npath, str):
-                raise AdapterError(f"payload_in.{ckey} is not a path string")
-            value = lookup(native, npath, None)
+            if not isinstance(native_path, str):
+                raise AdapterError(f"payload_in.{canon_key} is not a path string")
+            value = lookup(native, native_path, None)
             if value is None:
                 continue
-            assign(canonical, CANON_PATHS.get(ckey, ckey), value)
+            assign(canonical, CANON_PATHS.get(canon_key, canon_key), value)
         for key in PASSTHROUGH:
             if key not in canonical and key in native:
                 canonical[key] = native[key]
@@ -73,9 +73,9 @@ def translate_in(mapping: dict, native: Any) -> dict:
             cls = _native_tool_class(mapping, name)
             if cls in CLASS_TOOL:
                 canonical["tool_name"] = CLASS_TOOL[cls]
-        ext = (mapping.get("payload_in") or {}).get("extractor")
-        if ext is not None:
-            for path, value in extractors.get(ext)(native).items():
+        extractor_name = (mapping.get("payload_in") or {}).get("extractor")
+        if extractor_name is not None:
+            for path, value in extractors.get(extractor_name)(native).items():
                 assign(canonical, path, value)
     except (ExprError, extractors.ExtractorError) as e:
         raise AdapterError(str(e)) from e
@@ -145,18 +145,18 @@ def not_checked(mapping: dict | None, why: str) -> dict:
 
 
 def resolve_script(repo: Path, script: str) -> Path:
-    hooks = (repo / ".agents" / "hooks").resolve()
-    p = Path(script)
-    real = (p if p.is_absolute() else repo / p).resolve()
-    if not real.is_relative_to(hooks) or not real.is_file():
-        raise AdapterError(f"hook script {script!r} is not a file under {hooks}; refused")
+    hooks_dir = (repo / ".agents" / "hooks").resolve()
+    script_path = Path(script)
+    real = (script_path if script_path.is_absolute() else repo / script_path).resolve()
+    if not real.is_relative_to(hooks_dir) or not real.is_file():
+        raise AdapterError(f"hook script {script!r} is not a file under {hooks_dir}; refused")
     return real
 
 
 def find_repo(start: Path) -> Path:
-    for d in [start, *start.parents]:
-        if (d / ".agents").is_dir():
-            return d
+    for candidate_dir in [start, *start.parents]:
+        if (candidate_dir / ".agents").is_dir():
+            return candidate_dir
     raise AdapterError("no .agents directory found above the working directory")
 
 
@@ -170,20 +170,20 @@ def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: li
         raise AdapterError(f"bad harness name {name!r}")
     dirs = [repo / ".polymorph" / "basecamp" / "mappings", MAPPINGS_DIR]
     if extra_dir is not None:
-        e = extra_dir.resolve()
-        if e not in dirs and e not in [t.resolve() for t in trust]:
+        extra_resolved = extra_dir.resolve()
+        if extra_resolved not in dirs and extra_resolved not in [trust_dir.resolve() for trust_dir in trust]:
             raise AdapterError(f"--mappings {extra_dir} is outside trusted dirs; add --trust-dir")
-        dirs.insert(0, e)
-    for d in dirs:
-        f = d / f"{name}.toml"
-        if f.is_file():
-            with open(f, "rb") as fh:
-                raw = tomllib.load(fh)
-            errs = validate_mapping(raw)
-            if errs:
+        dirs.insert(0, extra_resolved)
+    for candidate_dir in dirs:
+        candidate_path = candidate_dir / f"{name}.toml"
+        if candidate_path.is_file():
+            with open(candidate_path, "rb") as handle:
+                raw = tomllib.load(handle)
+            validation_errors = validate_mapping(raw)
+            if validation_errors:
                 # an invalid mapping must be a visible NOT-checked, never a silently
                 # mis-wired guard: validation here is the runtime trust boundary
-                raise AdapterError(f"mapping {name} is invalid: {'; '.join(errs)}")
+                raise AdapterError(f"mapping {name} is invalid: {'; '.join(validation_errors)}")
             return raw
     raise AdapterError(f"no mapping {name}.toml found")
 
@@ -206,16 +206,16 @@ def adapt(mapping: dict, repo: Path, script: str, stdin_text: str,
         raise AdapterError(f"native payload is not valid JSON: {e}") from e
     canonical = translate_in(mapping, native)
     try:
-        cp = run_hook(real, canonical, capability_env(mapping), repo, timeout=timeout)
+        proc = run_hook(real, canonical, capability_env(mapping), repo, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise AdapterError(f"hook could not run: {e}") from e
-    if cp.returncode == 2:
+    if proc.returncode == 2:
         answer = {"hookSpecificOutput": {"permissionDecision": "deny",
-                                         "permissionDecisionReason": cp.stderr.strip()}}
+                                         "permissionDecisionReason": proc.stderr.strip()}}
         return translate_out(mapping, answer)
-    if cp.returncode != 0:
-        raise AdapterError(f"hook exited {cp.returncode}: {cp.stderr.strip()[:300]}")
-    out = cp.stdout.strip()
+    if proc.returncode != 0:
+        raise AdapterError(f"hook exited {proc.returncode}: {proc.stderr.strip()[:300]}")
+    out = proc.stdout.strip()
     answer = None
     if out:
         try:
@@ -228,19 +228,19 @@ def adapt(mapping: dict, repo: Path, script: str, stdin_text: str,
 
 
 def run_adapter(argv: list[str] | None = None, stdin=None, stdout=None, stderr=None) -> int:
-    ap = argparse.ArgumentParser(prog="polymorph adapter")
-    ap.add_argument("--harness", required=True)
-    ap.add_argument("--mappings", type=Path)
-    ap.add_argument("--trust-dir", type=Path, action="append", default=[])
-    ap.add_argument("--repo", type=Path)
-    ap.add_argument("--timeout", type=float, default=HOOK_TIMEOUT,
-                    help="seconds before the hook is killed (a killed hook is NOT checked, never a deny)")
-    ap.add_argument("script", help="hook script (after --)")
+    parser = argparse.ArgumentParser(prog="polymorph adapter")
+    parser.add_argument("--harness", required=True)
+    parser.add_argument("--mappings", type=Path)
+    parser.add_argument("--trust-dir", type=Path, action="append", default=[])
+    parser.add_argument("--repo", type=Path)
+    parser.add_argument("--timeout", type=float, default=HOOK_TIMEOUT,
+                        help="seconds before the hook is killed (a killed hook is NOT checked, never a deny)")
+    parser.add_argument("script", help="hook script (after --)")
     stdin, stdout, stderr = stdin or sys.stdin, stdout or sys.stdout, stderr or sys.stderr
     mapping = None
     try:
         try:
-            args = ap.parse_args(argv)
+            args = parser.parse_args(argv)
         except SystemExit as e:
             # a usage error must land in the same visible NOT-checked path as every other
             # fault: on a harness that reads exit 2 as deny, argparse's exit 2 would deny
