@@ -62,7 +62,8 @@ printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 
 `enabled` is the list of harnesses `generate` and `check` act on when you do not pass
 `--harness`. Each name must have a mapping: the shipped ones are `claude`, `zcode` and
-`gemini` (gemini is an unverified draft, see [Limits](limits.md)).
+`gemini` (claude has no `verified` field and gemini is an unverified draft, see
+[Limits](limits.md)).
 
 ## 3. Preview, then generate
 

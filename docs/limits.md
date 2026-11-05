@@ -30,7 +30,7 @@ The `verified` field of a mapping is free text. polymorph checks only that it is
 it does not read it, and nothing stops anyone writing it for a mapping that was not tested.
 The convention this project follows:
 
-- **Absent** means unverified. Drafts, the `gemini` mapping, and anything written from an
+- **Absent** means unverified. Drafts, the `claude` and `gemini` mappings, and anything written from an
   issue report start here. `generate` warns and `check` raises `mapping-unverified`.
 - **Present** means a named person looked at a named source on a named date, and the text
   says what and how: for example, "payload shape from a captured session on DATE" or "read
@@ -50,7 +50,7 @@ and the safe default is `false`.
 
 | Mapping | `verified` | Basis |
 |---|---|---|
-| `claude` | present | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)) and a live VS Code session whose payloads matched `payload_in`. Block semantics not live-tested. |
+| `claude` | absent | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)) and a live VS Code session whose payloads matched `payload_in`. No deny seen to stop a call, so no `verified`. |
 | `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
 | `gemini` | absent | A draft from an issue sketch. Every name is a guess. No fixtures. |
 

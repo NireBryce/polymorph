@@ -156,6 +156,15 @@ class PureTests(unittest.TestCase):
             with self.assertRaises(adapter.AdapterError):
                 adapter.load_mapping(link, "zcode", extra_dir=outside)
 
+    def test_gemini_ask_is_passed_through_not_blocked(self):
+        # SPEC "Wire protocol": with ask = false the hook hardens ask (GUARD_ASK_ENFORCED=0),
+        # not the adapter, so gemini's ask leaves as the canonical JSON, exit 0
+        gemini_mapping = adapter.load_mapping(Path("."), "gemini")
+        ask = {"hookSpecificOutput": {"permissionDecision": "ask", "permissionDecisionReason": "confirm?"}}
+        rendered = adapter.translate_out(gemini_mapping, ask)
+        self.assertEqual((rendered["exit"], json.loads(rendered["stdout"])), (0, ask))
+        self.assertEqual(adapter.capability_env(gemini_mapping)["GUARD_ASK_ENFORCED"], "0")
+
     def test_translate_out_unrecognized_answer_is_never_an_allow(self):
         for ans in ({"decision": "deny", "reason": "old style"}, {}, {"weird": True}):
             with self.assertRaises(adapter.AdapterError, msg=ans):

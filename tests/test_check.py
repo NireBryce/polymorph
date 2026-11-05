@@ -172,7 +172,6 @@ class CheckTest(unittest.TestCase):
         self.assertEqual([f for f in check.run_check(self.repo, harnesses=["gemini"])
                           if f.code == "exit2-unhonoured"], [])
         (d / "gemini.toml").write_text(base.replace('deny = { exit = 2, stderr = "{reason}" }\n', "")
-                                              .replace('ask = { exit = 2, stderr = "{reason}" }\n', "")
                                               .replace("exit_2_blocks = true", "exit_2_blocks = false"))
         self.assertEqual([f for f in check.run_check(self.repo, harnesses=["gemini"])
                           if f.code == "exit2-unhonoured"], [])

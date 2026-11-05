@@ -128,7 +128,7 @@ harness shows to the model) and NEVER a deny; never fail open silently. A hook a
 polymorph cannot translate (an unknown decision shape) is such a failure too: visible,
 never a deny and never a silent allow. `ask` on a harness
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
-the adapter.
+the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping.
 
 ## Repo layout (everything polymorph stores in a repo)
 

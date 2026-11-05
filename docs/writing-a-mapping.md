@@ -144,8 +144,11 @@ A harness that blocks by exit code, like the draft `gemini` mapping, looks like 
 ```toml
 [payload_out]
 deny = { exit = 2, stderr = "{reason}" }
-ask = { exit = 2, stderr = "{reason}" }
 ```
+
+There is no `ask` entry. When `capabilities.ask` is `false`, the hook hardens `ask` to deny
+itself (it reads `GUARD_ASK_ENFORCED=0`), so the mapping does not: `validate` rejects any
+`payload_out.ask` alongside `ask = false`.
 
 An adapter-delivery mapping needs at least one way to express a block: a `deny` entry,
 `exit_2_blocks = true`, or `json_answers = true` (the canonical JSON passes a deny
@@ -153,7 +156,8 @@ through). With none of the three, `check` warns `deny-unenforceable`: at run tim
 deny becomes a visible NOT-checked fault and the call proceeds, so the mapping cannot
 enforce anything.
 
-`exit` is required on `deny` and `ask` entries and must be `2`, the canonical block code.
+`exit` is required on `deny` and `ask` entries and must be `2`, the canonical block code
+(an `ask` entry exists only when `capabilities.ask` is `true`; see above).
 The adapter defaults a missing exit to `0`, which is an allow, and no other code is
 documented to block, so `validate` rejects a missing exit and any value but `2` — a deny
 or ask that renders as anything else fails open silently. `allow`, `warn` and `remind`

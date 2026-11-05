@@ -59,8 +59,8 @@ What the tool does today, measured against that goal:
   meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
   that resolve under `.agents/hooks/`.
 - **Transliterates** through declarative TOML mappings (`schema = 1`; `delivery` is
-  `direct` or `adapter`). Shipped: `claude` and `zcode`, each with `verified` text
-  stating what its mapping rests on, and a `gemini` draft with none.
+  `direct` or `adapter`). Shipped: `zcode` with `verified` text stating what its mapping
+  rests on; `claude` and a `gemini` draft without it.
 - **Generates** per-harness JSON hook configs from the `claude-settings` and
   `claude-like` templates, with `--check` for drift; repo-local mappings under
   `.polymorph/basecamp/mappings/` override the built-ins, with a warning.
@@ -87,7 +87,7 @@ env contract (`polymorph env`), and the onboarding run itself, `polymorph equip
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
 - **Not verified against live harnesses.** Every shipped mapping says in its `verified`
-  field what it actually rests on.
+  field or its header comment what it actually rests on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** polymorph's output, and the loadouts
