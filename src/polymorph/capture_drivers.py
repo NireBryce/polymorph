@@ -125,7 +125,54 @@ class ClaudeDriver(Driver):
         shutil.rmtree(scratch / ".claude", ignore_errors=True)
 
 
-DRIVERS: dict[str, Driver] = {d.name: d for d in (OpenCodeDriver(), ClaudeDriver())}
+class ZCodeDriver(Driver):
+    """ZCode (`zcode`).
+
+    BLOCKED. No headless invocation is known: the `zcode` on PATH (3.17.2, observed
+    2026-11-04) is the desktop app, and `zcode --version` and `zcode --help` boot the GUI
+    and print app logs -- neither prints help text or runs a session. Even with an
+    invocation, two things need a live confirmation first: that workspace hooks fire in it
+    at all (every hook-firing session observed so far was interactive,
+    docs/observed-zcode-session.md), and the workspace-hook trust gate -- a fresh scratch
+    `.zcode/config.json` is a new hook declaration, which the gate holds silently, so a run
+    could spend tokens and log nothing. The wiring freeze is satisfied by design: `install`
+    runs before any step, and each step is its own session, which reads the config at
+    start. Hooks go in `<scratch>/.zcode/config.json` through the same logic as
+    `polymorph discover init` in its claude-like shape (PreToolUse and PostToolUse).
+    """
+
+    name = "zcode"
+    binary = "zcode"
+    summary = "ZCode: hooks in .zcode/config.json (claude-like); no headless invocation known (BLOCKED)"
+    untested = ("never run against a real zcode; the zcode on PATH (3.17.2) is the desktop app "
+                "-- `--version` and `--help` boot the GUI -- and no headless invocation is known")
+    blocked = ("no headless invocation is known for it: the zcode on PATH (3.17.2) is the desktop app, "
+               "and `zcode --version` and `zcode --help` boot the GUI. Even with one, it is not known "
+               "that workspace hooks fire headlessly, and a fresh scratch config lands behind the "
+               "workspace-hook trust gate, which fails silent, so a run could spend tokens and log "
+               "nothing. Until a person confirms a headless invocation that fires hooks, use "
+               "`polymorph capture --print-prompts`")
+
+    def install(self, scratch: Path, full: bool) -> None:
+        cfg = ".zcode/config.json"
+        for event in ("PreToolUse", "PostToolUse"):
+            discover.init_config("zcode", cfg, event, "*", base=scratch, shape="claude-like",
+                                 log_dir=self.log_path(scratch).parent, redact=not full,
+                                 pythonpath=PACKAGE_PARENT)
+
+    def step_argv(self, prompt: str) -> list[str]:
+        raise NotImplementedError(
+            "no headless invocation for zcode is known; the driver is blocked until a person "
+            "confirms one (see the driver's docstring)")
+
+    def version_argv(self) -> list[str]:
+        raise NotImplementedError("zcode --version boots the desktop app; no headless invocation is known")
+
+    def remove(self, scratch: Path) -> None:
+        shutil.rmtree(scratch / ".zcode", ignore_errors=True)
+
+
+DRIVERS: dict[str, Driver] = {d.name: d for d in (OpenCodeDriver(), ClaudeDriver(), ZCodeDriver())}
 
 
 def quoted(argv: list[str]) -> str:

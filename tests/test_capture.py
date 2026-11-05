@@ -63,6 +63,30 @@ for name, inp in tools:
 '''
 
 
+ZCODE_STUB = '''#!{python}
+import json, os, subprocess, sys
+ctrl = {ctrl!r}
+src = {src!r}
+if "--version" in sys.argv[1:]:
+    print("zcode-stub 1.2.3"); sys.exit(0)
+open(os.path.join(ctrl, "zcode-calls.txt"), "a").write(json.dumps(sys.argv[1:]) + "\\n")
+ok = False
+try:
+    doc = json.load(open(os.path.join(os.getcwd(), ".zcode", "config.json")))
+    ev = doc["hooks"]["events"]
+    ok = (doc["hooks"].get("enabled") is True and "PreToolUse" in ev and "PostToolUse" in ev
+          and "discover log" in json.dumps(ev) and "zcode.jsonl" in json.dumps(ev))
+except Exception:
+    ok = False
+open(os.path.join(ctrl, "wired-ok.txt"), "w").write(str(ok))
+payload = {{"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "sz",
+            "tool_use_id": "t_1", "tool_input": {{"command": "echo hello"}}}}
+log = os.path.join(os.getcwd(), ".polymorph", "discovery", "zcode.jsonl")
+subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log],
+               input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
+'''
+
+
 def capture_main(argv):
     out, err = io.StringIO(), io.StringIO()
     rc = capture.main(argv, stdin=Pipe(""), stdout=out, stderr=err)
@@ -391,6 +415,38 @@ class Running(CaptureCase):
         self.assertIn("--print-prompts", err)
         self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
 
+    def test_blocked_zcode_driver_refuses_before_anything_runs(self):
+        rc, out, err = self.run_cap("--yes", harness="zcode")
+        self.assertEqual(rc, 2)
+        self.assertIn("blocked", err)
+        self.assertIn("--print-prompts", err)
+        self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
+        self.assertEqual(self.calls(), [])
+
+    def test_zcode_stub_run_with_a_confirmed_invocation(self):
+        # The shipped driver is blocked because no headless invocation is known. The test
+        # supplies a stub invocation the way a live confirmation would, and the stub itself
+        # checks the wiring a real harness would read at session start.
+        stub = self.base / "bin" / "zcode"
+        stub.write_text(ZCODE_STUB.format(python=sys.executable, ctrl=str(self.base / "ctrl"), src=SRC))
+        stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+        d = capture_drivers.DRIVERS["zcode"]
+        with mock.patch.object(d, "blocked", ""), \
+                mock.patch.object(d, "step_argv", lambda prompt: [str(stub), prompt]), \
+                mock.patch.object(d, "version_argv", lambda: [str(stub), "--version"]):
+            rc, out, err = self.run_cap("--yes", harness="zcode")
+        self.assertEqual(rc, 0, out + err)
+        r = self.base / "results" / "r"
+        self.assertIn("zcode-stub 1.2.3", (r / "report.md").read_text())
+        self.assertEqual((self.base / "ctrl" / "wired-ok.txt").read_text(), "True")
+        calls = [json.loads(x) for x in (self.base / "ctrl" / "zcode-calls.txt").read_text().splitlines()]
+        self.assertEqual(len(calls), 4)
+        for c in calls:            # one argument per step: the prompt, nothing else
+            self.assertEqual(len(c), 1)
+        self.assertEqual(sorted(p.name for p in r.iterdir()), ["draft.toml", "log.jsonl", "report.md", "summary.txt"])
+        self.assertRegex((r / "report.md").read_text(), r"\| Bash \| \d+ \|")
+        self.assert_clean()
+
     def test_unusable_out_exits_2_before_any_step(self):
         (self.base / "afile").write_text("x")
         cases = [str(self.base / "afile" / "sub")]
@@ -597,6 +653,22 @@ class Drivers(unittest.TestCase):
         self.assertEqual(d.step_argv("P")[:2], ["claude", "-p"])
         d.remove(scratch)
         self.assertFalse((scratch / ".claude").exists())
+
+    def test_zcode_driver_wires_claude_like_config_and_raises_on_invocation(self):
+        scratch = Path(tempfile.mkdtemp()).resolve()
+        d = capture_drivers.DRIVERS["zcode"]
+        d.install(scratch, full=False)
+        doc = json.loads((scratch / ".zcode/config.json").read_text())
+        self.assertTrue(doc["hooks"]["enabled"])
+        self.assertEqual(sorted(doc["hooks"]["events"]), ["PostToolUse", "PreToolUse"])
+        self.assertIn(str(scratch / ".polymorph/discovery/zcode.jsonl"), json.dumps(doc))
+        self.assertTrue(d.untested and d.blocked)
+        with self.assertRaises(NotImplementedError):   # no headless invocation is known
+            d.step_argv("P")
+        with self.assertRaises(NotImplementedError):   # --version boots the desktop app
+            d.version_argv()
+        d.remove(scratch)
+        self.assertFalse((scratch / ".zcode").exists())
 
     def test_prompt_kit_in_docs_matches_the_code(self):
         docs = (ROOT / "docs/discovery.md").read_text()
