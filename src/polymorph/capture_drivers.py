@@ -154,9 +154,9 @@ class ZCodeDriver(Driver):
                "`polymorph capture --print-prompts`")
 
     def install(self, scratch: Path, full: bool) -> None:
-        cfg = ".zcode/config.json"
+        config_file = ".zcode/config.json"
         for event in ("PreToolUse", "PostToolUse"):
-            discover.init_config("zcode", cfg, event, "*", base=scratch, shape="claude-like",
+            discover.init_config("zcode", config_file, event, "*", base=scratch, shape="claude-like",
                                  log_dir=self.log_path(scratch).parent, redact=not full,
                                  pythonpath=PACKAGE_PARENT)
 

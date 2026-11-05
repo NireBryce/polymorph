@@ -70,19 +70,21 @@ src = {src!r}
 if "--version" in sys.argv[1:]:
     print("zcode-stub 1.2.3"); sys.exit(0)
 open(os.path.join(ctrl, "zcode-calls.txt"), "a").write(json.dumps(sys.argv[1:]) + "\\n")
-ok = False
+wired = False
 try:
-    doc = json.load(open(os.path.join(os.getcwd(), ".zcode", "config.json")))
-    ev = doc["hooks"]["events"]
-    ok = (doc["hooks"].get("enabled") is True and "PreToolUse" in ev and "PostToolUse" in ev
-          and "discover log" in json.dumps(ev) and "zcode.jsonl" in json.dumps(ev))
+    config = json.load(open(os.path.join(os.getcwd(), ".zcode", "config.json")))
+    event_table = config["hooks"]["events"]
+    wired = (config["hooks"].get("enabled") is True
+             and "PreToolUse" in event_table and "PostToolUse" in event_table
+             and "discover log" in json.dumps(event_table)
+             and "zcode.jsonl" in json.dumps(event_table))
 except Exception:
-    ok = False
-open(os.path.join(ctrl, "wired-ok.txt"), "w").write(str(ok))
+    wired = False
+open(os.path.join(ctrl, "wired-ok.txt"), "w").write(str(wired))
 payload = {{"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "sz",
             "tool_use_id": "t_1", "tool_input": {{"command": "echo hello"}}}}
-log = os.path.join(os.getcwd(), ".polymorph", "discovery", "zcode.jsonl")
-subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log],
+log_path = os.path.join(os.getcwd(), ".polymorph", "discovery", "zcode.jsonl")
+subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log_path],
                input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
 '''
 
@@ -430,21 +432,22 @@ class Running(CaptureCase):
         stub = self.base / "bin" / "zcode"
         stub.write_text(ZCODE_STUB.format(python=sys.executable, ctrl=str(self.base / "ctrl"), src=SRC))
         stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
-        d = capture_drivers.DRIVERS["zcode"]
-        with mock.patch.object(d, "blocked", ""), \
-                mock.patch.object(d, "step_argv", lambda prompt: [str(stub), prompt]), \
-                mock.patch.object(d, "version_argv", lambda: [str(stub), "--version"]):
+        driver = capture_drivers.DRIVERS["zcode"]
+        with mock.patch.object(driver, "blocked", ""), \
+                mock.patch.object(driver, "step_argv", lambda prompt: [str(stub), prompt]), \
+                mock.patch.object(driver, "version_argv", lambda: [str(stub), "--version"]):
             rc, out, err = self.run_cap("--yes", harness="zcode")
         self.assertEqual(rc, 0, out + err)
-        r = self.base / "results" / "r"
-        self.assertIn("zcode-stub 1.2.3", (r / "report.md").read_text())
+        results_dir = self.base / "results" / "r"
+        self.assertIn("zcode-stub 1.2.3", (results_dir / "report.md").read_text())
         self.assertEqual((self.base / "ctrl" / "wired-ok.txt").read_text(), "True")
         calls = [json.loads(x) for x in (self.base / "ctrl" / "zcode-calls.txt").read_text().splitlines()]
         self.assertEqual(len(calls), 4)
-        for c in calls:            # one argument per step: the prompt, nothing else
-            self.assertEqual(len(c), 1)
-        self.assertEqual(sorted(p.name for p in r.iterdir()), ["draft.toml", "log.jsonl", "report.md", "summary.txt"])
-        self.assertRegex((r / "report.md").read_text(), r"\| Bash \| \d+ \|")
+        for call in calls:         # one argument per step: the prompt, nothing else
+            self.assertEqual(len(call), 1)
+        self.assertEqual(sorted(p.name for p in results_dir.iterdir()),
+                         ["draft.toml", "log.jsonl", "report.md", "summary.txt"])
+        self.assertRegex((results_dir / "report.md").read_text(), r"\| Bash \| \d+ \|")
         self.assert_clean()
 
     def test_unusable_out_exits_2_before_any_step(self):
