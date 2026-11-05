@@ -62,6 +62,27 @@ class ReaderTests(Base):
         with self.assertRaises(ReaderError):
             read_claude(self.repo)
 
+    def test_timeout_stored_unchanged_and_strings_refused(self):
+        # a fractional timeout was silently truncated (2.5 -> 2) and a numeric
+        # string silently coerced ("30" -> 30); the value must round-trip or fail visibly
+        p = self.repo / ".agents/settings.json"
+        d = json.loads(p.read_text())
+        d["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] = 2.5
+        p.write_text(json.dumps(d))
+        self.assertEqual(read_claude(self.repo).hooks[0].timeout, 2.5)
+        d["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] = 60.0
+        p.write_text(json.dumps(d))
+        self.assertEqual(read_claude(self.repo).hooks[0].timeout, 60.0)
+        for bad in ("30", "0.5", True, 0, -3):
+            d["hooks"]["SessionStart"][0]["hooks"][0]["timeout"] = bad
+            p.write_text(json.dumps(d))
+            with self.subTest(bad=bad):
+                with self.assertRaises(ReaderError) as ctx:
+                    read_claude(self.repo)
+                self.assertIn("timeout", str(ctx.exception))
+                # the clear message, not the generic malformed-entry re-wrap
+                self.assertNotIn("malformed hooks entry", str(ctx.exception))
+
     def test_symlink_escape_refused(self):
         os.symlink("/bin/sh", self.repo / ".agents/hooks/evil.sh")
         p = self.repo / ".agents/settings.json"
