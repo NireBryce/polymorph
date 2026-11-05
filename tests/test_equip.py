@@ -58,6 +58,7 @@ class EquipTests(unittest.TestCase):
         rc, out, err = self.run_cli("equip", "--repo", str(self.repo), "--harness", "zcode")
         self.assertEqual(rc, 0, (out, err))
         self.assertIn("[zcode] wrote .zcode/config.json", out)
+        self.assertIn("[zcode] warning: sessions already running will not load the new hooks", out)
         self.assertIn("- memory AGENTS.md", out)
         self.assertIn("- skills .agents/skills/alpha", out)
         self.assertIn("env contract:", out)
@@ -104,6 +105,7 @@ class EquipTests(unittest.TestCase):
                                   "--dry-run")
         self.assertEqual(rc, 0)
         self.assertIn("would write .zcode/config.json", out)
+        self.assertNotIn("warning: sessions already running", out)
         self.assertFalse((self.repo / ".zcode/config.json").exists())
         self.assertFalse((self.repo / ".polymorph/basecamp/loadout.toml").exists())
         self.assertEqual(sorted(p.relative_to(self.repo).as_posix() for p in self.repo.rglob("*")),
@@ -114,6 +116,7 @@ class EquipTests(unittest.TestCase):
         rc, out, _ = self.run_cli("equip", "--repo", str(self.repo), "--harness", "zcode")
         self.assertEqual(rc, 0)
         self.assertIn("unchanged .zcode/config.json", out)
+        self.assertIn("[zcode] warning: sessions already running", out)
 
     def test_undecided_reports_not_written(self):
         cfg = self.repo / ".polymorph/basecamp/config.toml"
@@ -121,6 +124,7 @@ class EquipTests(unittest.TestCase):
         rc, out, _ = self.run_cli("equip", "--repo", str(self.repo), "--harness", "nopost")
         self.assertEqual(rc, 0)
         self.assertIn("NOT WRITTEN .nopost/config.json", out)
+        self.assertNotIn("warning: sessions already running", out)
         self.assertFalse((self.repo / ".nopost/config.json").exists())
 
     def test_no_coverage_table_claims_nothing(self):

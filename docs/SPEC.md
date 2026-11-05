@@ -264,7 +264,9 @@ never command text or paths, and omits what it did not observe. Comments carry e
 counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.
 
 Generate output lists, per target: unmapped settings, the questions for undecided mismatches,
-applied decisions (`weakened:` for the weakening ones), stale decisions and notes. Exit codes of
+applied decisions (`weakened:` for the weakening ones), stale decisions, notes, and a warning
+that sessions already running will not load the new hooks (equip prints the same warning; not
+on `--check` or a dry run, which write nothing). Exit codes of
 `generate`: 0 ok, 1 `--check` found drift, 2 usage or internal error (including an invalid
 decision file), 3 undecided mismatches.
 
