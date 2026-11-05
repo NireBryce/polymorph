@@ -84,8 +84,10 @@ just ship-land PR    # merge pinned to the head, sync main --ff-only, delete bra
 ```
 
 `git add` a new file before `just check`: flakes ignore untracked files, so
-a new test or fixture silently does not exist. Do not pipe a check into
-`tail` or `head`: the pipe's exit status is the last command's.
+a new test or fixture silently does not exist. Do not pipe a check into a
+filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and
+a failed stage reads as passed. Write the output to a file and read the
+exit status separately, or use `set -o pipefail`.
 
 ## Architecture
 

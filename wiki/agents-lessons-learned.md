@@ -1,5 +1,5 @@
 # Lessons agents learned the hard way
-_Last modified: 2026-11-04_
+_Last modified: 2026-11-05_
 
 Past mistakes from building this project, one line each. **Home** is where
 the rule is enforced or stated; a lesson with no Home reaches nobody.
@@ -8,7 +8,7 @@ Skill `record-a-lesson` adds rows.
 | Lesson | Rule | Home |
 |---|---|---|
 | A test helper's default argument silently kept a test exercising the old behaviour after the code changed. | When a change adds a parameter, grep the test helpers for the default and pass the new case explicitly; break the code and watch the test fail. | `AGENTS.md` (check shown to fail), skill `review` |
-| `cmd \| tail` exited 0 while `cmd` failed. | A pipe's status is the last command's: do not pipe a check, or use `set -o pipefail`. Read the output, not the status. | `AGENTS.md` Commands |
+| `cmd \| tail` exited 0 while `cmd` failed — hit again as `just preflight 2>&1 \| grep`, whose grep found its pattern in the failing stage's output and printed it as if all was well. | A pipe's status is the last command's: do not pipe a check, or use `set -o pipefail`. Read the output, not the status. | `AGENTS.md` Commands |
 | A new test file was invisible to `nix flake check`. | Flakes ignore untracked files: `git add` before checking. | `AGENTS.md` Commands, skill `use-a-worktree` |
 | `nix flake check --no-build` passed on a check that does its work at build time. | `--no-build` only evaluates the derivation; run the real check (`just check`) without it before claiming the suite passes. | none yet |
 | A hand-written `.zcode/config.json` was rewritten by the tool into its own normal form, so `generate --check` reported drift forever. | Generate a tool-managed config in the tool's own normalized form, and test that it round-trips. | skill `new-mapping` (live verification) |
@@ -37,3 +37,4 @@ Skill `record-a-lesson` adds rows.
 | Marker grep over the discovery log found nothing, and the first pairing joined on nothing: command and prompt values are `{type, length}` descriptors, `ts` is an epoch float, and `toolCallId` redacted while `tool_use_id` survived. | A discovery log answers shape questions, not content questions: pair on an id the allowlist keeps, parse `ts` as a number, and census the raw file instead of grepping for content. | `docs/discovery.md`, `src/polymorph/discover.py` (`_SAFE_VALUES`, `_CALL_ID_KEYS`) |
 | Two wrong "never fires" conclusions from one log: non-tool events hid behind the summary's tool-event filter, and Stop payloads landed only after the session's replies ended. | Before concluding an event never fires, census the raw log with `--event` and read again after the session's replies finish; a filtered aggregate read early is absence-shaped, not evidence. | `docs/cli.md` (`discover summary`), `docs/observed-zcode-session.md` (the other hook events) |
 | While one session's round-3 probes ran on a fourteen-hook wiring, a parallel session rewrote the same `.zcode/config.json` underneath it; last writer won on disk and no running session could see the change — both experiments stayed valid only because each session's wiring snapshot predated the other's write. | One writer at a time for workspace hook wiring: sequence wiring experiments across sessions or claim the config, and diff the file before trusting a run's setup — a frozen snapshot can silently diverge from the file. | `docs/observed-zcode-session.md` (wiring freeze), skill `use-a-worktree` |
+| A markdown link added to AGENTS.md failed `just docs`: the link check reads the basecamp store copy (`git ls-files` skips the root symlink), so the link resolved from `.polymorph/basecamp/`, while GitHub renders the root symlink against the repo root. | Store files reference repo paths as backticked paths, never markdown links: no relative link resolves for both the store copy and the root symlink. | `.polymorph/basecamp/README.md` (store paths), `tests/docs.py` (`check_links`) |
