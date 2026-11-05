@@ -31,6 +31,8 @@ class ValidateTests(unittest.TestCase):
     def test_verified_policy(self):
         self.assertIn("verified", load("zcode"))
         self.assertNotIn("verified", load("gemini"))
+        # claude has had no block seen in a live session, which `verified` requires (AGENTS.md)
+        self.assertNotIn("verified", load("claude"))
         self.assertFalse(load("zcode")["capabilities"]["ask"])
 
     def test_wrong_tool_class_caught(self):
@@ -60,6 +62,21 @@ class ValidateTests(unittest.TestCase):
         bad(lambda m: m["payload_in"].update(cwd="$(whoami)"))
         bad(lambda m: m["payload_out"].update(deny={"exit": 2, "stderr": "`id`"}))
         bad(lambda m: m["events"].update(pre_tool="Pre Tool"))
+
+    def test_ask_is_hardened_by_the_hook_not_the_mapping(self):
+        # SPEC "Wire protocol": with ask = false the hook hardens ask (GUARD_ASK_ENFORCED),
+        # so no payload_out.ask entry belongs in the mapping, blocking or not
+        for exit_code in (2, 0):
+            with self.subTest(exit=exit_code):
+                m = load("gemini")
+                m["payload_out"]["ask"] = {"exit": exit_code, "stderr": "{reason}"}
+                errs = validate_mapping(m)
+                self.assertEqual(len(errs), 1, errs)   # one error, not a contradictory pair
+                self.assertIn("GUARD_ASK_ENFORCED", errs[0])
+        m = load("gemini")
+        m["payload_out"]["ask"] = {"exit": 2, "stderr": "{reason}"}
+        m["capabilities"]["ask"] = True   # the harness enforces ask; exit 2 is its native form
+        self.assertEqual(validate_mapping(m), [])
 
     def test_known_extractor_ok(self):
         m = load("zcode")

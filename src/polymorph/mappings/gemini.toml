@@ -34,5 +34,5 @@ session_id = "session_id"
 
 [payload_out]
 deny = { exit = 2, stderr = "{reason}" }
-ask = { exit = 2, stderr = "{reason}" }
-# warn/remind: unmapped, adapter passes the canonical JSON through.
+# ask/warn/remind: unmapped, adapter passes the canonical JSON through. With ask = false the
+# hook reads GUARD_ASK_ENFORCED=0 and hardens ask to deny itself (docs/SPEC.md, "Wire protocol").

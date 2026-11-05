@@ -17,8 +17,8 @@ First state of the project. Python 3.11+, standard library only.
   meaning are reported as unmapped, not dropped. Hook commands must be bare script paths
   that resolve under `.agents/hooks/`.
 - **Mappings:** TOML, `schema = 1`, with `delivery = "direct"` or `"adapter"`. Shipped:
-  `claude` and `zcode` (with `verified` text stating their basis) and a `gemini` draft with
-  no `verified`.
+  `zcode` (with `verified` text stating its basis), `claude` (basis in its header comment,
+  no `verified`) and a `gemini` draft with no `verified`.
 - **`generate`:** writes JSON hook configs using the `claude-settings` and `claude-like`
   templates, with `--check` for drift. Lookup of mappings from the repo's
   `.polymorph/basecamp/mappings/` overrides the built-in ones with a warning.
@@ -232,11 +232,19 @@ First state of the project. Python 3.11+, standard library only.
   as exit 2 -- is paired with `exit_2_blocks = false`: the route relies on the one code the
   mapping itself says does not block, so the call would proceed. The shipped mappings are
   all coherent and do not warn.
-- **`claude` verified against a live VS Code session:** a fresh Claude Code session with the
-  `discover init` logger fired PreToolUse and PostToolUse, and the payloads matched the
-  mapping's `payload_in` (tool_name, tool_input.command/.file_path, cwd, session_id); the
-  pairing of before/after lines by call id worked on real data. Block semantics remains
-  unlive-tested, and the `verified` string now says so precisely.
+- **`claude` payloads checked against a live VS Code session:** a fresh Claude Code session
+  with the `discover init` logger fired PreToolUse and PostToolUse, and the payloads matched
+  the mapping's `payload_in` (tool_name, tool_input.command/.file_path, cwd, session_id); the
+  pairing of before/after lines by call id worked on real data.
+- **`claude` loses `verified`:** no deny has been seen to stop a call in a live session,
+  which `verified` requires (AGENTS.md); the basis moves to the header comment. Breaks:
+  `generate` now warns and `check --strict` fails (`mapping-unverified`) for a `claude`
+  target.
+- **`ask` is hardened by the hook only (issue 70):** the `gemini` draft no longer maps `ask`
+  to exit 2, and `validate` rejects any `payload_out.ask` when `capabilities.ask` is `false`.
+  Breaks: on `gemini`, an `ask` from a hook that does not read `GUARD_ASK_ENFORCED` is now
+  passed through as JSON instead of blocking; a repo-local mapping with such an entry fails
+  `validate`.
 - **Discovery name and id patterns match the whole string (issue #50):** `_safe` and
   `_id_shaped` (and the call/message-id picker behind pairing) used `$`-anchored `re.match`,
   which also matches before a trailing newline; a value ending in one was kept verbatim as

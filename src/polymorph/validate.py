@@ -187,6 +187,14 @@ def validate_mapping(src: Any) -> list[str]:
                 if not isinstance(spec, dict):
                     errs.append(f"payload_out.{kind} must be a table")
                     continue
+                if kind == "ask" and isinstance(caps, dict) and caps.get("ask") is False:
+                    # SPEC "Wire protocol": the hook hardens ask to deny (it reads
+                    # GUARD_ASK_ENFORCED=0); a blocking entry would decide that for every hook,
+                    # and a non-blocking one fails the exit rule below, so neither belongs here
+                    errs.append("payload_out.ask is set while capabilities.ask is false: "
+                                "hardening ask is the hook's job (GUARD_ASK_ENFORCED), not the "
+                                "mapping's; remove the entry")
+                    continue
                 _unknown(errs, f"payload_out.{kind}", spec, OUT_FIELDS)
                 for field, value in spec.items():
                     want = OUT_FIELDS.get(field)

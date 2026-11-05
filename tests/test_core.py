@@ -383,12 +383,14 @@ class ValidateOutTests(unittest.TestCase):
     adapter and turn a deny into an allow or a non-blocking error."""
 
     @staticmethod
-    def _base(**payload_out):
+    def _base(ask_enforced=False, **payload_out):
+        # an ask entry only exists on a mapping whose harness enforces ask: with ask = false
+        # the hook hardens it and validate rejects the entry (test_conformance)
         return {
             "schema": 1, "name": "x", "config_path": "a.json", "format": "json",
             "template": "t", "tools": {}, "events": {}, "payload_in": {},
             "payload_out": payload_out,
-            "capabilities": {"ask": False, "post_event": False, "exit_2_blocks": False,
+            "capabilities": {"ask": ask_enforced, "post_event": False, "exit_2_blocks": False,
                              "rewrites_input": False, "json_answers": False},
         }
 
@@ -406,7 +408,7 @@ class ValidateOutTests(unittest.TestCase):
     def test_deny_or_ask_exit_zero_is_an_error(self):
         from polymorph.validate import validate_mapping
         for kind in ("deny", "ask"):
-            errs = validate_mapping(self._base(**{kind: {"exit": 0}}))
+            errs = validate_mapping(self._base(ask_enforced=kind == "ask", **{kind: {"exit": 0}}))
             self.assertTrue(any(f"{kind}.exit" in e for e in errs), errs)
         for kind in ("allow", "warn", "remind"):
             self.assertEqual(validate_mapping(self._base(**{kind: {"exit": 0}})), [])
@@ -417,10 +419,11 @@ class ValidateOutTests(unittest.TestCase):
         from polymorph.validate import validate_mapping
         for kind in ("deny", "ask"):
             for spec in ({}, {"stdout": "x"}, {"stderr": "x"}, {"exit": 1}, {"exit": 3}):
-                errs = validate_mapping(self._base(**{kind: spec}))
+                errs = validate_mapping(self._base(ask_enforced=kind == "ask", **{kind: spec}))
                 self.assertTrue(any(f"{kind}.exit" in e for e in errs), (kind, spec, errs))
         self.assertEqual(validate_mapping(self._base(deny={"exit": 2})), [])
-        self.assertEqual(validate_mapping(self._base(ask={"exit": 2, "stderr": "{reason}"})), [])
+        self.assertEqual(validate_mapping(self._base(ask_enforced=True,
+                                                     ask={"exit": 2, "stderr": "{reason}"})), [])
 
 
 class HookCommandTimeoutTests(unittest.TestCase):
