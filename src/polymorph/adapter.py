@@ -168,7 +168,9 @@ def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: li
 
     if not _NAME.fullmatch(name):
         raise AdapterError(f"bad harness name {name!r}")
-    dirs = [repo / ".polymorph" / "basecamp" / "mappings", MAPPINGS_DIR]
+    # every compared root is resolved: a resolved --mappings against unresolved
+    # base dirs refused the repo's own mappings dir reached through a symlink
+    dirs = [(repo / ".polymorph" / "basecamp" / "mappings").resolve(), MAPPINGS_DIR.resolve()]
     if extra_dir is not None:
         extra_resolved = extra_dir.resolve()
         if extra_resolved not in dirs and extra_resolved not in [trust_dir.resolve() for trust_dir in trust]:

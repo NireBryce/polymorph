@@ -77,7 +77,9 @@ class Result:
 
 def snapshot(target: str) -> tuple[dict, str, str]:
     pr = gh_json("pr", "view", target, "--json", "number,headRefOid,headRefName,baseRefName,isCrossRepository,mergeStateStatus,state")
-    runs = gh_json("run", "list", "--commit", pr["headRefOid"], "--json", "status,conclusion")
+    # --limit past gh's default: a failing run beyond the cutoff must not read as green
+    runs = gh_json("run", "list", "--commit", pr["headRefOid"], "--limit", "100",
+                   "--json", "status,conclusion")
     status, conclusion = aggregate(runs)
     return pr, status, conclusion
 

@@ -13,7 +13,7 @@ class Hook:
     event: str  # "session_start" | "pre_tool" | "post_tool"
     classes: tuple[str, ...]  # subset of CLASSES; () = all
     script: str  # path relative to repo root, under hooks_dir
-    timeout: int | None = None
+    timeout: int | float | None = None
 
 
 @dataclass(frozen=True)

@@ -132,6 +132,30 @@ class PureTests(unittest.TestCase):
         self.assertEqual((r["exit"], json.loads(r["stdout"])), (0, warn))
         self.assertEqual(adapter.translate_out(MAPPING, None)["exit"], 0)
 
+    def test_mappings_dir_through_a_symlinked_repo_is_trusted(self):
+        # the trust check compared a resolved --mappings path against unresolved
+        # base dirs, so the repo's own mappings dir reached through a symlinked
+        # repo path was refused as "outside trusted dirs"
+        minimal = ('schema = 1\nname = "zcode"\nconfig_path = ".zcode/config.json"\n'
+                   'format = "json"\ntemplate = "claude-like"\n[tools]\n[events]\n'
+                   '[capabilities]\nask = false\npost_event = false\nexit_2_blocks = false\n'
+                   'rewrites_input = false\njson_answers = false\n[payload_in]\n[payload_out]\n')
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+            repo = base / "repo"
+            mappings = repo / ".polymorph" / "basecamp" / "mappings"
+            mappings.mkdir(parents=True)
+            (mappings / "zcode.toml").write_text(minimal)
+            link = base / "repo-link"
+            os.symlink(repo, link)
+            raw = adapter.load_mapping(link, "zcode", extra_dir=link / ".polymorph/basecamp/mappings")
+            self.assertEqual(raw["name"], "zcode")
+            outside = base / "elsewhere"
+            outside.mkdir()
+            (outside / "zcode.toml").write_text(minimal)
+            with self.assertRaises(adapter.AdapterError):
+                adapter.load_mapping(link, "zcode", extra_dir=outside)
+
     def test_translate_out_unrecognized_answer_is_never_an_allow(self):
         for ans in ({"decision": "deny", "reason": "old style"}, {}, {"weird": True}):
             with self.assertRaises(adapter.AdapterError, msg=ans):

@@ -89,6 +89,22 @@ class CiWaitTests(unittest.TestCase):
                           {"match": RUN_LIST, "outputs": [js(runs(("completed", "success")))]}])
         self.assertEqual(r.returncode, 1)
 
+    def test_run_list_beyond_ghs_default_limit_is_requested(self):
+        # gh truncates `run list` at its default; a failing run past the cutoff
+        # must not read as green. The stub answers truncated unless the call
+        # carries --limit, mimicking gh.
+        truncated = js(runs(*[("completed", "success")] * 20))
+        full = js(runs(*[("completed", "success")] * 20, ("completed", "failure")))
+        r, s = self.wait([
+            {"match": RUN_LIST + ["--commit", SHA, "--limit"], "outputs": [full]},
+            {"match": RUN_LIST, "outputs": [truncated]},
+            {"match": PR_VIEW, "outputs": [js(pr())]},
+        ])
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("completed failure", r.stdout)
+        self.assertTrue(any(c[:7] == ["gh", "run", "list", "--commit", SHA, "--limit", "100"]
+                            for c in s.calls()))
+
     def test_follows_a_new_head_commit(self):
         r, s = self.wait([{"match": PR_VIEW, "outputs": [js(pr(sha=SHA, merge="BLOCKED")), js(pr(sha=NEW))]},
                           {"match": RUN_LIST + ["--commit", SHA], "outputs": [js(runs(("in_progress", None)))]},
