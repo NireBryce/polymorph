@@ -100,6 +100,7 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `decisions.py` | `.polymorph/basecamp/decisions/NAME.toml`: validate, `Mismatch`/`Decision`, the question format |
 | `check.py` | static analysis of a repo's agent config (`polymorph check`); runs nothing |
 | `capture.py`, `capture_drivers.py`, `data/` | `polymorph capture`: scratch dir, fixed steps, confirmation, report; shipped drivers (`opencode`, `claude`, `zcode`) and the plugin template |
+| `probe.py`, `data/probe-guard-hook.py` | `polymorph discover probe`: drives one marker command per decision route through a driver-capable harness; the guard (token-scoped, decode file) and the interpreter fill `[capabilities]` with how each flag was observed; adapters in `ADAPTERS` (zcode only) |
 | `inventory.py`, `links.py`, `adopt.py`, `equip.py` | the gap report (coverage tables say what a harness reads); the symlinks `equip` and `adopt` make for `no-link` gaps (built-in tables only); the move into the basecamp store; the onboarding run |
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |

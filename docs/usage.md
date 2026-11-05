@@ -254,3 +254,21 @@ polymorph discover draft --name NAME [--include EVENT ...] [--event EVENT ...] f
 | `--name NAME` | name of the drafted mapping |
 | `--include EVENT` | also use lines of this event (repeatable); default is tool events only |
 | `--event EVENT` | use only lines of this event (repeatable), replacing the tool-event default |
+
+## polymorph discover probe
+
+Drive a scripted session to observe capability flags live.
+
+```
+polymorph discover probe --harness HARNESS [--into DRAFT.toml] [--yes] [--keep] [--full] [--step-timeout SECONDS] [--total-timeout SECONDS]
+```
+
+| Argument | Meaning |
+|---|---|
+| `--harness HARNESS` | driver name with a probe adapter (see docs) |
+| `--into DRAFT.toml` | replace the [capabilities] block of this draft (default: print only) |
+| `--yes` | skip the question (required when stdin is not a terminal) |
+| `--keep` | keep the scratch directory afterwards |
+| `--full` | log raw payloads; default is redacted. Needs --keep |
+| `--step-timeout SECONDS` | kill a probe run after this many seconds (default 120.0) |
+| `--total-timeout SECONDS` | skip the remaining probe runs after this many seconds (default 300.0) |

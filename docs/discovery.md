@@ -290,6 +290,13 @@ without guessing from gaps between rows.
 - Delete the side file with the log when you are done; it is discovery data and stays
   untracked.
 
+For a harness a `capture` driver can run headlessly, `polymorph discover probe` mechanizes
+this round: it wires a guard that denies only this run's token-marked commands, drives one
+marker command per decision route, joins the decode file to the log on the call id, and
+writes the five flags with how each was observed into a draft's `[capabilities]` -- see
+[the command's section](cli.md#discover-probe). The manual round here stays the route for
+harnesses with no driver.
+
 ## What to send
 
 Open an issue from the **Harness report** form

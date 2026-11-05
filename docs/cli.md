@@ -463,6 +463,44 @@ Tests whether a running harness re-reads its hook config without a restart.
 
 `--shape` defaults to what the existing file looks like.
 
+### `discover probe`
+
+```
+polymorph discover probe --harness NAME [--into DRAFT.toml] [--yes] [--keep] [--full]
+                         [--step-timeout S] [--total-timeout S]
+```
+
+Observes `[capabilities]` live instead of defaulting them to false (issue #14). It runs a
+scripted session -- one synthetic marker command per decision route -- through a harness a
+[capture](#capture) driver can run headlessly, with a **probe guard** wired beside the
+discovery logger: a shipped hook script that denies only commands carrying that run's
+random token (every other command passes untouched, so the probe can never block a real
+call) and answers per case -- allow, exit-2 deny, JSON deny, JSON ask, input rewrite --
+writing one decode line (`case event answer call-id`) to `<log without .jsonl>-decode.log`
+per dispatched case, the join protocol from
+[Discovery, "Capability probes and a decode file"](discovery.md#capability-probes-and-a-decode-file).
+
+It prints a `[capabilities]` table with one evidence comment per line --
+`observed`, `derived` (for example: under redaction a landed rewrite shows as a PostToolUse
+command length that grew; the rewritten echo is longer by construction) or `untested` (the
+value stays `false`) -- and, for each flag, the same how-line on stdout. Exit 0 when all
+five flags settled, 1 when some are untested (an empty log prints the pending-trust hint:
+a wired hook that never fires may be pending trust, not a broken mapping), 2 on usage errors.
+
+| Flag | Meaning |
+|---|---|
+| `--harness NAME` | A driver with a probe adapter. Today that is `zcode` only (a claude-like guard); for `opencode` the guard design is issue #2, and the command exits 2. A blocked driver refuses first (exit 2). |
+| `--into DRAFT.toml` | Replace only that draft's `[capabilities]` block, leaving `verified` and every other table untouched; refuses a draft without the block, and restores the original if the spliced file stops validating. Without it the table is only printed. |
+| `--yes` | Skip the question (required when stdin is not a terminal). The cost warning still prints, as a short notice. |
+| `--keep` | Keep the scratch directory and print its path. |
+| `--full` | Log raw payloads. Needs `--keep` (exit 2 without it): the raw log must survive the run. |
+| `--step-timeout S` / `--total-timeout S` | Per run (default 120) and overall (default 300) limits; the guard hook itself is capped at 10 s and fails open, bounded. |
+
+Confirmation, scratch-directory handling, minimal environment and signal cleanup are the
+same as [capture](#capture). Nothing from a mapping, a log or a harness reply becomes code
+or a command: the guard is shipped template code with constants written in, and the
+prompts are constants with the token formatted in. A probe never sets `verified`.
+
 ## The redaction default and `--env-be-very-careful`
 
 Discovery logs are **redacted by default**. Keys are kept. Only structural values
