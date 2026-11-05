@@ -117,6 +117,18 @@ def _parser() -> argparse.ArgumentParser:
                         help="also use lines of this event (repeatable); default is tool events only")
         sp.add_argument("--event", action="append", default=[], metavar="EVENT",
                         help="use only lines of this event (repeatable), replacing the tool-event default")
+    dp = ds.add_parser("probe", help="drive a scripted session to observe capability flags live")
+    from .probe import DEFAULT_STEP_TIMEOUT, DEFAULT_TOTAL_TIMEOUT
+    dp.add_argument("--harness", required=True, help="driver name with a probe adapter (see docs)")
+    dp.add_argument("--into", default=None, metavar="DRAFT.toml",
+                    help="replace the [capabilities] block of this draft (default: print only)")
+    dp.add_argument("--yes", action="store_true", help="skip the question (required when stdin is not a terminal)")
+    dp.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
+    dp.add_argument("--full", action="store_true", help="log raw payloads; default is redacted. Needs --keep")
+    dp.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS",
+                    help="kill a probe run after this many seconds (default %(default)s)")
+    dp.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS",
+                    help="skip the remaining probe runs after this many seconds (default %(default)s)")
     return p
 
 
@@ -138,6 +150,9 @@ def _cmd_discover(args) -> int:
     if args.dcmd == "summary":
         print(discover.summarize(args.file, args.include, args.event), end="")
         return 0
+    if args.dcmd == "probe":
+        from . import probe
+        return probe.run(args)
     if args.dcmd == "reload-check":
         if args.finish:
             seen, msg = discover.reload_check_finish(args.config_path, args.scratch_log)

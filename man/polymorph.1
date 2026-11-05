@@ -33,6 +33,8 @@ polymorph discover reload\-check \-\-config\-path CONFIG_PATH \-\-scratch\-log S
 polymorph discover summary [\-\-include EVENT ...] [\-\-event EVENT ...] file
 .br
 polymorph discover draft \-\-name NAME [\-\-include EVENT ...] [\-\-event EVENT ...] file
+.br
+polymorph discover probe \-\-harness HARNESS [\-\-into DRAFT.toml] [\-\-yes] [\-\-keep] [\-\-full] [\-\-step\-timeout SECONDS] [\-\-total\-timeout SECONDS]
 .SH DESCRIPTION
 polymorph reads a repository's Claude Code agent config (.agents/settings.json and .agents/hooks/) and writes hook configs for other coding harnesses from declarative per\-harness TOML mappings. It also reports what else the repository provides (skills, rules, memory files) that a harness will not read, and can run a hook script behind a mapping at hook time.
 .PP
@@ -344,6 +346,33 @@ also use lines of this event (repeatable); default is tool events only
 .TP
 .B \-\-event EVENT
 use only lines of this event (repeatable), replacing the tool\-event default
+.SS polymorph discover probe
+Drive a scripted session to observe capability flags live.
+.PP
+.nf
+polymorph discover probe \-\-harness HARNESS [\-\-into DRAFT.toml] [\-\-yes] [\-\-keep] [\-\-full] [\-\-step\-timeout SECONDS] [\-\-total\-timeout SECONDS]
+.fi
+.TP
+.B \-\-harness HARNESS
+driver name with a probe adapter (see docs)
+.TP
+.B \-\-into DRAFT.toml
+replace the [capabilities] block of this draft (default: print only)
+.TP
+.B \-\-yes
+skip the question (required when stdin is not a terminal)
+.TP
+.B \-\-keep
+keep the scratch directory afterwards
+.TP
+.B \-\-full
+log raw payloads; default is redacted. Needs \-\-keep
+.TP
+.B \-\-step\-timeout SECONDS
+kill a probe run after this many seconds (default 120.0)
+.TP
+.B \-\-total\-timeout SECONDS
+skip the remaining probe runs after this many seconds (default 300.0)
 .SH FILES
 .TP
 .I \&.agents/settings.json
