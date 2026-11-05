@@ -426,7 +426,14 @@ sorted by `ts` before counting, because each hook event is logged by its own pro
 lines can land out of order. When lines carry a call id and a message id (`tool_use_id` or
 `toolCallId` / `id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines
 are paired by them and the `pairing` line reports paired, out-of-order, unpaired and
-id-less counts.
+id-less counts. When paired lines carry timestamps, a `slowest pre->post deltas` block
+follows the pairing line -- up to five, largest first, each with the delta, the tool name
+and the call id -- so fail-open hook latency is one command to see instead of a hand join:
+a hook awaited out to its timeout kill shows as a delta near that timeout. A delta is the
+gap between the two logger lines' write times (one process per hook event, each writing at
+its start), so it approximates what the harness waited on the pre-hook rather than
+measuring hook duration; a pair whose post landed before its pre carries no delta (the
+pairing line counts it).
 
 ### `discover draft`
 

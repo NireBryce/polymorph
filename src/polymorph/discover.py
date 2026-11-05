@@ -699,6 +699,38 @@ def _pairing_text(p: dict[str, int]) -> str:
             f"{p['no_id']} without an id")
 
 
+def _slowest(selected: list[tuple[int, dict]], keep: int = 5) -> list[tuple[float, str, str]] | None:
+    """The slowest paired pre->post deltas as (duration_seconds, tool name, call id); None without one.
+
+    Same pairing key as _pairing; a delta needs both lines and a post at or after its pre
+    (an earlier post is clock and file-order noise, already counted out of order there).
+    The delta is the gap between the two logger lines' write times -- one process per hook
+    event writes at its start -- so it approximates what the harness waited on the pre-hook:
+    a hook awaited out to its timeout kill shows as a delta near that timeout, which is the
+    fail-open latency no payload ever shows.
+    """
+    write_times_by_pair: dict[tuple, dict[str, tuple[float, str]]] = {}
+    for _, record in selected:
+        event_name = _top(record)[0]
+        kind = _event_kind(event_name)[0] if event_name and _EVENT_RE.match(event_name) else None
+        if kind not in ("pre_tool", "post_tool"):
+            continue
+        call_id, message_id = _ids(record["raw"])
+        if call_id is None:
+            continue
+        write_time = _num(record.get("ts"))
+        tool_name = _safe(_top(record)[1]) or "<no name>"
+        pair_times = write_times_by_pair.setdefault((call_id, message_id), {})
+        pair_times.setdefault(kind, (write_time, tool_name))
+    deltas = []
+    for (call_id, _message_id), times in write_times_by_pair.items():
+        if len(times) == 2 and times["post_tool"][0] >= times["pre_tool"][0]:
+            duration_seconds = times["post_tool"][0] - times["pre_tool"][0]
+            deltas.append((duration_seconds, times["pre_tool"][1], call_id))
+    deltas.sort(key=lambda item: (-item[0], item[2]))
+    return deltas[:keep] or None
+
+
 def _is_descriptor(v) -> bool:
     return (isinstance(v, dict) and set(v) == {"type", "length"} and isinstance(v["type"], str)
             and isinstance(v["length"], int))
@@ -963,6 +995,11 @@ def summarize(log: str | Path, include=(), events=()) -> str:
     pairing = _pairing(sel)
     if pairing:
         out.append("pairing by call id and message id: " + _pairing_text(pairing))
+    deltas = _slowest(sel)
+    if deltas:
+        out.append("slowest pre->post deltas (logger write time; includes the hook wait):")
+        for duration_seconds, tool_name, call_id in deltas:
+            out.append(f"  {duration_seconds:.3f}s  {tool_name}  {call_id}")
     per_session: dict[str, list[tuple[int, dict]]] = {}
     for i, rec in sel:
         sid = _top(rec)[2]
