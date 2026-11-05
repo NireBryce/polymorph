@@ -9,7 +9,7 @@ when_to_use: Adding, renaming or removing a mapping key, a capability, a templat
 ## Applies to
 
 Any change to what a mapping file may contain, or to `Hook`/`Canon`, the
-adapter's environment variables, or the codes `polymorph check` emits. These
+adapter's environment variables, or the codes `polymorph manage check` emits. These
 live in several files and drift apart silently.
 
 ## What changes together
@@ -40,5 +40,5 @@ Then `README.md` and `docs/cli.md` if a command or example changed, and the
 - Anything a mapping can name stays data: dotted paths, `{placeholder}`s and
   names of built-ins. Never add a field whose value is evaluated, executed,
   imported or shell-expanded.
-- Run `polymorph validate` and `polymorph conformance` over every shipped
+- Run `polymorph manage validate` and `polymorph manage conformance` over every shipped
   mapping, then `just preflight`.

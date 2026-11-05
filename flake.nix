@@ -12,7 +12,7 @@
       packages = forAll (pkgs: {
         default = pkgs.python3Packages.buildPythonApplication {
           pname = "polymorph";
-          version = "0.0.1.dev0";
+          version = "0.0.1.dev1";
           pyproject = true;
           src = ./.;
           build-system = [ pkgs.python3Packages.setuptools ];

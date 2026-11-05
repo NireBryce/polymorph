@@ -139,7 +139,7 @@ class PureTests(unittest.TestCase):
         minimal = ('schema = 1\nname = "zcode"\nconfig_path = ".zcode/config.json"\n'
                    'format = "json"\ntemplate = "claude-like"\n[tools]\n[events]\n'
                    '[capabilities]\nask = false\npost_event = false\nexit_2_blocks = false\n'
-                   'rewrites_input = false\njson_answers = false\n[payload_in]\n[payload_out]\n')
+                   'rewrites_input = false\njson_answers = true\n[payload_in]\n[payload_out]\n')
         with tempfile.TemporaryDirectory() as d:
             base = Path(d)
             repo = base / "repo"
@@ -170,6 +170,13 @@ class PureTests(unittest.TestCase):
             with self.assertRaises(adapter.AdapterError, msg=ans):
                 adapter.translate_out(MAPPING, ans)
         self.assertEqual(adapter.translate_out(MAPPING, None), {"stdout": "", "exit": 0, "stderr": ""})
+
+    def test_deny_with_no_route_is_an_error_not_an_allow(self):
+        m = {**MAPPING, "payload_out": {},
+             "capabilities": {**MAPPING["capabilities"], "json_answers": False, "exit_2_blocks": False}}
+        deny = {"hookSpecificOutput": {"permissionDecision": "deny", "permissionDecisionReason": "no"}}
+        with self.assertRaises(adapter.AdapterError):
+            adapter.translate_out(m, deny)
 
 
 class RunAdapterTests(unittest.TestCase):

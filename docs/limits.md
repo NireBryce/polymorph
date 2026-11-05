@@ -8,7 +8,7 @@ trust a generated hook config.
 
 ## What `check` does and does not tell you
 
-A clean `polymorph check` means: the hook scripts named in your settings exist, are
+A clean `polymorph manage check` means: the hook scripts named in your settings exist, are
 executable and live under `.agents/hooks/`; each mapping is valid; the generated files on
 disk match what `generate` would write; the shipped fixtures replay.
 

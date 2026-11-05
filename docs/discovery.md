@@ -105,7 +105,7 @@ If you suspect the harness needs a restart to see a changed hook file, test it:
 
 ```sh
 python -m polymorph discover draft .polymorph/discovery/mytool.jsonl --name mytool > mytool.toml
-python -m polymorph validate mytool.toml
+python -m polymorph manage validate mytool.toml
 ```
 
 On the three-payload log above the draft is:
@@ -164,7 +164,10 @@ How to read it:
   `ask` is enforced. Find out by testing, then change them — and first confirm the hooks run
   at all: a harness may hold them behind an approval gate and run nothing (ZCode 3.17.2's
   trust gate does; see [the observed ZCode session](observed-zcode-session.md)). See
-  [Writing a mapping](writing-a-mapping.md).
+  [Writing a mapping](writing-a-mapping.md). Until one of them (or a `payload_out.deny`
+  entry) says how a deny blocks, `validate` fails the draft with `payload_out.deny is
+  required ...`: that is the one error every fresh draft has, and it goes once the test has
+  shown how the harness blocks.
 - No `verified` field. Keep it that way until someone has run the mapping in a live
   harness, and then write what they checked.
 

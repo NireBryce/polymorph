@@ -217,4 +217,21 @@ def validate_mapping(src: Any) -> list[str]:
                 if kind in ("deny", "ask") and "exit" not in spec:
                     errs.append(f"payload_out.{kind}.exit is missing and must be 2 "
                                 f"(the default exit 0 renders the {kind} as an allow)")
+    errs += deny_route_errors(mapping)
     return errs
+
+
+def deny_route_errors(mapping: dict) -> list[str]:
+    """A deny must reach the harness as something that blocks. With no payload_out.deny the
+    adapter falls back to JSON pass-through (json_answers) or exit 2 (exit_2_blocks); with
+    neither it can only refuse the deny at run time (a NOT-checked fault, and the call
+    proceeds), so such a mapping is refused here instead."""
+    capabilities, payload_out = mapping.get("capabilities"), mapping.get("payload_out")
+    if mapping.get("delivery") == "direct":
+        return []   # hooks run bare and speak the canonical protocol; no adapter renders a deny
+    if not isinstance(capabilities, dict) or not isinstance(payload_out, dict) or "deny" in payload_out:
+        return []
+    if capabilities.get("json_answers") is True or capabilities.get("exit_2_blocks") is True:
+        return []
+    return ["payload_out.deny is required when neither capabilities.json_answers nor "
+            "capabilities.exit_2_blocks is true: without it a guard deny cannot block"]

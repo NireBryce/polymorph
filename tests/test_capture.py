@@ -33,7 +33,7 @@ with open("env-names.txt", "a") as f:
     f.write("\\n".join(sorted(os.environ)) + "\\n")
 open("plugin-present.txt", "w").write(str(os.path.exists(".opencode/plugins/polymorph-discovery/index.js")))
 mode = open(os.path.join(ctrl, "mode")).read().strip()
-if mode == "hang":
+if mode == "hang" or (mode == "hang-second" and "scratch.txt" in prompt):
     open(os.path.join(ctrl, "pid"), "w").write(str(os.getpid()))
     time.sleep(60)
 if mode == "fail":
@@ -328,6 +328,31 @@ class Running(CaptureCase):
         time.sleep(0.2)
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
+        self.assert_clean()
+
+    def test_interrupt_after_a_step_keeps_what_was_captured(self):
+        # the shell step logs a line; the file step hangs and is interrupted
+        self.set_mode("hang-second")
+        pidfile = self.base / "ctrl" / "pid"
+
+        def interrupt_when_hanging():
+            for _ in range(400):
+                if pidfile.exists():
+                    _thread.interrupt_main()
+                    return
+                time.sleep(0.025)
+
+        threading.Thread(target=interrupt_when_hanging, daemon=True).start()
+        rc, out, err = self.run_cap("--yes", "--steps", "shell", "file", "search")
+        self.assertEqual(rc, 130, out + err)
+        r = self.base / "results" / "r"
+        report = (r / "report.md").read_text()
+        self.assertIn("| shell | ok | 1 |", report)
+        self.assertIn("| file | interrupted |", report)
+        self.assertIn("| search | not run |", report)
+        self.assertEqual(len((r / "log.jsonl").read_text().splitlines()), 1)
+        self.assertIn("partial results", out)
+        self.assertEqual(len(self.calls()), 2)
         self.assert_clean()
 
     def test_signal_inside_the_final_cleanup_still_removes_scratch(self):

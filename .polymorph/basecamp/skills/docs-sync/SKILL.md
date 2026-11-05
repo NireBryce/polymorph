@@ -19,7 +19,7 @@ change, not later.
 | CLI subcommands and flags | `docs/cli.md`, `src/polymorph/cli.py` | `README.md` |
 | flag names and help text, the man page | `cli.py` `help=` strings; `just reference` writes `docs/usage.md` and `man/polymorph.1` | never edited by hand |
 | what each module does | `AGENTS.md` architecture table | |
-| check codes (`polymorph check`) | `docs/SPEC.md` | |
+| check codes (`polymorph manage check`) | `docs/SPEC.md` | |
 | which mappings are verified | the `verified` key in `src/polymorph/mappings/*.toml` | never copied into prose |
 
 ## Do

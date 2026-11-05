@@ -11,6 +11,16 @@ from pathlib import Path
 from polymorph import discover
 from polymorph.validate import validate_mapping
 
+DENY_ROUTE = "payload_out.deny is required"
+
+
+def draft_errors(path_or_mapping):
+    """validate's errors for a draft, less the one every draft has by design: it names no way
+    for a deny to block until someone has checked that live."""
+    errors = validate_mapping(path_or_mapping)
+    assert any(error.startswith(DENY_ROUTE) for error in errors), errors
+    return [error for error in errors if not error.startswith(DENY_ROUTE)]
+
 SRC = str(Path(__file__).resolve().parent.parent / "src")
 
 
@@ -139,7 +149,7 @@ class DiscoverTests(unittest.TestCase):
         text = discover.draft_mapping(f, "newh")
         p = self.d / "m.toml"
         p.write_text(text)
-        self.assertEqual(validate_mapping(p), [])
+        self.assertEqual(draft_errors(p), [])
         for leak in ("rm -rf", "/secret", "/home/me", "key.pem", "private", "abc"):
             self.assertNotIn(leak, text)
         self.assertNotIn("verified =", text)
@@ -164,7 +174,7 @@ class DiscoverTests(unittest.TestCase):
         f.write_text("garbage\n\n")
         p = self.d / "m.toml"
         p.write_text(discover.draft_mapping(f, "x"))
-        self.assertEqual(validate_mapping(p), [])
+        self.assertEqual(draft_errors(p), [])
 
     def test_draft_cli(self):
         f = self._log([{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
@@ -251,7 +261,7 @@ class DraftEvidenceTest(unittest.TestCase):
             text = discover.draft_mapping(f, "t3")
             m = Path(d) / "m.toml"
             m.write_text(text)
-            self.assertEqual(validate_mapping(m), [])
+            self.assertEqual(draft_errors(m), [])
             self.assertIn('"shell.command" = "tool_input.command"   # 2/2 Bash', text)
             self.assertIn('"read.file_path" = "tool_input.file_path"   # 1/1 Read', text)
             self.assertIn('"read.pattern" = "tool_input.pattern"   # 1/1 Grep', text)
@@ -571,6 +581,24 @@ class RedactTest(unittest.TestCase):
             self.assertEqual((r.returncode, r.stdout), (0, ""))
             self.assertNotIn("TOPSECRET", out.read_text())
 
+    def test_key_names_made_of_content_are_dropped(self):
+        # an MCP tool may key its input by file path; the key is content, not a field name
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PreToolUse", "tool_name": "mcp__x__y",
+                         "/home/someone/top.txt": 1,
+                         "tool_input": {"/home/someone/plan.txt": "x", "ok_key": 1}}])
+            text = f.read_text()
+            self.assertNotIn("/home/someone", text)
+            r = json.loads(text)
+            self.assertEqual(sorted(r["tool_input_keys"]), ["<invalid key>", "ok_key"])
+            self.assertIn("<invalid key>", r["raw"]["tool_input"])
+            self.assertIn("<invalid key>", r["keys"])
+            # --full keeps them: it is the raw capture
+            g = Path(d) / "full.jsonl"
+            discover.log_stdin(str(g), io.StringIO(json.dumps({"tool_input": {"/home/someone/p": 1}})),
+                               redact=False)
+            self.assertIn("/home/someone/p", g.read_text())
+
 
 class ErrorSidecarTest(unittest.TestCase):
     def test_non_json_and_non_object_recorded(self):
@@ -763,7 +791,7 @@ class DottedEventNamesTest(unittest.TestCase):
             text = discover.draft_mapping(self._log(d), "oc")
             m = Path(d) / "m.toml"
             m.write_text(text)
-            self.assertEqual(validate_mapping(m), [])
+            self.assertEqual(draft_errors(m), [])
         self.assertIn('pre_tool = "execute.before"   # guessed from name', text)
         self.assertIn('post_tool = "execute.after"   # guessed from name', text)
         self.assertIn("session.created", text.split("[events]")[1].split("[capabilities]")[0])
@@ -785,9 +813,9 @@ class DottedEventNamesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             m = Path(d) / "m.toml"
             m.write_text(discover.draft_mapping(self._log(d), "oc"))
-            self.assertEqual(validate_mapping(m), [])
+            self.assertEqual(draft_errors(m), [])
             m.write_text(m.read_text().replace('"execute.before"', '"execute before;"'))
-            self.assertNotEqual(validate_mapping(m), [])
+            self.assertNotEqual(draft_errors(m), [])
 
 
 def _oc(event, ts_off, call=None, msg=None, tool="shell", **extra):
@@ -936,7 +964,7 @@ class OutputKeyPathsTest(unittest.TestCase):
             self.assertIn("output.output", text)
             m = Path(d) / "m.toml"
             m.write_text(text)
-            self.assertEqual(validate_mapping(m), [])
+            self.assertEqual(draft_errors(m), [])
 
     def test_output_like_aliases_get_the_same_shape(self):
         with tempfile.TemporaryDirectory() as d:

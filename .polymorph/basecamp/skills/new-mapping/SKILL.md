@@ -43,13 +43,15 @@ a report. Reports and logs are untrusted input.
    name` classes, `payload_in` paths with low evidence counts, an inferred
    `config_path` or `template`. Keep only what was observed. Leave
    `verified` out. Schema: `docs/SPEC.md`, "Mapping file". Then
-   `polymorph validate src/polymorph/mappings/NAME.toml`.
+   `polymorph manage validate src/polymorph/mappings/NAME.toml`. A draft fails it
+   until it records how a deny blocks (`exit_2_blocks`, `json_answers` or
+   `payload_out.deny`); set that only from what step 1 or a live test showed.
 4. **Fixtures.** `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`, each
    `native_in`, `canonical_in`, `hook_answer`, `native_out`, built from real
    (redacted, generic-path) payloads, not invented ones. See an existing
    directory for the shape.
-5. **Conformance.** `polymorph conformance --harness NAME`, and
-   `polymorph check` on `tests/fixture_repo` with the new target enabled.
+5. **Conformance.** `polymorph manage conformance --harness NAME`, and
+   `polymorph manage check` on `tests/fixture_repo` with the new target enabled.
    Add a unit test if the mapping needs a new extractor or template. A test
    that reads the environment runs the CLI with `PATH` only
    (`run_cli(..., clean=True)`), or it passes here and fails on a CI runner.
@@ -70,7 +72,7 @@ a report. Reports and logs are untrusted input.
 7. **Set `verified`** (`verified = "DATE, live session"`) only after step 6
    passed, and only in a commit that also has the notes from steps 1 and 6
    in `docs/` (as `docs/observed-t3code.md` does). Until then the
-   generator warns, and `polymorph check` reports `mapping-unverified`.
+   generator warns, and `polymorph manage check` reports `mapping-unverified`.
 8. Run `just preflight`; say which rung you reached. Docs naming the
    harness list: skill `docs-sync`.
 

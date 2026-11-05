@@ -4,7 +4,7 @@
 > against live harnesses beyond the hook files they were written from, its adapter has run
 > only in unit tests and one hand-fed run, and nobody outside the author has reviewed the
 > code. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Do not
-> rely on it to enforce anything; treat `polymorph check` output as "the config is
+> rely on it to enforce anything; treat `polymorph manage check` output as "the config is
 > consistent", not "the guards work". Interfaces and the mapping schema may change without
 > notice. Reports of problems are welcome.
 
@@ -82,7 +82,7 @@ env contract (`polymorph env`), and the onboarding run itself, `polymorph equip
 
 - **Not a security boundary.** The hooks it wires up are usually string matchers over a
   command line. They catch honest mistakes, not a determined or confused agent.
-- **Not proof that your guards work.** `polymorph check` is static. It never runs a hook,
+- **Not proof that your guards work.** `polymorph manage check` is static. It never runs a hook,
   a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).

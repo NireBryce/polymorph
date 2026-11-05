@@ -86,7 +86,6 @@ grouped by target, then a summary line.
 | `mapping-unverified` | warning | Mapping has no `verified` field. |
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
 | `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
-| `deny-unenforceable` | warning | An `adapter` mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a deny becomes a NOT-checked fault and the call proceeds. |
 | `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
@@ -358,7 +357,10 @@ Output in the results directory: `summary.txt` (`discover summary`), `draft.toml
 (`discover draft`, unverified), `report.md` (polymorph version, `<harness> --version`, a row per
 step with its exit status and log lines, the tool calls from the log with counts and input key
 names, and the steps that produced no log line) and `log.jsonl`. Exit 0 if every step exited 0,
-1 if one failed, timed out or was skipped, 2 for a usage error.
+1 if one failed, timed out or was skipped, 2 for a usage error. An interrupted run (Ctrl-C,
+SIGTERM, SIGHUP) still writes these files from what the log holds, marks the step it cut as
+`interrupted` and the rest as `not run`, says the results are partial, and exits with the
+signal's status.
 
 ## `discover`
 
@@ -451,7 +453,9 @@ polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event E
 ```
 
 Prints a schema 1 mapping to stdout (redirect it to a file). It has no `verified` field,
-all capabilities `false`, and comments with evidence counts. `--include` and `--event`
+all capabilities `false`, no `payload_out.deny`, and comments with evidence counts. So it
+fails `validate` until someone has seen how the harness blocks and says so (a capability or a
+`deny` entry; see [Writing a mapping](writing-a-mapping.md#worked-example-zcode)). `--include` and `--event`
 select lines as for `summary` (tool events by default). Event names may contain `.`, `-` and
 `:`; a name ending in `before` or `after` is guessed as `pre_tool` or `post_tool` and marked
 `guessed from name`, and every other observed event name is listed in a comment under
