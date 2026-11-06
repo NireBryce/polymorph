@@ -1,9 +1,9 @@
 # polymorph
 
-> **Experimental and unvetted.** polymorph is pre-alpha. Its mappings have not been verified
-> against live harnesses beyond the hook files they were written from, its adapter has run
-> only in unit tests and one hand-fed run, and nobody outside the author has reviewed the
-> code. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Do not
+> **Experimental and unvetted.** polymorph is pre-alpha. Only the `zcode` mapping carries
+> `verified`, from two live probe sessions; `claude` rests on live payload logs without a
+> deny seen to block, and `gemini` is an unchecked draft. Its adapter has run only in unit
+> tests and one hand-fed run, and nobody outside the author has reviewed the code. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Do not
 > rely on it to enforce anything; treat `polymorph manage check` output as "the config is
 > consistent", not "the guards work". Interfaces and the mapping schema may change without
 > notice. Reports of problems are welcome.
@@ -75,8 +75,9 @@ The rest of the inventory in the goal — skills, rules, `AGENTS.md`/`CLAUDE.md`
 **Delivered since this baseline** (see [the pivot plan](docs/plan-loadout-pivot.md)):
 the discover-and-report inventory with per-harness coverage tables and the gap report
 (`polymorph inventory`), `polymorph manage adopt` (store-and-symlink conversion), the
-env contract (`polymorph env`), and the onboarding run itself, `polymorph equip
---harness NAME`.
+env contract (`polymorph env`), the onboarding run itself, `polymorph equip
+--harness NAME`, and `polymorph discover probe`, which fills a mapping's `[capabilities]`
+from a live session (`zcode`'s `verified` now rests on two such probe rounds).
 
 ## What it is not
 
@@ -86,8 +87,9 @@ env contract (`polymorph env`), and the onboarding run itself, `polymorph equip
   a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
-- **Not verified against live harnesses.** Every shipped mapping says in its `verified`
-  field or its header comment what it actually rests on.
+- **Not broadly verified against live harnesses.** Only `zcode` carries `verified`, and
+  its header comment lists what is still a best guess. Every shipped mapping says in its
+  `verified` field or its header comment what it actually rests on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** polymorph's output, and the loadouts
@@ -108,7 +110,7 @@ python -m polymorph --help                        # after pip install -e ., or w
 
 Either install works: the built-in mappings and fixtures ship inside the Python package
 (`src/polymorph/mappings/`, `src/polymorph/fixtures/`), so a plain `pip install .` can run
-`conformance` and `check` from any directory. The editable install is for working on polymorph.
+`manage conformance` and `manage check` from any directory. The editable install is for working on polymorph.
 
 ## Five-minute quickstart
 
@@ -155,10 +157,11 @@ disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
 | `manage adopt` | Move agent files at rest into the basecamp store and symlink them back. |
 | `env` | Emit the env contract from host facts, or run a command under it. |
 | `adapter` | The runtime shim a generated config calls: translates a native hook payload, runs your script, translates the answer back. |
-| `validate` | Check one mapping file against schema 1. |
-| `conformance` | Replay the shipped fixtures through the adapter. |
+| `manage validate` | Check one mapping file against schema 1. |
+| `manage conformance` | Replay the shipped fixtures through the adapter. |
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
-| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Spends tokens: see Cost and responsibility. |
+| `discover probe` | Drive a scripted session through one marker command per decision route and print the `[capabilities]` block with how each flag was observed. Spends tokens; `zcode` is the only adapter. |
+| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Drivers: `opencode`, `claude`, and `zcode` (refuses to run until a headless session is seen to fire hooks). Spends tokens: see Cost and responsibility. |
 
 Every flag is in [CLI reference](docs/cli.md).
 
@@ -174,8 +177,11 @@ Every flag is in [CLI reference](docs/cli.md).
 ## Tests
 
 ```sh
-PYTHONPATH=src python3 -m unittest discover -s tests
+just test         # PYTHONPATH=src python3 -m unittest discover -s tests
+just preflight    # what CI runs: tests, doc checks, lint, nix flake check, self-check
 ```
+
+Tests use stub harnesses only; none of them runs a real model.
 
 ## License
 
