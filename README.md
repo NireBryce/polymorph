@@ -161,7 +161,7 @@ disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
 | `manage conformance` | Replay the shipped fixtures through the adapter. |
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
 | `discover probe` | Drive a scripted session through one marker command per decision route and print the `[capabilities]` block with how each flag was observed. Spends tokens; `zcode` is the only adapter. |
-| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Drivers: `opencode`, `claude`, and `zcode` (refuses to run until a headless session is seen to fire hooks). Spends tokens: see Cost and responsibility. |
+| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Drivers: `opencode` runs; `claude` and `zcode` refuse to run and say why (neither has been seen working headless). Spends tokens: see Cost and responsibility. |
 
 Every flag is in [CLI reference](docs/cli.md).
 
