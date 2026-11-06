@@ -188,6 +188,35 @@ use; each entry that does says what breaks.
   which also matches before a trailing newline; a value ending in one was kept verbatim as
   a name or id. `fullmatch` now, so it reduces to `<invalid>` or a `{type, length}`
   descriptor like any other unsafe value.
+- **`discover probe` (new):** `polymorph discover probe --harness NAME` drives a scripted
+  session through a capture driver, one marker command per decision route (allow, deny, json,
+  ask, rewrite), with a guard hook that denies only commands carrying that run's random token.
+  It prints `[capabilities]` with one evidence comment per flag (observed, derived, or untested
+  and left `false`); `--into DRAFT.toml` replaces only that block and leaves `verified` alone.
+  It spends tokens and drives a real harness; `zcode` is the only adapter.
+- **`capture --harness zcode` (new, blocked):** the driver wires the discovery logger into a
+  scratch `.zcode/config.json` and knows the headless invocation (the app's own bundle under
+  `ELECTRON_RUN_AS_NODE`, paths derived from the `zcode` wrapper on `PATH`), but refuses to run
+  (exit 2): no headless session has yet reached a tool call, so whether hooks fire headlessly
+  is unconfirmed. `--print-prompts` still works.
+- **Running sessions do not load new hooks:** `manage generate` (under each target it wrote or
+  left unchanged) and `equip` (once) print a warning that a session already open will not pick
+  up the new hooks. Output only. Not printed by `--check` or `--dry-run`.
+- **`discover summary` per session:** a log holding more than one session id gets a
+  `per session:` block (payloads, per-event counts, pairing). An id that fails the id shape
+  prints as `<invalid>`, so an old-format line cannot forge a summary line. Behaviour change:
+  an empty-string session id reads `<invalid>`, not `<no session id>`.
+- **`discover summary` slowest deltas:** after the pairing line, the five slowest
+  before-to-after deltas by call id (delta, tool name, call id). They approximate how long the
+  harness waited on the pre-tool hook, from logger write times.
+- **Hook timeouts are stored unchanged:** a fractional `timeout` in `.agents/settings.json`
+  was truncated (2.5 became 2) and a numeric string was coerced. A positive int or float is
+  now kept as written; anything else is refused with the timeout message. Breaks: a string
+  timeout such as `"30"` is now an error.
+- **Adapter trust check resolves every root:** the repo's own mappings directory reached
+  through a symlinked repo path was refused as outside the trusted dirs (a NOT-checked fault,
+  never an allow). Both sides of the comparison now resolve; a directory outside every trusted
+  root is still refused.
 
 ## 0.0.1.dev0
 
