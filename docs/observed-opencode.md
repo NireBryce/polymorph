@@ -6,6 +6,9 @@ JavaScript, so discovery used a small plugin that pipes each payload to
 `claude` mapping does not apply; a polymorph mapping for it would need a generated plugin,
 which polymorph does not produce.
 
+What the current OpenCode docs and the V2 plugin source say, set beside this run, is in
+[wiki/behavior-opencode.md](../wiki/behavior-opencode.md).
+
 Sources, kept apart because they differ in strength:
 
 - **Live**: a running v2.0.32 server with the plugin loaded, about 4,100 logged payloads
