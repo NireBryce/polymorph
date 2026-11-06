@@ -657,7 +657,7 @@ class Drivers(unittest.TestCase):
         d.remove(scratch)
         self.assertFalse((scratch / ".claude").exists())
 
-    def test_zcode_driver_wires_claude_like_config_and_raises_on_invocation(self):
+    def test_zcode_driver_wires_claude_like_config_and_derives_the_cli_argv(self):
         scratch = Path(tempfile.mkdtemp()).resolve()
         d = capture_drivers.DRIVERS["zcode"]
         d.install(scratch, full=False)
@@ -666,10 +666,25 @@ class Drivers(unittest.TestCase):
         self.assertEqual(sorted(doc["hooks"]["events"]), ["PostToolUse", "PreToolUse"])
         self.assertIn(str(scratch / ".polymorph/discovery/zcode.jsonl"), json.dumps(doc))
         self.assertTrue(d.untested and d.blocked)
-        with self.assertRaises(NotImplementedError):   # no headless invocation is known
-            d.step_argv("P")
-        with self.assertRaises(NotImplementedError):   # --version boots the desktop app
-            d.version_argv()
+        package = Path(tempfile.mkdtemp())
+        (package / "bin").mkdir()
+        (package / "lib/ZCode/resources/glm").mkdir(parents=True)
+        (package / "bin/zcode").write_text("#!/bin/sh\n")
+        (package / "lib/ZCode/zcode").write_text("electron")
+        (package / "lib/ZCode/resources/glm/zcode.cjs").write_text("bundle")
+        with mock.patch.object(capture_drivers.shutil, "which", return_value=str(package / "bin/zcode")):
+            step = d.step_argv("P")
+            version = d.version_argv()
+            self.assertEqual(step[:2], ["env", "ELECTRON_RUN_AS_NODE=1"])
+            self.assertEqual(step[2:4], [str(package / "lib/ZCode/zcode"),
+                                         str(package / "lib/ZCode/resources/glm/zcode.cjs")])
+            self.assertEqual(step[4:], ["--prompt", "P", "--mode", "yolo"])
+            self.assertEqual(version[4:], ["version"])
+        # a layout without the bundle raises instead of guessing
+        (package / "lib/ZCode/resources/glm/zcode.cjs").unlink()
+        with mock.patch.object(capture_drivers.shutil, "which", return_value=str(package / "bin/zcode")):
+            with self.assertRaises(RuntimeError):
+                d.step_argv("P")
         d.remove(scratch)
         self.assertFalse((scratch / ".zcode").exists())
 
