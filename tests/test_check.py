@@ -122,8 +122,9 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(all(f.severity == "warning" and f.target == "zcode" for f in fs))
         self.assertIn("GUARD_ASK_ENFORCED", fs[0].message)
 
-    def test_an_adapter_mapping_that_cannot_express_a_deny_is_flagged(self):
-        # issue #35: no payload_out.deny with exit_2_blocks and json_answers both false
+    def test_an_adapter_mapping_that_cannot_express_a_deny_is_invalid(self):
+        # issue #35: no payload_out.deny with exit_2_blocks and json_answers both false;
+        # validate refuses it, so check reports mapping-invalid (an error), not a warning
         d = self.repo / ".polymorph/basecamp/mappings"
         d.mkdir(exist_ok=True)
         base = (Path(check.BUILTIN_DIR) / "gemini.toml").read_text()
@@ -139,19 +140,19 @@ class CheckTest(unittest.TestCase):
                 for p in d.glob("gemini.toml"):
                     p.unlink()
                 (d / "gemini.toml").write_text(mut(base))
-                fs = [f for f in check.run_check(self.repo, harnesses=["gemini"])
-                      if f.code == "deny-unenforceable"]
+                findings = [f for f in check.run_check(self.repo, harnesses=["gemini"])
+                            if f.code == "mapping-invalid" and "payload_out.deny" in f.message]
                 if name == "cannot deny":
-                    self.assertTrue(fs)
-                    self.assertTrue(all(f.severity == "warning" and f.target == "gemini" for f in fs))
-                    self.assertIn("NOT-checked", fs[0].message)
+                    self.assertTrue(findings)
+                    self.assertTrue(all(f.severity == "error" and f.target == "gemini" for f in findings))
                 else:
-                    self.assertEqual(fs, [])
+                    self.assertEqual(findings, [])
 
-    def test_a_direct_mapping_is_never_flagged_as_deny_unenforceable(self):
+    def test_a_direct_mapping_needs_no_deny_route(self):
         # direct delivery bypasses the adapter, so its empty payload_out expresses nothing
-        fs = [f for f in check.run_check(self.repo) if f.code == "deny-unenforceable"]
-        self.assertEqual(fs, [])
+        findings = [f for f in check.run_check(self.repo)
+                    if f.code == "mapping-invalid" and "payload_out.deny" in f.message]
+        self.assertEqual(findings, [])
 
     def test_a_deny_route_on_an_exit_the_mapping_calls_non_blocking_is_flagged(self):
         # issue #49: gemini's deny/ask entries render as exit 2, the only code
@@ -224,6 +225,13 @@ class CheckTest(unittest.TestCase):
         out.unlink()
         self.assertIn("generated-drift", self.codes())
         self.assertEqual(run("--repo", str(self.repo))[0], 1)
+
+    def test_generated_drift_names_a_command_that_exists(self):
+        # generate moved under `manage`; the old `polymorph generate` is a usage error
+        (self.repo / ".zcode/config.json").unlink()
+        drift = [f for f in check.run_check(self.repo) if f.code == "generated-drift"]
+        self.assertTrue(drift)
+        self.assertIn("polymorph manage generate", drift[0].message)
 
     def test_mapping_override_note(self):
         d = self.repo / ".polymorph/basecamp/mappings"

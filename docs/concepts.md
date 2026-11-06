@@ -134,8 +134,9 @@ mapping that also sets `ask = false` is therefore flagged by `check` as
 `direct-ask-unenforceable`: the hardening the flag promises is unobservable by the hook,
 which can only apply it if it was written for this harness and detects it itself.
 An adapter mapping that cannot express a block at all (no `payload_out.deny`, and
-`exit_2_blocks` and `json_answers` both false) is flagged as `deny-unenforceable`: a deny
-would become a visible NOT-checked fault and the call would proceed.
+`exit_2_blocks` and `json_answers` both false) fails `validate`, so `check` reports it as
+`mapping-invalid`: a deny would otherwise become a visible NOT-checked fault and the call
+would proceed.
 
 Capabilities in a mapping are claims. Only a live test establishes them; see
 [Limits](limits.md).
@@ -169,7 +170,7 @@ by `<hook-script>:<event>:<kind>` -- the hook's canonical event is part of the k
 script registered under several events is decided per event -- with a `choice` and a `date`.
 Skipping is always a choice you
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
-event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
+event) are flagged by `generate` and by `polymorph manage check`. Details: [SPEC](SPEC.md#decisions).
 
 ## Inventory and the gap report
 

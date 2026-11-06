@@ -464,7 +464,9 @@ def _redact_payload(raw):
         return _descriptor(raw)
     out = {}
     for k, v in raw.items():
-        if k in _SAFE_VALUES and isinstance(v, (int, float, bool)):
+        if not _safe(str(k), _KEY_RE):   # a key that is not a plain name may be content (a path)
+            out["<invalid key>"] = _descriptor(v)
+        elif k in _SAFE_VALUES and isinstance(v, (int, float, bool)):
             out[k] = v
         elif k in _SAFE_VALUES and isinstance(v, str) and _safe_text(k, v):
             out[k] = v

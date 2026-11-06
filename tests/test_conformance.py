@@ -100,6 +100,29 @@ class ValidateTests(unittest.TestCase):
         m["payload_in"]["read.pattern"] = "tool_input.pattern"
         self.assertEqual(validate_mapping(m), [])
 
+    def test_deny_needs_a_route_that_blocks(self):
+        m = load("zcode")
+        m.pop("delivery")
+        m["capabilities"].update(json_answers=False, exit_2_blocks=False)
+        errs = validate_mapping(m)
+        self.assertTrue(any("payload_out.deny" in e for e in errs), errs)
+        m["payload_out"]["deny"] = {"exit": 2, "stderr": "{reason}"}
+        self.assertEqual(validate_mapping(m), [])
+        m["payload_out"].pop("deny")
+        m["capabilities"]["exit_2_blocks"] = True
+        self.assertEqual(validate_mapping(m), [])
+
+    def test_only_known_placeholders(self):
+        m = load("zcode")
+        m.pop("delivery")
+        for ok in ("{reason}", "{context}", "{message}", "why: {reason} ({context})"):
+            m["payload_out"]["deny"] = {"exit": 2, "stderr": ok}
+            self.assertEqual(validate_mapping(m), [], ok)
+        for bad in ("{reasn}", "{Reason}", "x {foo} y"):   # "{reason.x}" is literal text here
+            m["payload_out"]["deny"] = {"exit": 2, "stderr": bad}
+            errs = validate_mapping(m)
+            self.assertTrue(any("placeholder" in e for e in errs), (bad, errs))
+
 
 class FixtureShapeTests(unittest.TestCase):
     def test_fixtures_present_and_well_formed(self):

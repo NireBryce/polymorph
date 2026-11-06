@@ -81,8 +81,12 @@ python -m polymorph manage generate
 ```
 ```
 [zcode] wrote .zcode/config.json (DRIFT)
+  warning: sessions already running will not load the new hooks; restart the session (observed on zcode 2026-11-04; other harnesses may differ)
   unmapped setting: permissions.allow (1 entries)
 ```
+
+The warning is printed whenever `generate` writes hooks: a session that is already running
+read its hook wiring at start and will not pick up the new file.
 
 The result, `.zcode/config.json`:
 
@@ -114,13 +118,14 @@ key. Hand-written hooks in the generated file are replaced.
 ## 4. Check
 
 ```sh
-python -m polymorph check
+python -m polymorph manage check
 ```
 ```
 [zcode]
   note mapping-untested-live zcode: not tested live: block semantics, ask enforcement unproven
+  warning direct-ask-unenforceable zcode: delivery = "direct" runs the hook bare: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening works only in a script written to detect this harness itself (.../polymorph/mappings/zcode.toml)
   note setting-unmapped zcode: permissions.allow (1 entries)
-0 error(s), 0 warning(s), 2 note(s)
+0 error(s), 1 warning(s), 2 note(s)
 ```
 
 Exit 0. Before `generate` ran, the same command exits 1 with
@@ -129,8 +134,10 @@ and `check` reports drift again until you re-run `generate`.
 
 The two notes are permanent. `mapping-untested-live` is polymorph reminding you that
 nobody has proved ZCode enforces a deny from this file; `setting-unmapped` lists what was
-not translated. `check --strict` makes warnings fail too (these are notes, so it still
-passes).
+not translated. The warning is about the shipped `zcode` mapping itself: it runs hooks
+directly, so a hook cannot tell that ZCode treats `ask` as allow unless it was written to
+detect ZCode. `check --strict` makes warnings fail too, so with the shipped `zcode` mapping
+it exits 1.
 
 ## 5. Try the adapter by hand
 

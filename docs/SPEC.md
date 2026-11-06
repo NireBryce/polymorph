@@ -88,7 +88,7 @@ canonical protocol. It is only valid for an identity translation: `payload_out` 
 `shell.command` and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
 `read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
 `tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
-a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
+a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph manage check`
 reports `mapping-invalid`). A direct mapping's `[tools]` names are matchers the harness
 evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edit`, `Write`,
 `MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match.
@@ -356,7 +356,7 @@ real ones. Invented fixtures would only restate the guess.
 
 ## polymorph manage check
 
-`polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
+`polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
 (`check.py`). Static: never executes a hook script, a harness or the network; writes nothing.
 Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
 
@@ -368,7 +368,6 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-unverified` | warning | mapping has no `verified` |
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
 | `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
-| `deny-unenforceable` | warning | an adapter mapping has no `payload_out.deny` and both `exit_2_blocks` and `json_answers` are false: a guard deny becomes a visible NOT-checked fault and the call proceeds (#35) |
 | `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |

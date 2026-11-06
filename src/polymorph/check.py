@@ -1,4 +1,4 @@
-"""`polymorph check`: static analysis of a repo's agent config.
+"""`polymorph manage check`: static analysis of a repo's agent config.
 
 Never executes a hook script, a harness or the network, and never writes files.
 Each check is a small function returning Findings with a stable code.
@@ -28,7 +28,6 @@ CODES = {
     "mapping-unverified": ("warning", "A mapping has no `verified` field."),
     "mapping-untested-live": ("note", "Block semantics and ask enforcement are unproven without a live test."),
     "direct-ask-unenforceable": ("warning", "A direct-delivery mapping sets ask = false: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot observe the claim (issue #34)."),
-    "deny-unenforceable": ("warning", "An adapter-delivery mapping has no way to express a deny (no payload_out.deny; exit_2_blocks and json_answers both false), so a guard deny is a NOT-checked fault and the call proceeds (issue #35)."),
     "exit2-unhonoured": ("warning", "A mapping's deny or ask route renders as exit 2 while exit_2_blocks is false: the exit the route relies on is the one the mapping says does not block (issue #49)."),
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
@@ -121,12 +120,6 @@ def check_mapping(repo: Path, name: str, mapping: Mapping) -> list[Finding]:
                       'delivery = "direct" runs the hook bare: no adapter runs, so nothing sets '
                       "GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening "
                       "works only in a script written to detect this harness itself", _rel(repo, mapping.source)))
-    if mapping.delivery == "adapter" and not mapping.payload_out.get("deny") \
-            and not mapping.capabilities.get("exit_2_blocks") and not mapping.capabilities.get("json_answers"):
-        out.append(_f("deny-unenforceable", name,
-                      "no payload_out.deny and both exit_2_blocks and json_answers are false: a guard "
-                      "deny becomes a visible NOT-checked fault and the call proceeds, so this mapping "
-                      "cannot enforce a block", _rel(repo, mapping.source)))
     if mapping.delivery == "adapter" and (mapping.payload_out.get("deny") or mapping.payload_out.get("ask")) \
             and not mapping.capabilities.get("exit_2_blocks"):
         out.append(_f("exit2-unhonoured", name,
@@ -222,7 +215,7 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
         findings += [_f("setting-unmapped", name, unmapped_setting) for unmapped_setting in target_result.unmapped]
         if target_result.drift:
             state = "missing" if not (repo / target_result.path).is_file() else "differs from generate output"
-            findings.append(_f("generated-drift", name, f"{target_result.path} {state}; run `polymorph generate`", target_result.path))
+            findings.append(_f("generated-drift", name, f"{target_result.path} {state}; run `polymorph manage generate`", target_result.path))
     return findings
 
 

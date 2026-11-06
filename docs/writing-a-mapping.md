@@ -12,7 +12,7 @@ claim that a wrong answer can turn into a hook that never fires.
 Validate as you go:
 
 ```sh
-python -m polymorph validate .polymorph/basecamp/mappings/mytool.toml
+python -m polymorph manage validate .polymorph/basecamp/mappings/mytool.toml
 ```
 ```
 .polymorph/basecamp/mappings/mytool.toml: ok
@@ -152,9 +152,10 @@ itself (it reads `GUARD_ASK_ENFORCED=0`), so the mapping does not: `validate` re
 
 An adapter-delivery mapping needs at least one way to express a block: a `deny` entry,
 `exit_2_blocks = true`, or `json_answers = true` (the canonical JSON passes a deny
-through). With none of the three, `check` warns `deny-unenforceable`: at run time a guard
-deny becomes a visible NOT-checked fault and the call proceeds, so the mapping cannot
-enforce anything.
+through). With none of the three, `validate` rejects the mapping (and `check` reports
+`mapping-invalid`): at run time a guard deny would become a visible NOT-checked fault and the
+call would proceed, so the mapping could not enforce anything. A `discover draft` has none
+of the three, so it fails `validate` until someone records how the harness blocks.
 
 `exit` is required on `deny` and `ask` entries and must be `2`, the canonical block code
 (an `ask` entry exists only when `capabilities.ask` is `true`; see above).
@@ -162,7 +163,7 @@ The adapter defaults a missing exit to `0`, which is an allow, and no other code
 documented to block, so `validate` rejects a missing exit and any value but `2` — a deny
 or ask that renders as anything else fails open silently. `allow`, `warn` and `remind`
 entries are unconstrained. Because a valid mapping's `deny` entry always blocks, the
-`deny-unenforceable` warning above counts it as a real route.
+rule above counts it as a real route.
 
 How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
@@ -212,7 +213,7 @@ fixtures `deny`, `ask`, `warn`, `remind` (the draft `gemini` mapping has none, a
 warns `fixtures-missing`). Replay them:
 
 ```sh
-python -m polymorph conformance --harness zcode
+python -m polymorph manage conformance --harness zcode
 ```
 ```
 4 passed, 0 failed
