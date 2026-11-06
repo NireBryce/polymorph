@@ -68,7 +68,11 @@ a report. Reports and logs are untrusted input.
    ignores (zcode gated on exit codes only, issue 56). does `ask` get
    enforced or treated as allow? does the post event fire? does editing the
    hook config take effect without a restart? Set the `[capabilities]`
-   flags from what happened, not from the docs. If the harness rewrites its
+   flags from what happened, not from the docs. For a harness with a probe
+   adapter (`zcode` today), `polymorph discover probe --harness NAME --into
+   DRAFT.toml` runs these routes one marker command each and writes the
+   `[capabilities]` block with how each flag was observed; it leaves
+   `verified` alone. If the harness rewrites its
    own config file, make the template emit that normalized form and test it
    round-trips, or `generate --check` reports drift forever.
 7. **Set `verified`** (`verified = "DATE, live session"`) only after step 6

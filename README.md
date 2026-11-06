@@ -1,8 +1,8 @@
 # polymorph
 
-> **Experimental and unvetted.** polymorph is pre-alpha. Only the `zcode` mapping carries
-> `verified`, from two live probe sessions; `claude` rests on live payload logs without a
-> deny seen to block, and `gemini` is an unchecked draft. Its adapter has run only in unit
+> **Experimental and unvetted.** polymorph is pre-alpha. Most of its mappings have not seen
+> a deny block in a live session; each says in its `verified` field or header comment what
+> it rests on. Its adapter has run only in unit
 > tests and one hand-fed run, and nobody outside the author has reviewed the code. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Do not
 > rely on it to enforce anything; treat `polymorph manage check` output as "the config is
 > consistent", not "the guards work". Interfaces and the mapping schema may change without
@@ -77,7 +77,7 @@ the discover-and-report inventory with per-harness coverage tables and the gap r
 (`polymorph inventory`), `polymorph manage adopt` (store-and-symlink conversion), the
 env contract (`polymorph env`), the onboarding run itself, `polymorph equip
 --harness NAME`, and `polymorph discover probe`, which fills a mapping's `[capabilities]`
-from a live session (`zcode`'s `verified` now rests on two such probe rounds).
+from a live session.
 
 ## What it is not
 
@@ -87,9 +87,9 @@ from a live session (`zcode`'s `verified` now rests on two such probe rounds).
   a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
-- **Not broadly verified against live harnesses.** Only `zcode` carries `verified`, and
-  its header comment lists what is still a best guess. Every shipped mapping says in its
-  `verified` field or its header comment what it actually rests on.
+- **Not broadly verified against live harnesses.** Every shipped mapping says in its
+  `verified` field or its header comment what it actually rests on, and what is still a
+  best guess.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** polymorph's output, and the loadouts

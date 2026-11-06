@@ -64,7 +64,8 @@ git push -u origin feat/<thing>
 gh pr create --base experimental --title "<subject>" --body-file <file>
 ```
 
-- Branch and first line start with `feat/`, `fix/`, `docs:`, `chore:`.
+- The branch name starts `feat/`, `fix/`, `docs/` or `chore/`; the commit
+  subject starts `feat:`, `fix:`, `docs:` or `chore:`.
 - The message says what this commit contains. Use a quoted heredoc or a
   file so backticks are not executed.
 - PR body in the sections of `.github/PULL_REQUEST_TEMPLATE.md`. If an
@@ -96,7 +97,8 @@ just ship-land <n> --allow-base experimental
 It re-checks what `ci-wait` checks and refuses otherwise, and refuses a PR from
 another repository, with a protected head branch (`main`, `master`,
 `experimental`, the default branch) or with a base other than the default branch
-(`--allow-base BRANCH` for a stacked PR), all before merging. It merges with
+(so every per-task PR onto `experimental` passes `--allow-base experimental`;
+a stacked PR passes its base the same way), all before merging. It merges with
 `--rebase` (one commit) or `--merge` (several, each message kept), pinned
 with `--match-head-commit` to the head it checked, then fast-forwards the
 local base branch, removes a worktree on the branch, and deletes the local

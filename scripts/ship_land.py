@@ -8,8 +8,8 @@ Refuses unless scripts/ci_wait.py's conditions hold (every run on the head
 commit succeeded and the PR is CLEAN), and, before merging anything, refuses a PR
 whose head is in another repository, whose head branch is the base or a protected
 branch (main, master, experimental, the repo's default branch), or whose base is
-not the repo's default branch (`--allow-base BRANCH` permits a stacked PR onto
-BRANCH). Then: merge with `--rebase` when the PR
+not the repo's default branch (`--allow-base BRANCH` permits BRANCH: `experimental`
+for the per-task flow, or a stacked PR's base). Then: merge with `--rebase` when the PR
 has exactly one commit, else `--merge`, pinned with `--match-head-commit` to the
 head that was checked; fast-forward the local base branch; remove a worktree on
 the PR's branch; delete the local branch (`-d`; `-D` only when it is exactly the head that
@@ -182,7 +182,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=ci_wait.DEFAULT_TIMEOUT)
     parser.add_argument("--interval", type=float, default=ci_wait.DEFAULT_INTERVAL)
     parser.add_argument("--allow-base", metavar="BRANCH",
-                    help="permit args PR whose base is BRANCH instead of the default branch (stacked PRs)")
+                    help="permit a PR whose base is BRANCH instead of the default branch "
+                         "(experimental for per-task PRs, or a stacked PR's base)")
     args = parser.parse_args(argv)
     try:
         return land(args.pr, args.timeout, args.interval, allow_base=args.allow_base)

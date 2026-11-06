@@ -376,13 +376,13 @@ skip the remaining probe runs after this many seconds (default 300.0)
 .SH FILES
 .TP
 .I \&.agents/settings.json
-The Claude Code settings read by generate and check.
+The Claude Code settings read by manage generate and manage check.
 .TP
 .I \&.agents/hooks/
 Hook scripts. A hook must resolve under this directory.
 .TP
 .I \&.polymorph/basecamp/config.toml
-The harnesses generate writes for.
+The harnesses manage generate writes for.
 .TP
 .I \&.polymorph/basecamp/mappings/
 Repo\-local mappings; they override the built\-in ones with a warning.
@@ -407,12 +407,12 @@ Default directory for discover logs.
 Success.
 .TP
 .B 1
-Findings or drift (check, generate \-\-check), a refusal (adopt), a failed conformance run.
+Findings or drift (manage check, manage generate \-\-check), a refusal (manage adopt), a failed manage conformance run.
 .TP
 .B 2
 A usage error or an error in the input. The adapter never exits 2: its faults are reported as NOT checked.
 .TP
 .B 3
-generate has undecided items and wrote nothing for those targets.
+manage generate has undecided items and wrote nothing for those targets.
 .SH SEE ALSO
 docs/cli.md (what each command does), docs/usage.md (this page as Markdown), docs/SPEC.md (the contract).
