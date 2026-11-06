@@ -24,8 +24,12 @@ shares `.git`.
 
 ```sh
 git -C <repo> fetch origin
-git -C <repo> worktree add <scratch>/wt-<thing> -b feat/<thing> origin/main
+git -C <repo> worktree add <scratch>/wt-<thing> -b feat/<thing> origin/experimental
 ```
+
+Branch from `origin/experimental`, where work lands by default (skill
+`ship`). Branch from `origin/main` only for a change that lands on `main`
+directly, such as the promotion itself (skill `promote-to-main`).
 
 Name the branch you will ship. Check `git status -sb` and `pwd` before
 anything that changes state: a tool that resets the working directory puts
