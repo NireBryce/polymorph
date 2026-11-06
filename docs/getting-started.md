@@ -62,28 +62,31 @@ printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 
 `enabled` is the list of harnesses `generate` and `check` act on when you do not pass
 `--harness`. Each name must have a mapping: the shipped ones are `claude`, `zcode` and
-`gemini` (gemini is an unverified draft, see [Limits](limits.md)).
+`gemini` (claude has no `verified` field and gemini is an unverified draft, see
+[Limits](limits.md)).
 
 ## 3. Preview, then generate
 
 ```sh
-python -m polymorph generate --check
+python -m polymorph manage generate --check
 ```
 ```
 [zcode] would write .zcode/config.json (DRIFT)
-  warning: zcode: mapping has no `verified` field; treat output as unverified
   unmapped setting: permissions.allow (1 entries)
 ```
 Exit code 1: the file does not exist, so it differs. Nothing was written.
 
 ```sh
-python -m polymorph generate
+python -m polymorph manage generate
 ```
 ```
 [zcode] wrote .zcode/config.json (DRIFT)
-  warning: zcode: mapping has no `verified` field; treat output as unverified
+  warning: sessions already running will not load the new hooks; restart the session (observed on zcode 2026-11-04; other harnesses may differ)
   unmapped setting: permissions.allow (1 entries)
 ```
+
+The warning is printed whenever `generate` writes hooks: a session that is already running
+read its hook wiring at start and will not pick up the new file.
 
 The result, `.zcode/config.json`:
 
@@ -115,12 +118,12 @@ key. Hand-written hooks in the generated file are replaced.
 ## 4. Check
 
 ```sh
-python -m polymorph check
+python -m polymorph manage check
 ```
 ```
 [zcode]
-  warning mapping-unverified zcode: mapping has no `verified` field; treat output as unverified (.../polymorph/mappings/zcode.toml)
   note mapping-untested-live zcode: not tested live: block semantics, ask enforcement unproven
+  warning direct-ask-unenforceable zcode: delivery = "direct" runs the hook bare: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening works only in a script written to detect this harness itself (.../polymorph/mappings/zcode.toml)
   note setting-unmapped zcode: permissions.allow (1 entries)
 0 error(s), 1 warning(s), 2 note(s)
 ```
@@ -129,22 +132,23 @@ Exit 0. Before `generate` ran, the same command exits 1 with
 `error generated-drift ... .zcode/config.json missing`. Edit `.agents/settings.json` later
 and `check` reports drift again until you re-run `generate`.
 
-The warning stays until someone sees a deny from this file stop a tool call in a live ZCode
-session and adds `verified` to the mapping; no shipped mapping has it yet. The two notes are
-permanent. `mapping-untested-live` is polymorph reminding you that nobody has proved ZCode
-enforces a deny from this file; `setting-unmapped` lists what was not translated.
-`check --strict` makes warnings fail too, so with the shipped `zcode` mapping it exits 1.
+The two notes are permanent. `mapping-untested-live` is polymorph reminding you that
+nobody has proved ZCode enforces a deny from this file; `setting-unmapped` lists what was
+not translated. The warning is about the shipped `zcode` mapping itself: it runs hooks
+directly, so a hook cannot tell that ZCode treats `ask` as allow unless it was written to
+detect ZCode. `check --strict` makes warnings fail too, so with the shipped `zcode` mapping
+it exits 1.
 
 ## 5. Try the adapter by hand
 
 For a harness with `delivery = "adapter"` (the default) the generated command is
-`python -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed
+`python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed
 it a payload yourself. Using the unverified `gemini` mapping, whose shell tool is called
 `run_shell_command`:
 
 ```sh
 echo '{"tool_name":"run_shell_command","tool_input":{"command":"rm -rf /"}}' \
-  | python -m polymorph adapter --harness gemini -- .agents/hooks/block-rm.sh
+  | python3 -m polymorph adapter --harness gemini -- .agents/hooks/block-rm.sh
 echo $?
 ```
 ```

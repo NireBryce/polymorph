@@ -1,9 +1,12 @@
 # Claude Code: the canonical protocol itself, so every translation is identity.
 # No `verified` field: block semantics have not been seen in a live session, which
-# `verified` requires (AGENTS.md). What this mapping rests on (2026-10-30): the
+# `verified` requires (AGENTS.md). What this mapping rests on: 2026-10-30, the
 # nixos-configs hooks (.agents/hooks/*.sh) running under Claude Code with these exact
-# field names, plus a live capture of SessionStart/PreToolUse/PostToolUse payloads via
-# t3code (Claude Agent SDK).
+# field names, plus a capture of SessionStart/PreToolUse/PostToolUse payloads via
+# t3code (Claude Agent SDK); 2026-11-04, a live VS Code Claude Code session (fresh
+# start, logger via `discover init` + `discover summary`; redacted, no --full) where
+# PreToolUse and PostToolUse fired and the payloads matched payload_in (tool_name,
+# tool_input.command/.file_path, cwd, session_id). No deny was seen to stop a call.
 schema = 1
 name = "claude"
 config_path = ".claude/settings.json"

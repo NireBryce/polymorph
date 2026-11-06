@@ -96,10 +96,10 @@ def _read(path: Path) -> Mapping:
         raw = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as e:
         raise MappingError(f"{path}: invalid TOML: {e}") from e
-    m = parse_mapping(raw, str(path))
-    if m.name != path.stem:
-        raise MappingError(f"{path}: name {m.name!r} does not match filename")
-    return m
+    mapping = parse_mapping(raw, str(path))
+    if mapping.name != path.stem:
+        raise MappingError(f"{path}: name {mapping.name!r} does not match filename")
+    return mapping
 
 
 def load_mapping(
@@ -118,23 +118,23 @@ def load_mapping(
     builtin = BUILTIN_DIR.resolve()
 
     if mappings_dir is not None:
-        d = Path(mappings_dir).resolve()
-        trusted = [repo_dir, builtin, *(Path(t).resolve() for t in trust_dirs)]
-        if d not in trusted:
+        resolved_dir = Path(mappings_dir).resolve()
+        trusted = [repo_dir, builtin, *(Path(trust_dir).resolve() for trust_dir in trust_dirs)]
+        if resolved_dir not in trusted:
             raise MappingError(
-                f"mappings dir {d} is outside the repo's {REPO_DIR}/ and the built-in "
+                f"mappings dir {resolved_dir} is outside the repo's {REPO_DIR}/ and the built-in "
                 "mappings; pass --trust-dir to load it"
             )
-        f = d / f"{name}.toml"
-        if not f.is_file():
-            raise MappingError(f"no mapping {name!r} in {d}")
-        return _read(f)
+        candidate = resolved_dir / f"{name}.toml"
+        if not candidate.is_file():
+            raise MappingError(f"no mapping {name!r} in {resolved_dir}")
+        return _read(candidate)
 
-    local, built = repo_dir / f"{name}.toml", builtin / f"{name}.toml"
-    if local.is_file():
-        if built.is_file():
-            warn(f"{local} overrides the built-in {name!r} mapping")
-        return _read(local)
-    if built.is_file():
-        return _read(built)
+    local_path, builtin_path = repo_dir / f"{name}.toml", builtin / f"{name}.toml"
+    if local_path.is_file():
+        if builtin_path.is_file():
+            warn(f"{local_path} overrides the built-in {name!r} mapping")
+        return _read(local_path)
+    if builtin_path.is_file():
+        return _read(builtin_path)
     raise MappingError(f"no mapping named {name!r} (looked in {repo_dir} and {builtin})")

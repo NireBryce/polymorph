@@ -12,6 +12,8 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 | core | `src/polymorph/canon.py`, `reader_claude.py`, `mapping.py`, `generate.py`, `cli.py`, `__main__.py` | `Canon`, `load_mapping`, `generate` |
 | adapter | `src/polymorph/adapter.py`, `extractors.py`, `exprs.py` | `translate_in`, `translate_out`, `run_adapter` |
 | conformance | `src/polymorph/conformance.py`, `validate.py`, `src/polymorph/fixtures/**`, `src/polymorph/mappings/**` | `validate_mapping`, `run_fixtures` |
+| inventory | `src/polymorph/inventory.py`, `src/polymorph/coverage/*.toml` | `read_inventory`, `load_coverage`, `gaps` |
+| adopt | `src/polymorph/adopt.py`, `links.py` | `adopt`, `plan`, `apply` |
 | report | `.polymorph/basecamp/skills/report-harness/SKILL.md`, `.github/ISSUE_TEMPLATE/harness-report.yml` | none |
 
 ## Canonical config (`canon.py`)
@@ -33,7 +35,9 @@ class Canon:
 Claude reader: matcher regex `Bash`->shell, `Edit|Write|MultiEdit`->edit,
 `Read|Grep|Glob`->read, `mcp__*`->mcp, else other. `permissions.*` and `attribution`
 are reported in `unmapped`, never dropped silently. A script outside `.agents/hooks/`
-(after `realpath`) is refused with an error.
+(after `realpath`) is refused with an error. The resolved script path is embedded in
+generated command lines, so it may contain only plain path characters; quotes, whitespace,
+`$`, backticks or other shell metacharacters are refused with an error.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -77,15 +81,18 @@ deny = { exit = 2, stderr = "{reason}" }
 ```
 
 `delivery` (optional, default `"adapter"`): how `generate` writes the hook command.
-`"adapter"` emits `python -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
+`"adapter"` emits `python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
 `"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the
 canonical protocol. It is only valid for an identity translation: `payload_out` empty and every
 `payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`,
 `shell.command` and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
 `read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
 `tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
-a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph check`
-reports `mapping-invalid`).
+a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph manage check`
+reports `mapping-invalid`). A direct mapping's `[tools]` names are matchers the harness
+evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edit`, `Write`,
+`MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match.
+`other` is unconstrained.
 
 Required: `schema`, `name`, `config_path`, `format`, `template` and the tables `[tools]`,
 `[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
@@ -93,10 +100,15 @@ is valid. `generate`, `validate` and `check` apply the same rule (loading a mapp
 `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
 `context_file`, `skills_dir`, `delivery`.
 
-`payload_out` strings may use only the placeholders `{reason}`, `{context}` and `{message}`;
-any other is a validation error. A mapping with no `payload_out.deny` must have
-`json_answers` or `exit_2_blocks` true, or `validate` rejects it (a deny would otherwise leave
-as exit 0, an allow); the adapter treats that case as a fault, never as exit 0.
+A classed `payload_in` key must be one of the canonical fields (`shell.command`,
+`edit.file_path`, `read.file_path`, `read.path`, `read.pattern`, `read.glob`); any other
+`CLASS.field` key is a validation error, because the adapter would place its value at a
+top-level dotted path nothing in the canonical payload reads.
+
+A `payload_out.deny` or `payload_out.ask` entry must set `exit = 2`, the canonical block
+exit: the adapter defaults a missing exit to 0, which renders the answer as an allow, and
+no other code is documented to block. `allow`, `warn` and `remind` entries are unconstrained
+(they are not block claims).
 
 Expressions are dotted paths and `{placeholder}` substitution only; output is
 JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
@@ -109,47 +121,124 @@ Canonical = Claude Code hook protocol: stdin JSON with `tool_name`, `tool_input`
 (`allow|ask|deny`) + `permissionDecisionReason`, `additionalContext`, `systemMessage`,
 post-call `decision:"block"`, or exit 2 with stderr.
 
-Adapter invocation: `python -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
+Adapter invocation: `python3 -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
 Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the
 answer to native form. Translation failure => visible message (stderr + exit code the
-harness shows to the model) and NEVER a deny; never fail open silently. `ask` on a harness
+harness shows to the model) and NEVER a deny; never fail open silently. A hook answer
+polymorph cannot translate (an unknown decision shape) is such a failure too: visible,
+never a deny and never a silent allow. `ask` on a harness
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
-the adapter, so `validate` rejects a `payload_out.ask` with a non-zero `exit` on such a
-mapping.
+the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping.
 
 ## Repo layout (everything polymorph stores in a repo)
 
 ```
 .polymorph/basecamp/
-  config.toml          # enabled = ["zcode", ...]  (targets to generate)
-  mappings/NAME.toml   # repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  # answers to generation-time mismatches; see "Decisions"
-  generated/NAME/      # generated shims and plugin files (planned)
+  config.toml            # enabled = ["zcode", ...]  (targets to generate)
+  mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
+  coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
+  decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
+  loadout.toml           # equip's provenance manifest: per issued artifact its sha256, source, and the mapping-path + mapping-hash it was generated from; per made symlink its target
+  generated/NAME/        # generated shims and plugin files (planned)
 ```
 
 Generated harness configs stay where the harness reads them (the mapping's `config_path`).
-Discovery logs go to `.polymorph-discovery/` (by default under the current directory, or
-`--log-dir`). polymorph never edits `.gitignore`: add `.polymorph-discovery/` yourself so a
-raw log is not one `git add` away from being committed.
+Discovery logs go to `.polymorph/discovery/` (by default under the current directory, or
+`--log-dir`). polymorph edits `.gitignore` only when `equip --gitignore` appends the issued
+artifact path; add `.polymorph/discovery/` yourself so a
+raw log is not one `git add` away from being committed. `--full` (on `discover init` and
+`capture`) is refused without an explicit `--log-dir` / `--out`, and without
+`--i-really-want-this-in-the-repo-raw`; with both it still asks for a typed `yes`. The log is
+plain text: nothing encrypts or hides it.
+
+## Inventory and coverage tables
+
+The discover-and-report kinds (skills, rules, memory, `.claude/`) are read as paths and
+symlink targets only; file contents are never opened, and every found path is reported --
+nothing is dropped for lacking a `SKILL.md` or any other marker. What a harness honours of
+those kinds is data, not code: `coverage/NAME.toml`, schema 1, closed-world (an unknown key
+or kind is an error), with `load_mapping`'s lookup rules (the repo-local file overrides the
+built-in with a warning; an explicit dir must be the repo's, the built-in's or trusted). A
+harness with no coverage table means nothing is known about it: the gap report claims
+nothing rather than claiming a gap. The gap report lists each provided path the table gives
+no way of honouring. A symlink whose resolved target is already honoured content is a
+pointer, not a gap (issue #31): a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind -- `.claude/skills` -> `.agents/skills`
+when the table honours skills at `.agents/skills` -- is read by the harness through that
+other path, so it is not reported. A memory item is honoured only by resolving to a named
+memory file; a real second copy stays `unlinked-copy`, and a symlink to anything else stays
+a gap. Owner: `inventory.py`.
+
+`adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
+`CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp
+store and replaces each original path with a relative symlink into it. It refuses a path
+that is already a symlink (reporting where it points), a path with uncommitted changes or ignored by git
+(`git status --porcelain --ignored`; a directory that is not a git worktree refuses everything), and
+a store copy that already exists beside the file at rest. A second run is a no-op.
+Hook scripts and `.agents/settings.json` are never moved: they stay where the harness
+reads them. adopt never edits a file through a symlink -- the store copy is the only one
+written -- and writes nothing outside the repository. Owner: `adopt.py`.
+
+Links (`links.py`, issue #39). `equip` (for its harness) and `adopt` (for every harness with a
+coverage table) create the symlink that closes each `no-link` gap: the path the harness reads
+is made a relative link to the provided file or directory (`CLAUDE.md -> AGENTS.md`,
+`.claude/skills -> ../.agents/skills`, `.claude/rules -> ../.agents/rules`). Only `no-link`
+is acted on. A real file or directory at the read path (`unlinked-copy`) and a symlink to
+somewhere else (`points-elsewhere`) are never replaced or rewritten; the gap report names
+them. Links are made only from built-in coverage tables: a repo-local table is data the
+repository ships, and it does not get to choose where polymorph creates a symlink. A link
+path under `.git` or `.polymorph`, or below a symlink that leaves the repository, is refused,
+and so is a path two harnesses want linked to different targets. Each link made is recorded
+in `loadout.toml` as `[links.NAME]` `"PATH" = {target, kind}`, so a link polymorph made can be
+told from one the user made. `--no-links` on both commands skips this.
+
+## The env contract
+
+`.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path
+(and optional scope), the environment variable names a harness session must not inherit
+(`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1,
+closed-world like everything else. The key path is embedded in `GIT_SSH_COMMAND`, which
+git runs through a shell, so it may contain only plain path characters; exports are
+NAME=value with a plain variable name, and loader, interpreter and shell variables
+(`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `GIT_SSH_COMMAND`, ...)
+are refused. `polymorph env` emits the contract as shell exports
+(a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's
+exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the contract
+applied and exits with its status. A `--harness` name must appear in the host facts or
+resolve to a mapping.
+
+Emit-only: the key is referenced by path and its contents are never read, printed or
+moved; no file is written; there is no daemon. A missing harness section that a mapping
+backs is valid but emits no markers. Owner: `env.py`.
 
 ## Trust
 
-Hook scripts must resolve under `<repo>/.agents/hooks/`. Extractors and templates are
+Hook scripts must resolve under `<repo>/.agents/hooks/`. A mapping's `config_path` must
+resolve inside the repository: a symlinked component that leaves it is refused, for the
+generated-config read and the write alike. Extractors and templates are
 looked up by name in code shipped with polymorph. `--trust-dir` is required to load
 mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in `src/polymorph/mappings/`.
 
 ## CLI
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
+polymorph manage generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
 polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
-polymorph validate FILE.toml
-polymorph conformance [--harness NAME]
-polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph manage validate FILE.toml
+polymorph manage conformance [--harness NAME]
+polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore] [--no-links]
+                        # the onboarding run: writes the loadout, reports honoured surface, gaps, env; records provenance
+polymorph inventory [--repo .] [--harness NAME ...] [--json]
+                        # discover-and-report kinds and per-harness gaps; reads paths and symlink targets, never file contents
+polymorph manage adopt [--repo .] [--dry-run] [--no-links]
+                        # moves agent files at rest into the basecamp store and symlinks back, then links what harnesses read; refuses dirty trees and symlinks
+polymorph env [--repo .] [--harness NAME] [--exec CMD]
+                        # emits the env contract from host facts (.polymorph/basecamp/env.toml) as shell exports, or runs CMD under it; emit-only
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
-                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--env-be-very-careful]
+                        [--shape claude-settings|claude-like] [--log-dir DIR] [--full] [--i-really-want-this-in-the-repo-raw] [--env-be-very-careful]
                         # adds the logger as its own matcher group; keeps other hooks; refuses unparsable hooks
-polymorph discover log [--full] [--env-be-very-careful] --out FILE   # stdin -> one JSON line; silent, exit 0 always
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE   # stdin -> one JSON line; silent, exit 0 always
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
                         # per-event/per-tool key tables, counts, sessions; tool events by default, sorted by ts, paired by id
 polymorph discover reload-check --config-path P --scratch-log F [--finish]
@@ -157,21 +246,27 @@ polymorph discover reload-check --config-path P --scratch-log F [--finish]
 polymorph discover draft FILE.jsonl --name NAME [--include EVENT ...] [--event EVENT ...]
                         # prints draft mapping, no `verified`
 polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S] [--total-timeout S]
-                  [--out DIR] [--full]   # runs a real harness headless in a scratch dir; typed `yes` unless --yes
+                  [--out DIR] [--full] [--i-really-want-this-in-the-repo-raw]   # runs a real harness headless in a scratch dir; typed `yes` unless --yes
 polymorph capture --print-prompts        # prints the manual prompt kit, runs nothing
 ```
 
 Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
 (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
-By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads.
+`plugin_version` and `location` (issue #23) appear only when the calling plugin passed
+`--plugin-version`/`--location`: a value is kept verbatim when short and free of shell
+characters, becomes `<invalid>` when it is not, and a missing key reads as unmarked in the
+summary, which marks both the way it marks the schema.
+By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value.
 Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
-The default log holds full commands and file contents and must not be shared.
+The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.
 The log is untrusted data: draft copies back only values matching strict name patterns,
 never command text or paths, and omits what it did not observe. Comments carry evidence
 counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.
 
 Generate output lists, per target: unmapped settings, the questions for undecided mismatches,
-applied decisions (`weakened:` for the weakening ones), stale decisions and notes. Exit codes of
+applied decisions (`weakened:` for the weakening ones), stale decisions, notes, and a warning
+that sessions already running will not load the new hooks (equip prints the same warning; not
+on `--check` or a dry run, which write nothing). Exit codes of
 `generate`: 0 ok, 1 `--check` found drift, 2 usage or internal error (including an invalid
 decision file), 3 undecided mismatches.
 
@@ -182,18 +277,31 @@ not guess and does not drop the hook silently. Each mismatch is *undecided* unti
 `.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
 
 ```toml
-schema = 1
+schema = 2
 
-[decisions.".agents/hooks/edit-check.sh:no-event"]   # id = <hook-script>:<kind>
+[decisions.".agents/hooks/edit-check.sh:post_tool:no-event"]   # id = <hook-script>:<event>:<kind>
 choice = "substitute:BeforeTool"
 date = "2026-10-30"
 note = "optional free text"
 ```
 
-Top-level keys are `schema` (must be 1) and `decisions`; unknown keys are errors. An entry has
+Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon and the kind. One decision covers every hook of that script that has
-that mismatch in that target.
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool` or
+`post_tool`), a colon and the kind. One decision covers every hook of that script on that
+event that has that mismatch in that target. (Schema 1 ids had no event: one script
+registered under several events produced the same id for each, and one decision answered
+every event it was registered under, with `generate` recording only the first
+application's weakening. The event dimension is the schema 2 break.)
+
+To migrate a schema 1 file by hand: set `schema = 2`, then for each old `<script>:<kind>`
+entry, find the events `.agents/settings.json` registers `<script>` under (the event keys
+whose matcher groups carry its command), map `SessionStart`/`PreToolUse`/`PostToolUse` to
+`session_start`/`pre_tool`/`post_tool`, and write one `[decisions."<script>:<event>:<kind>"]`
+per event with the same `choice`, `date` and `note`. A script registered under both tool
+events becomes two entries, which is the point: they can now be decided separately. An id
+for an event the script is not registered under simply matches no mismatch and reads as
+`decision-stale`, not an error.
 
 | Kind | Fires when | Choices |
 |---|---|---|
@@ -246,9 +354,9 @@ The `gemini` mapping is an unverified draft written from a sketch, not from a ca
 so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies
 real ones. Invented fixtures would only restate the guess.
 
-## polymorph check
+## polymorph manage check
 
-`polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
+`polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
 (`check.py`). Static: never executes a hook script, a harness or the network; writes nothing.
 Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
 
@@ -259,6 +367,8 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-invalid` | error | mapping fails `validate_mapping`, or cannot be loaded |
 | `mapping-unverified` | warning | mapping has no `verified` |
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
+| `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
+| `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
 | `decision-undecided` | error | a hook needs an event, tool class or field the target lacks and no decision answers it |
@@ -267,6 +377,8 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `decision-invalid` | error | the decision file or an entry fails validation |
 | `setting-unmapped` | note | `canon.unmapped` entries |
 | `generated-drift` | error | generated file differs from `generate` output; a missing file is drift |
+| `loadout-drift` | warning | a loadout entry's pinned mapping hash no longer matches that mapping file, or the file is gone (the adapter re-reads mappings at run time) |
+| `loadout-invalid` | error | loadout.toml fails validation |
 | `fixtures-missing` | warning | built-in mapping has no `src/polymorph/fixtures/<name>/*.json` |
 | `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
 | `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |

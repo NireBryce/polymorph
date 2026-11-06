@@ -31,10 +31,10 @@ Consequences:
 
 - The canonical config gains per-kind sections; the "unmapped, not dropped" behavior extends per kind — a skill no target harness reads is **reported**, which is the README's founding ethos applied at repo scale.
 - The per-harness **gap report becomes first-class**: what harness X honours, and what X will silently ignore even after onboarding.
-- Only transliterate kinds get mapping files. Discover-and-report kinds instead need a small declarative **capability table** per harness (what it honours), which is data, not code — the same character as the mappings.
+- Only transliterate kinds get mapping files. Discover-and-report kinds instead need a small declarative **coverage table** per harness (what it honours), which is data, not code — the same character as the mappings.
 - The basecamp store (`.polymorph/basecamp/`) holds canonical files — core skills, `AGENTS.md`/`CLAUDE.md` — and symlinks them to where agents expect them; discovery reports the agent-facing path and follows the link to the canonical file.
 
-Phase 1 verification: a fixture repo containing every kind, plus a capability table that ignores one of them, and a test asserting the gap report names exactly that one.
+Phase 1 verification: a fixture repo containing every kind, plus a coverage table that ignores one of them, and a test asserting the gap report names exactly that one.
 
 ## Slice 2 — the env contract
 
@@ -57,7 +57,7 @@ subcommands:
 - **`polymorph manage ...`** — the maintainer half, deployed in the repo: its config
   lives under the basecamp directory, its output is committed, its checks run in CI.
   `generate`, `check`, `validate` and `conformance` move under it when slice 3 lands,
-  and basecamp-keeping work accumulates here: inventory kinds, capability tables,
+  and basecamp-keeping work accumulates here: inventory kinds, coverage tables,
   staleness, upstream review, `adopt`.
 - **`polymorph equip --harness NAME`** — the contributor half, run on a repo: it reads
   the basecamp and writes equipped artifacts. One command, not a group — the contributor
@@ -117,10 +117,10 @@ One piece each, tracked beside the slices:
 - No daemon, no network calls, no host mutation beyond the repository.
 - Not a security boundary: [Limits](limits.md) is unchanged, and the gap report says what a harness honours, not whether the harness enforces it.
 
-## Open questions (recommendations inline)
+## Open questions (answered where slice 1 settled them)
 
-1. Per-kind mapping files vs sections in one file — recommended: per-kind files, so each harness × kind keeps its own `verified` granularity.
-2. Schema bump for the new kinds — recommended: none. Hook mappings stay `schema = 1`; the discover-and-report kinds are new files, not a schema change.
-3. The env facts file convention — recommended: `.polymorph/basecamp/env.toml`, mirroring the existing mappings override path.
-4. `AGENTS.md` treatment — recommended: discover and point, never parse. The content is written for the agent, not the harness.
+1. Per-kind mapping files vs sections in one file — **answered**: per-kind files. The coverage tables landed as one file per harness; hook mappings stay one file each, and slice 3's per-kind mappings follow the same shape, so each harness × kind keeps its own `verified` granularity.
+2. Schema bump for the new kinds — **answered**: none. Hook mappings stay `schema = 1`; the discover-and-report kinds are new files (`coverage/NAME.toml`, itself schema 1 and closed-world), not a schema change.
+3. The env facts file convention — **answered as recommended**: `.polymorph/basecamp/env.toml`, now mirroring the mappings and coverage override paths.
+4. `AGENTS.md` treatment — **answered**: discover and point, never parse. The inventory reports the path and the resolved symlink target; contents are never opened.
 5. Where the basecamp directory standard lives long-term — `.polymorph/basecamp/` for now (outside `.agents/`, so a manager's storage is not read as repo-provided agent config); revisit if a second basecamp manager appears.

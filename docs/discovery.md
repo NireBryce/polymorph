@@ -47,7 +47,7 @@ wrote .mytool/config.json
 ```
 
 That file now has one catch-all hook, `PreToolUse` with matcher `*`, whose command is
-`<python> -m polymorph discover log --out <abs path>/.polymorph-discovery/mytool.jsonl`.
+`<python> -m polymorph discover log --out <abs path>/.polymorph/discovery/mytool.jsonl`.
 Change the event or matcher with `--event-name` and `--matcher` if the harness uses
 different names; use `--shape claude-like` if its file wraps hooks in
 `hooks.enabled` / `hooks.events` as ZCode's does. To capture more than one event, run
@@ -74,7 +74,7 @@ Only the events you ran `init` for are logged. Run `init` again with
 ## 3. Look at what you got
 
 ```sh
-python -m polymorph discover summary .polymorph-discovery/mytool.jsonl
+python -m polymorph discover summary .polymorph/discovery/mytool.jsonl
 ```
 ```
 payloads: 3   non-object lines: 0   sessions: 1
@@ -104,7 +104,8 @@ If you suspect the harness needs a restart to see a changed hook file, test it:
 ## 4. Draft a mapping
 
 ```sh
-python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name mytool > mytool.toml
+python -m polymorph discover draft .polymorph/discovery/mytool.jsonl --name mytool > mytool.toml
+python -m polymorph manage validate mytool.toml
 ```
 
 On the three-payload log above the draft is:
@@ -160,11 +161,13 @@ How to read it:
   objects, with values hidden. Enum-valued keys cannot be told apart from other strings
   once values are redacted, so they are not listed.
 - All capabilities are `false`, because payloads cannot tell you whether exit 2 blocks or
-  `ask` is enforced. Find out by testing, then change them. See
-  [Writing a mapping](writing-a-mapping.md).
-- `polymorph validate` refuses the draft as it stands: with no capability that blocks and no
-  `payload_out.deny`, a deny would reach the harness as exit 0. It validates once you have
-  seen how the harness blocks and written that down.
+  `ask` is enforced. Find out by testing, then change them — and first confirm the hooks run
+  at all: a harness may hold them behind an approval gate and run nothing (ZCode 3.17.2's
+  trust gate does; see [the observed ZCode session](observed-zcode-session.md)). See
+  [Writing a mapping](writing-a-mapping.md). Until one of them (or a `payload_out.deny`
+  entry) says how a deny blocks, `validate` fails the draft with `payload_out.deny is
+  required ...`: that is the one error every fresh draft has, and it goes once the test has
+  shown how the harness blocks.
 - No `verified` field. Keep it that way until someone has run the mapping in a live
   harness, and then write what they checked.
 
@@ -176,9 +179,7 @@ treated as untrusted data; nothing in it is evaluated.
 
 Default logs are redacted: values become `{"type": "string", "length": 17}`, with no hash,
 so a payload with a command or a path shows only its size. Event names, tool names, ids
-and a few structural fields stay. Key names stay too, but only plain names (letters, digits,
-`_`, `-`); any other key, such as a file path an MCP tool uses as a key, becomes
-`<invalid key>`. The `cwd`, `transcript_path` and every prompt, command
+and a few structural fields stay. The `cwd`, `transcript_path` and every prompt, command
 and file content are reduced to type and length.
 
 Rules:
@@ -189,7 +190,11 @@ Rules:
 - Leave `--env-be-very-careful` off unless you need to find out which variables the
   harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE` or
   `HARNESS`. See [CLI reference](cli.md#the-redaction-default-and---env-be-very-careful).
-- Add `.polymorph-discovery/` to your `.gitignore`. polymorph does not do that for you.
+- `--full` needs an explicit `--log-dir` (or `--out`), the long
+  `--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. The log is plain text, so a
+  secret scanner would flag it if it were committed. Put it outside the repo, on tmpfs if you can
+  (`$XDG_RUNTIME_DIR`), and delete it when you are done.
+- Add `.polymorph/discovery/` to your `.gitignore`. polymorph does not do that for you.
   Check `git status` before `git add -A`.
 - "Redacted" is not "anonymous". Tool names, key names and lengths can still identify what
   you were doing. Look at the log before sharing it.
@@ -251,6 +256,49 @@ Guard rails, whoever does it:
 - Do not print or open the harness's authentication configuration.
 - This spends model credits and may auto-approve tool calls; keep the prompts exactly as
   written.
+
+### Capability probes and a decode file
+
+The prompts above wire a logger and capture payload shapes. Answer semantics need a
+second pass: one probe script, one marker command per decision route, run in a live
+session started **after** the probe wiring exists (a running session's wiring is frozen
+at its start, so config edits land only in sessions begun afterwards), with each result
+recorded observed, derived or untested — see the capability-probe pattern in
+[the observed zcode session](observed-zcode-session.md).
+
+The log cannot tell you which payload carried which marker: values are redacted to
+`{type, length}`, so it answers shape questions, not content questions. Have each probe
+branch write its own decode line to a side file next to the log — the marker, the event,
+the call id, and the answer the branch chose:
+
+```sh
+printf '%s %s %s %s\n' "$marker" "$event" "$answer" \
+  "$(printf '%s' "$input" | grep -o '"toolCallId":[^,}]*' | head -1)" \
+  >> "${LOG%.jsonl}-decode.log"
+```
+
+Join on the call id: the allowlist keeps ids, so marker → call id → payload shape reads
+straight across, and Pre→Post deltas in the log then measure what the harness did with
+the answer (a 2 s kill under an explicit `timeout`, a 60 s kill under the default)
+without guessing from gaps between rows.
+
+- The side file carries marker names, ids and the probe's own chosen answers — never
+  payload values. The hook reads the payload before redaction and writes only what you
+  choose; the redaction allowlist is not bypassed.
+- The side-file write happens inside the hook, not through a tool call, so a
+  payload-matching probe cannot self-block on it. Do name markers to avoid colliding
+  with any matcher already wired — write them from parts if the probe's own matcher must
+  not see a marker's full text in a payload (the zcode probe denied the very call that
+  installed a new marker).
+- Delete the side file with the log when you are done; it is discovery data and stays
+  untracked.
+
+For a harness a `capture` driver can run headlessly, `polymorph discover probe` mechanizes
+this round: it wires a guard that denies only this run's token-marked commands, drives one
+marker command per decision route, joins the decode file to the log on the call id, and
+writes the five flags with how each was observed into a draft's `[capabilities]` -- see
+[the command's section](cli.md#discover-probe). The manual round here stays the route for
+harnesses with no driver.
 
 ## What to send
 

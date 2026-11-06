@@ -18,17 +18,26 @@ class ExtractorError(ValueError):
 
 
 def apply_patch_paths(native: dict) -> dict[str, Any]:
-    """Pull file paths out of an apply_patch envelope into tool_input.file_path(s)."""
+    """Pull file paths out of an apply_patch envelope into tool_input.file_path(s).
+
+    Tolerant of text that is not a patch: a payload with no patch text, or that merely
+    mentions "*** ", yields no fields and the guard runs on whatever fields exist. A real
+    patch envelope ("*** Begin Patch") with no file header the extractor can read raises:
+    returning no path there would let the guard see no file at all, so it is NOT checked
+    instead, visibly.
+    """
     for field in _PATCH_FIELDS:
         text = lookup(native, field, None)
         if isinstance(text, list):
-            text = "\n".join(str(t) for t in text)
+            text = "\n".join(str(line) for line in text)
         if isinstance(text, str) and "*** " in text:
             paths = list(dict.fromkeys(_PATCH_FILE.findall(text)))
             if not paths:
-                raise ExtractorError("apply_patch_paths: patch text has no file headers")
+                if "*** Begin Patch" in text:
+                    raise ExtractorError("apply_patch_paths: patch text has no file headers")
+                return {}
             return {"tool_input.file_path": paths[0], "tool_input.file_paths": paths}
-    raise ExtractorError("apply_patch_paths: no patch text found in tool_input")
+    return {}
 
 
 REGISTRY: dict[str, Callable[[dict], dict[str, Any]]] = {

@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from polymorph import capture, capture_drivers
+from polymorph import __version__, capture, capture_drivers
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = str(ROOT / "src")
@@ -45,10 +45,12 @@ if mode == "late":
              "p = {{'hook_event_name': 'execute.before', 'tool_name': 'bash', 'session_id': 's1', 'input': {{'command': 'x'}}}}\\n"
              "subprocess.run([sys.executable, '-m', 'polymorph', 'discover', 'log', '--out', sys.argv[1]],"
              " input=json.dumps(p), text=True, env={{'PYTHONPATH': sys.argv[2]}})\\n")
-    subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl"), src])
+    subprocess.Popen([sys.executable, "-c", child, os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl"), src])
     sys.exit(0)
 silent = os.path.exists(os.path.join(ctrl, "silent")) and "sleep" in prompt
-log = os.path.join(os.getcwd(), ".polymorph-discovery", "opencode.jsonl")
+js = os.path.join(os.getcwd(), ".opencode", "plugins", "polymorph-discovery", "index.js")
+full = os.path.exists(js) and "--full" in open(js).read()
+log = os.path.join(os.getcwd(), ".polymorph", "discovery", "opencode.jsonl")
 tools = [("bash", {{"command": "echo hello"}})]
 if "scratch.txt" in prompt:
     tools = [("write", {{"filePath": "scratch.txt", "content": "hello"}}), ("read", {{"filePath": "scratch.txt"}})]
@@ -56,8 +58,34 @@ for name, inp in tools:
     if silent:
         break
     payload = {{"hook_event_name": "execute.before", "tool_name": name, "session_id": "s1", "input": inp}}
-    subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log],
-                   input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
+    argv = [sys.executable, "-m", "polymorph", "discover", "log"] + (["--full"] if full else []) + ["--out", log]
+    subprocess.run(argv, input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
+'''
+
+
+ZCODE_STUB = '''#!{python}
+import json, os, subprocess, sys
+ctrl = {ctrl!r}
+src = {src!r}
+if "--version" in sys.argv[1:]:
+    print("zcode-stub 1.2.3"); sys.exit(0)
+open(os.path.join(ctrl, "zcode-calls.txt"), "a").write(json.dumps(sys.argv[1:]) + "\\n")
+wired = False
+try:
+    config = json.load(open(os.path.join(os.getcwd(), ".zcode", "config.json")))
+    event_table = config["hooks"]["events"]
+    wired = (config["hooks"].get("enabled") is True
+             and "PreToolUse" in event_table and "PostToolUse" in event_table
+             and "discover log" in json.dumps(event_table)
+             and "zcode.jsonl" in json.dumps(event_table))
+except Exception:
+    wired = False
+open(os.path.join(ctrl, "wired-ok.txt"), "w").write(str(wired))
+payload = {{"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "sz",
+            "tool_use_id": "t_1", "tool_input": {{"command": "echo hello"}}}}
+log_path = os.path.join(os.getcwd(), ".polymorph", "discovery", "zcode.jsonl")
+subprocess.run([sys.executable, "-m", "polymorph", "discover", "log", "--out", log_path],
+               input=json.dumps(payload), text=True, env={{"PYTHONPATH": src}})
 '''
 
 
@@ -181,6 +209,50 @@ class Confirmation(CaptureCase):
         self.assertIn("NOTICE", out)
         self.assertIn("spends tokens", out)
         self.assertNotIn("Continue?", out)
+
+    def test_full_without_out_is_refused_before_anything_runs(self):
+        rc, o, err = capture_main(["--harness", "opencode", "--yes", "--full"])
+        self.assertEqual(rc, 2, err)
+        self.assertIn("raw commands, file contents and paths", err)
+        self.assertIn("--out", err)
+        self.assertIn("--i-really-want-this-in-the-repo-raw", err)
+        self.assertEqual(o, "")
+
+    def test_full_needs_the_long_flag_even_with_yes_and_a_good_out(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc, o, err = capture_main(["--harness", "opencode", "--yes", "--full",
+                                       "--out", str(Path(d) / "results")])
+            self.assertEqual(rc, 2, err)
+            self.assertIn("--full needs --i-really-want-this-in-the-repo-raw", err)
+            self.assertFalse((Path(d) / "results").exists())
+
+    def test_full_with_the_long_flag_still_needs_a_typed_yes(self):
+        with tempfile.TemporaryDirectory() as d:
+            argv = ["--harness", "opencode", "--full", "--i-really-want-this-in-the-repo-raw",
+                    "--out", str(Path(d) / "results")]
+            rc, o, err = capture_main([*argv, "--yes"])          # --yes is the cost answer, not this one
+            self.assertEqual(rc, 2, err)
+            self.assertIn("nobody to type yes", err)
+            out, errs = io.StringIO(), io.StringIO()
+            rc = capture.main(argv, stdin=Tty("no\n"), stdout=out, stderr=errs)
+            self.assertEqual(rc, 2, errs.getvalue())
+            self.assertIn("cancelled", errs.getvalue())
+            self.assertFalse((Path(d) / "results").exists())
+
+    def test_full_gate_acceptance_produces_a_raw_log_and_says_so(self):
+        # every refusal above guards this path: with --out + the long flag + typed
+        # yesses (cost, then the raw-log confirmation), capture runs, and the
+        # results say RAW and hold an unredacted log
+        rc, out, err = self.run_cap("--full", "--i-really-want-this-in-the-repo-raw",
+                                    "--steps", "shell", stdin=Tty("yes\nyes\n"))
+        self.assertEqual(rc, 0, out + err)
+        r = self.base / "results" / "r"
+        self.assertIn("RAW (--full): contains commands and file contents, do not share",
+                      (r / "report.md").read_text())
+        recs = [json.loads(l) for l in (r / "log.jsonl").read_text().splitlines()]
+        self.assertTrue(recs)
+        self.assertEqual({rec.get("redacted") for rec in recs}, {False})
+        self.assert_clean()
 
     def test_non_tty_without_yes_refuses_with_2(self):
         rc, out, err = self.run_cap()
@@ -370,6 +442,39 @@ class Running(CaptureCase):
         self.assertIn("--print-prompts", err)
         self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
 
+    def test_blocked_zcode_driver_refuses_before_anything_runs(self):
+        rc, out, err = self.run_cap("--yes", harness="zcode")
+        self.assertEqual(rc, 2)
+        self.assertIn("blocked", err)
+        self.assertIn("--print-prompts", err)
+        self.assertNotIn("WARNING", out)   # refused before the cost warning, nothing launched
+        self.assertEqual(self.calls(), [])
+
+    def test_zcode_stub_run_with_a_confirmed_invocation(self):
+        # The shipped driver is blocked because no headless invocation is known. The test
+        # supplies a stub invocation the way a live confirmation would, and the stub itself
+        # checks the wiring a real harness would read at session start.
+        stub = self.base / "bin" / "zcode"
+        stub.write_text(ZCODE_STUB.format(python=sys.executable, ctrl=str(self.base / "ctrl"), src=SRC))
+        stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+        driver = capture_drivers.DRIVERS["zcode"]
+        with mock.patch.object(driver, "blocked", ""), \
+                mock.patch.object(driver, "step_argv", lambda prompt: [str(stub), prompt]), \
+                mock.patch.object(driver, "version_argv", lambda: [str(stub), "--version"]):
+            rc, out, err = self.run_cap("--yes", harness="zcode")
+        self.assertEqual(rc, 0, out + err)
+        results_dir = self.base / "results" / "r"
+        self.assertIn("zcode-stub 1.2.3", (results_dir / "report.md").read_text())
+        self.assertEqual((self.base / "ctrl" / "wired-ok.txt").read_text(), "True")
+        calls = [json.loads(x) for x in (self.base / "ctrl" / "zcode-calls.txt").read_text().splitlines()]
+        self.assertEqual(len(calls), 4)
+        for call in calls:         # one argument per step: the prompt, nothing else
+            self.assertEqual(len(call), 1)
+        self.assertEqual(sorted(p.name for p in results_dir.iterdir()),
+                         ["draft.toml", "log.jsonl", "report.md", "summary.txt"])
+        self.assertRegex((results_dir / "report.md").read_text(), r"\| Bash \| \d+ \|")
+        self.assert_clean()
+
     def test_unusable_out_exits_2_before_any_step(self):
         (self.base / "afile").write_text("x")
         cases = [str(self.base / "afile" / "sub")]
@@ -520,7 +625,7 @@ class Drivers(unittest.TestCase):
         d = capture_drivers.DRIVERS["opencode"]
         d.install(scratch, full=False)
         js = (scratch / ".opencode/plugins/polymorph-discovery/index.js").read_text()
-        self.assertIn(json.dumps(str(scratch / ".polymorph-discovery/opencode.jsonl")), js)
+        self.assertIn(json.dumps(str(scratch / ".polymorph/discovery/opencode.jsonl")), js)
         self.assertIn(json.dumps(sys.executable), js)
         self.assertNotIn("@@CONSTANTS@@", js)
         self.assertNotIn("--full", js)
@@ -538,8 +643,22 @@ class Drivers(unittest.TestCase):
         self.assertIn(f"const POLYMORPH_ENV = {json.dumps({'PYTHONPATH': capture_drivers.PACKAGE_PARENT})}", js)
         args = json.loads(js.split("const POLYMORPH_ARGS = ")[1].split("\nconst POLYMORPH_ENV")[0])
         self.assertEqual(args[:2], ["-m", "polymorph"])
+        self.assertIn("--full", args)   # install(full=True) bakes the flag: the plugin logs raw
         self.assertFalse([a for a in args if a.startswith("PYTHONPATH=")])
         self.assertIn("env: POLYMORPH_ENV", js)
+
+    def test_rendered_plugin_sends_provenance(self):
+        # the plugin stamps every line with its own generation and ctx.location, so a
+        # server-global log can be split by origin (issue #23)
+        scratch = Path(tempfile.mkdtemp()).resolve()
+        d = capture_drivers.DRIVERS["opencode"]
+        d.install(scratch, full=False)
+        js = (scratch / ".opencode/plugins/polymorph-discovery/index.js").read_text()
+        d.remove(scratch)
+        self.assertIn("setProvenance(ctx)", js)
+        self.assertIn("const PLUGIN_VERSION = " + json.dumps(__version__), js)
+        self.assertIn("spawn(POLYMORPH_CMD, [...POLYMORPH_ARGS, ...PROVENANCE_ARGS]", js)
+        self.assertIn('args.push("--location=" + ctx.location)', js)
 
     def test_plugin_tool_hook_registration_cannot_throw_out_of_setup(self):
         # node is not available to the tests, so this reads the code: every ctx.tool.hook call
@@ -557,11 +676,42 @@ class Drivers(unittest.TestCase):
         d.install(scratch, full=False)
         hooks = json.loads((scratch / ".claude/settings.json").read_text())["hooks"]
         self.assertEqual(sorted(hooks), ["PostToolUse", "PreToolUse"])
-        self.assertIn(str(scratch / ".polymorph-discovery/claude.jsonl"), json.dumps(hooks))
+        self.assertIn(str(scratch / ".polymorph/discovery/claude.jsonl"), json.dumps(hooks))
         self.assertTrue(d.untested)
         self.assertEqual(d.step_argv("P")[:2], ["claude", "-p"])
         d.remove(scratch)
         self.assertFalse((scratch / ".claude").exists())
+
+    def test_zcode_driver_wires_claude_like_config_and_derives_the_cli_argv(self):
+        scratch = Path(tempfile.mkdtemp()).resolve()
+        d = capture_drivers.DRIVERS["zcode"]
+        d.install(scratch, full=False)
+        doc = json.loads((scratch / ".zcode/config.json").read_text())
+        self.assertTrue(doc["hooks"]["enabled"])
+        self.assertEqual(sorted(doc["hooks"]["events"]), ["PostToolUse", "PreToolUse"])
+        self.assertIn(str(scratch / ".polymorph/discovery/zcode.jsonl"), json.dumps(doc))
+        self.assertTrue(d.untested and d.blocked)
+        package = Path(tempfile.mkdtemp())
+        (package / "bin").mkdir()
+        (package / "lib/ZCode/resources/glm").mkdir(parents=True)
+        (package / "bin/zcode").write_text("#!/bin/sh\n")
+        (package / "lib/ZCode/zcode").write_text("electron")
+        (package / "lib/ZCode/resources/glm/zcode.cjs").write_text("bundle")
+        with mock.patch.object(capture_drivers.shutil, "which", return_value=str(package / "bin/zcode")):
+            step = d.step_argv("P")
+            version = d.version_argv()
+            self.assertEqual(step[:2], ["env", "ELECTRON_RUN_AS_NODE=1"])
+            self.assertEqual(step[2:4], [str(package / "lib/ZCode/zcode"),
+                                         str(package / "lib/ZCode/resources/glm/zcode.cjs")])
+            self.assertEqual(step[4:], ["--prompt", "P", "--mode", "yolo"])
+            self.assertEqual(version[4:], ["version"])
+        # a layout without the bundle raises instead of guessing
+        (package / "lib/ZCode/resources/glm/zcode.cjs").unlink()
+        with mock.patch.object(capture_drivers.shutil, "which", return_value=str(package / "bin/zcode")):
+            with self.assertRaises(RuntimeError):
+                d.step_argv("P")
+        d.remove(scratch)
+        self.assertFalse((scratch / ".zcode").exists())
 
     def test_prompt_kit_in_docs_matches_the_code(self):
         docs = (ROOT / "docs/discovery.md").read_text()

@@ -1,14 +1,15 @@
 ---
 name: ship
-description: How to land work on main through a branch, a PR, one confirmation, the merge, and deleting the branch.
-when_to_use: A bare "push", "ship it", "land this" or "merge this" -- any ask to get changes onto main.
+description: How to land work through a branch, a PR, one confirmation, the merge, and deleting the branch.
+when_to_use: A bare "push", "ship it", "land this" or "merge this" -- any ask to get changes onto experimental or main.
 ---
 
-# Landing work on main
+# Landing work
 
 ## Applies to
 
-An ask to get changes onto `main`: a bare "push", "ship it", "land this",
+An ask to get changes onto a landing branch -- `experimental` by default,
+`main` for stabilized updates: a bare "push", "ship it", "land this",
 "merge this". Not for other git work:
 
 | ask | what to do |
@@ -18,11 +19,22 @@ An ask to get changes onto `main`: a bare "push", "ship it", "land this",
 | "commit this" | Commit. Pushing was not asked for. |
 | another branch named outright | Push directly there. |
 
-If unsure whether an ask means `main`, ask. `main` never takes a direct
-push from an agent; this flow is how a change reaches it.
+If unsure whether an ask means `main`, ask. Neither branch takes a direct
+push from an agent: this flow lands work on `experimental`, and `main`
+takes stabilized updates from it (below).
 
 **One** confirmation, asked once CI is green, covers both actions: "merge,
 and delete the branch afterward?" On yes, both happen in the same turn.
+
+## The experimental tier
+
+Work lands on `experimental` by default: open the PR with
+`--base experimental` and land it with `just ship-land <n> --allow-base
+experimental`. `main` takes stabilized updates from it once stable: open a
+PR `experimental` → `main` and merge it directly with `gh pr merge` --
+`ship-land` refuses a PR whose head is `experimental` on purpose, so that
+update stays a deliberate step rather than the per-task flow. Before opening that PR,
+follow skill `promote-to-main`.
 
 ## 0. Is it green locally?
 
@@ -39,7 +51,7 @@ If it passed locally and CI is red, the step it missed belongs in
 In your own worktree (skill `use-a-worktree`):
 
 ```sh
-git switch -c feat/<thing> origin/main
+git switch -c feat/<thing> origin/experimental
 git add <paths>          # name them; never a bare `git add -A`
 git commit -F - <<'MSG'
 feat: <what changed>
@@ -49,7 +61,7 @@ feat: <what changed>
 Co-Authored-By: Claude
 MSG
 git push -u origin feat/<thing>
-gh pr create --base main --title "<subject>" --body-file <file>
+gh pr create --base experimental --title "<subject>" --body-file <file>
 ```
 
 - Branch and first line start with `feat/`, `fix/`, `docs:`, `chore:`.
@@ -78,7 +90,7 @@ does not, leave the PR open, say so, and stop.
 ## 3. Merge, then delete -- on yes only
 
 ```sh
-just ship-land <n>
+just ship-land <n> --allow-base experimental
 ```
 
 It re-checks what `ci-wait` checks and refuses otherwise, and refuses a PR from

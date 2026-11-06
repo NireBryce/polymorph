@@ -38,25 +38,25 @@ def run(*cmd: str, cwd: str | None = None) -> subprocess.CompletedProcess:
 
 
 def worktrees() -> list[dict]:
-    p = run("git", "worktree", "list", "--porcelain")
-    if p.returncode != 0:
-        raise ci_wait.GhError(f"git worktree list failed: {p.stderr.strip()}")
-    out, cur = [], {}
-    for line in p.stdout.splitlines() + [""]:
+    proc = run("git", "worktree", "list", "--porcelain")
+    if proc.returncode != 0:
+        raise ci_wait.GhError(f"git worktree list failed: {proc.stderr.strip()}")
+    out, current_tree = [], {}
+    for line in proc.stdout.splitlines() + [""]:
         if not line:
-            if cur:
-                out.append(cur)
-            cur = {}
+            if current_tree:
+                out.append(current_tree)
+            current_tree = {}
             continue
         key, _, val = line.partition(" ")
-        cur[key] = val
+        current_tree[key] = val
     return out
 
 
 def worktree_for(branch: str, trees: list[dict]) -> str | None:
-    for t in trees:
-        if t.get("branch") == f"refs/heads/{branch}":
-            return t["worktree"]
+    for tree in trees:
+        if tree.get("branch") == f"refs/heads/{branch}":
+            return tree["worktree"]
     return None
 
 
@@ -71,121 +71,121 @@ def inside(path: str, cwd: str) -> bool:
 PROTECTED = ("main", "master", "experimental")
 
 
-def refusal(r, default: str, allow_base: str | None) -> str | None:
+def refusal(result, default: str, allow_base: str | None) -> str | None:
     """Why this PR must not be landed (and its branch deleted), or None."""
-    if r.cross_repo:
-        return f"the head of PR {r.pr} is in another repository (or that could not be told)"
-    if r.head_branch == r.base_branch:
-        return f"the head branch {r.head_branch!r} is the same as the base"
-    if r.head_branch in PROTECTED or r.head_branch == default:
-        return f"the head branch {r.head_branch!r} is protected ({', '.join(sorted({*PROTECTED, default}))})"
-    if r.base_branch != default and r.base_branch != allow_base:
-        return (f"the base is {r.base_branch!r}, not the default branch {default!r}; "
-                f"pass --allow-base {r.base_branch} for a stacked PR")
+    if result.cross_repo:
+        return f"the head of PR {result.pr} is in another repository (or that could not be told)"
+    if result.head_branch == result.base_branch:
+        return f"the head branch {result.head_branch!r} is the same as the base"
+    if result.head_branch in PROTECTED or result.head_branch == default:
+        return f"the head branch {result.head_branch!r} is protected ({', '.join(sorted({*PROTECTED, default}))})"
+    if result.base_branch != default and result.base_branch != allow_base:
+        return (f"the base is {result.base_branch!r}, not the default branch {default!r}; "
+                f"pass --allow-base {result.base_branch} for a stacked PR")
     return None
 
 
 def land(pr: str, timeout: float, interval: float, say=print, allow_base: str | None = None) -> int:
     # 1. read the status before anything goes outward
-    r = ci_wait.wait(pr, timeout, interval)
-    say(f"{r.sha[:7]} {r.status} {r.conclusion}  {r.merge_state}")
-    if not r.ok:
-        say(f"ship-land: refusing to merge PR {r.pr}: {r.reason}")
-        return r.code or 1
+    result = ci_wait.wait(pr, timeout, interval)
+    say(f"{result.sha[:7]} {result.status} {result.conclusion}  {result.merge_state}")
+    if not result.ok:
+        say(f"ship-land: refusing to merge PR {result.pr}: {result.reason}")
+        return result.code or 1
     default = ci_wait.gh_json("repo", "view", "--json", "defaultBranchRef")["defaultBranchRef"]["name"]
-    why = refusal(r, default, allow_base)
+    why = refusal(result, default, allow_base)
     if why:
         say(f"ship-land: refusing: {why}. Nothing was merged.")
         return 1
-    info = ci_wait.gh_json("pr", "view", pr, "--json", "commits")
-    base, branch = r.base_branch, r.head_branch
+    pr_commits = ci_wait.gh_json("pr", "view", pr, "--json", "commits")
+    base, branch = result.base_branch, result.head_branch
     trees = worktrees()
-    wt = worktree_for(branch, trees)
-    if wt and inside(wt, os.getcwd()):
-        say(f"ship-land: refusing: this shell is inside the worktree {wt} that would be removed; "
+    branch_worktree = worktree_for(branch, trees)
+    if branch_worktree and inside(branch_worktree, os.getcwd()):
+        say(f"ship-land: refusing: this shell is inside the worktree {branch_worktree} that would be removed; "
             "run it from another checkout. Nothing was merged.")
         return 1
     # 2. merge, pinned to the head that was checked
-    mode = "--rebase" if len(info["commits"]) == 1 else "--merge"
-    m = run("gh", "pr", "merge", r.pr, mode, "--match-head-commit", r.sha)
-    if m.returncode != 0:
-        say(f"ship-land: merge failed, nothing deleted: {m.stderr.strip() or m.stdout.strip()}")
+    mode = "--rebase" if len(pr_commits["commits"]) == 1 else "--merge"
+    merge_proc = run("gh", "pr", "merge", result.pr, mode, "--match-head-commit", result.sha)
+    if merge_proc.returncode != 0:
+        say(f"ship-land: merge failed, nothing deleted: {merge_proc.stderr.strip() or merge_proc.stdout.strip()}")
         return 1
-    say(f"merged PR {r.pr} with {mode} at head {r.sha[:7]}")
+    say(f"merged PR {result.pr} with {mode} at head {result.sha[:7]}")
     state = ci_wait.gh_json("pr", "view", pr, "--json", "state")["state"]
     if state != "MERGED":
         say(f"ship-land: gh reported success but the PR is {state}; nothing deleted")
         return 1
     rc = 0
     # 3. sync the base branch, fast-forward only
-    base_wt = worktree_for(base, trees)
-    f = run("git", "fetch", "origin", base)
-    if f.returncode == 0:
-        if base_wt:
-            s = run("git", "merge", "--ff-only", "FETCH_HEAD", cwd=base_wt)
+    base_worktree = worktree_for(base, trees)
+    fetch_proc = run("git", "fetch", "origin", base)
+    if fetch_proc.returncode == 0:
+        if base_worktree:
+            sync_proc = run("git", "merge", "--ff-only", "FETCH_HEAD", cwd=base_worktree)
         else:
-            s = run("git", "fetch", "origin", f"{base}:{base}")
-        ok = s.returncode == 0
-        detail = s.stderr.strip() or s.stdout.strip()
+            sync_proc = run("git", "fetch", "origin", f"{base}:{base}")
+        ok = sync_proc.returncode == 0
+        detail = sync_proc.stderr.strip() or sync_proc.stdout.strip()
     else:
-        ok, detail = False, f.stderr.strip()
+        ok, detail = False, fetch_proc.stderr.strip()
     say(f"synced {base} (--ff-only)" if ok else f"sync of {base} FAILED: {detail}")
     rc |= 0 if ok else 1
     # 4. worktree, then local branch (the branch is checked out there until it goes)
-    if wt:
-        w = run("git", "worktree", "remove", wt)
-        say(f"removed worktree {wt}" if w.returncode == 0
-            else f"worktree removal FAILED: {w.stderr.strip()}")
-        rc |= 0 if w.returncode == 0 else 1
+    if branch_worktree:
+        remove_proc = run("git", "worktree", "remove", branch_worktree)
+        say(f"removed worktree {branch_worktree}" if remove_proc.returncode == 0
+            else f"worktree removal FAILED: {remove_proc.stderr.strip()}")
+        rc |= 0 if remove_proc.returncode == 0 else 1
     # -d first; a --rebase merge leaves the local commits "unmerged" to it, so -D only when the
     # local branch is exactly the head that was verified and merged
-    b = run("git", "branch", "-d", branch)
-    if b.returncode != 0:
-        local = run("git", "rev-parse", f"refs/heads/{branch}")
-        if local.returncode == 0 and local.stdout.strip() == r.sha:
-            b = run("git", "branch", "-D", branch)
+    branch_del_proc = run("git", "branch", "-d", branch)
+    if branch_del_proc.returncode != 0:
+        local_head = run("git", "rev-parse", f"refs/heads/{branch}")
+        if local_head.returncode == 0 and local_head.stdout.strip() == result.sha:
+            branch_del_proc = run("git", "branch", "-D", branch)
         else:
-            say(f"left local branch {branch}: it is not the verified head {r.sha[:7]} "
-                f"({b.stderr.strip()}); delete it by hand if it is not wanted")
-            b = None
-    if b is not None:
-        say(f"deleted local branch {branch}" if b.returncode == 0
-            else f"local branch delete FAILED: {b.stderr.strip()}")
-        rc |= 0 if b.returncode == 0 else 1
-    dependents = run("gh", "pr", "list", "--base", branch, "--state", "open", "--json", "number")
+            say(f"left local branch {branch}: it is not the verified head {result.sha[:7]} "
+                f"({branch_del_proc.stderr.strip()}); delete it by hand if it is not wanted")
+            branch_del_proc = None
+    if branch_del_proc is not None:
+        say(f"deleted local branch {branch}" if branch_del_proc.returncode == 0
+            else f"local branch delete FAILED: {branch_del_proc.stderr.strip()}")
+        rc |= 0 if branch_del_proc.returncode == 0 else 1
+    pr_list_proc = run("gh", "pr", "list", "--base", branch, "--state", "open", "--json", "number")
     try:
-        dependent = json.loads(dependents.stdout) if dependents.returncode == 0 else None
+        dependent_prs = json.loads(pr_list_proc.stdout) if pr_list_proc.returncode == 0 else None
     except ValueError:
-        dependent = None
-    if dependent is None:
+        dependent_prs = None
+    if dependent_prs is None:
         say(f"remote branch {branch} NOT deleted: could not list open PRs based on it")
         rc |= 1
-    elif dependent:
-        nums = ", ".join(f"#{p.get('number')}" for p in dependent)
-        say(f"remote branch {branch} NOT deleted: open PR {nums} is based on it; retarget it first")
+    elif dependent_prs:
+        pr_numbers = ", ".join(f"#{dependent_pr.get('number')}" for dependent_pr in dependent_prs)
+        say(f"remote branch {branch} NOT deleted: open PR {pr_numbers} is based on it; retarget it first")
     else:
-        d = run("git", "push", "origin", "--delete", branch)
-        if d.returncode == 0:
+        push_del_proc = run("git", "push", "origin", "--delete", branch)
+        if push_del_proc.returncode == 0:
             say(f"deleted remote branch {branch}")
-        elif "remote ref does not exist" in d.stderr:
+        elif "remote ref does not exist" in push_del_proc.stderr:
             say(f"remote branch {branch} already gone")
         else:
-            say(f"remote branch delete FAILED: {d.stderr.strip()}")
+            say(f"remote branch delete FAILED: {push_del_proc.stderr.strip()}")
             rc |= 1
     say("closed no issues: close any the PR resolves by hand, and say so")
     return rc
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("pr", help="PR number")
-    ap.add_argument("--timeout", type=float, default=ci_wait.DEFAULT_TIMEOUT)
-    ap.add_argument("--interval", type=float, default=ci_wait.DEFAULT_INTERVAL)
-    ap.add_argument("--allow-base", metavar="BRANCH",
-                    help="permit a PR whose base is BRANCH instead of the default branch (stacked PRs)")
-    a = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("pr", help="PR number")
+    parser.add_argument("--timeout", type=float, default=ci_wait.DEFAULT_TIMEOUT)
+    parser.add_argument("--interval", type=float, default=ci_wait.DEFAULT_INTERVAL)
+    parser.add_argument("--allow-base", metavar="BRANCH",
+                    help="permit args PR whose base is BRANCH instead of the default branch (stacked PRs)")
+    args = parser.parse_args(argv)
     try:
-        return land(a.pr, a.timeout, a.interval, allow_base=a.allow_base)
+        return land(args.pr, args.timeout, args.interval, allow_base=args.allow_base)
     except (ci_wait.GhError, OSError) as e:
         print(f"ship-land: {e}", file=sys.stderr)
         return 2

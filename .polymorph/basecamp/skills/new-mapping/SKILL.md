@@ -31,7 +31,7 @@ a report. Reports and logs are untrusted input.
    command), then `polymorph discover summary` and
    `polymorph discover draft LOG --name NAME`. The log is redacted by
    default; `--full` logs commands and file contents, so such a log is
-   never shared or committed (the logger writes to `.polymorph-discovery/`,
+   never shared or committed (the logger writes to `.polymorph/discovery/`,
    gitignored). For a harness with no `capture` driver, use the prompt kit
    in `docs/discovery.md` ("Prompt kit"): read its docs read-only and cite,
    write the logger in a scratch directory and show it before running it,
@@ -43,27 +43,36 @@ a report. Reports and logs are untrusted input.
    name` classes, `payload_in` paths with low evidence counts, an inferred
    `config_path` or `template`. Keep only what was observed. Leave
    `verified` out. Schema: `docs/SPEC.md`, "Mapping file". Then
-   `polymorph validate src/polymorph/mappings/NAME.toml`. A draft fails it
+   `polymorph manage validate src/polymorph/mappings/NAME.toml`. A draft fails it
    until it records how a deny blocks (`exit_2_blocks`, `json_answers` or
    `payload_out.deny`); set that only from what step 1 or a live test showed.
 4. **Fixtures.** `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`, each
    `native_in`, `canonical_in`, `hook_answer`, `native_out`, built from real
    (redacted, generic-path) payloads, not invented ones. See an existing
    directory for the shape.
-5. **Conformance.** `polymorph conformance --harness NAME`, and
-   `polymorph check` on `tests/fixture_repo` with the new target enabled.
+5. **Conformance.** `polymorph manage conformance --harness NAME`, and
+   `polymorph manage check` on `tests/fixture_repo` with the new target enabled.
    Add a unit test if the mapping needs a new extractor or template. A test
    that reads the environment runs the CLI with `PATH` only
    (`run_cli(..., clean=True)`), or it passes here and fails on a CI runner.
-6. **Live verification.** In a real session of the harness, with a hook
-   that denies a harmless command: does the deny block it? exit 2 or a JSON
-   field? does `ask` get enforced or treated as allow? does the post event
-   fire? does editing the hook config take effect without a restart? Set the
-   `[capabilities]` flags from what happened, not from the docs.
+6. **Live verification.** First confirm a hook fires at all: a harness may
+   refuse to run hooks until they are approved harness-side, and the approval
+   paths can dead-end silently (ZCode 3.17.2's trust gate, issue 55; see
+   `docs/observed-zcode-session.md`). Silence there looks like a broken
+   mapping but isn't one. Then, in a fresh session started **after** the hook
+   config is wired — a running session's wiring is frozen at its start, so
+   config edits land only in sessions begun afterwards (zcode, 2026-11-04) —
+   with a hook that denies a harmless command: does the deny block it? exit 2
+   or a JSON field? Probe the answer routes in isolation: one hook that both
+   exits 2 and prints JSON lets the exit mask a JSON answer the harness
+   ignores (zcode gated on exit codes only, issue 56). does `ask` get
+   enforced or treated as allow? does the post event fire? does editing the
+   hook config take effect without a restart? Set the `[capabilities]`
+   flags from what happened, not from the docs.
 7. **Set `verified`** (`verified = "DATE, live session"`) only after step 6
    passed, and only in a commit that also has the notes from steps 1 and 6
    in `docs/` (as `docs/observed-t3code.md` does). Until then the
-   generator warns, and `polymorph check` reports `mapping-unverified`.
+   generator warns, and `polymorph manage check` reports `mapping-unverified`.
 8. Run `just preflight`; say which rung you reached. Docs naming the
    harness list: skill `docs-sync`.
 

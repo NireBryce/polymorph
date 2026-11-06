@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import CANON_PATHS
+from .exprs import placeholder_names
 
 EXTRACTORS = ["apply_patch_paths"]  # shipped registry; names only, code lives elsewhere
 CLASSES = ("shell", "edit", "read", "mcp", "other")
@@ -14,8 +15,7 @@ EVENTS = ("session_start", "pre_tool", "post_tool")
 CAPS = ("ask", "post_event", "exit_2_blocks", "rewrites_input", "json_answers")
 OUT_KINDS = ("allow", "deny", "ask", "warn", "remind")
 OUT_FIELDS = {"exit": int, "stdout": str, "stderr": str}
-# The values the adapter fills into payload_out strings (adapter._classify); nothing else.
-OUT_PLACEHOLDERS = ("reason", "context", "message")
+KNOWN_PLACEHOLDERS = {"reason", "context", "message"}
 
 REQUIRED = ("schema", "name", "config_path", "format", "template",
             "tools", "events", "capabilities", "payload_in", "payload_out")
@@ -29,7 +29,6 @@ _PATH = re.compile(r"^[A-Za-z_][\w-]*(\.[\w-]+)*$")
 _TOOL = re.compile(r"^[A-Za-z_][\w.*-]*$")
 _NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
 _PLACEHOLDER = re.compile(r"\{[a-z_][a-z0-9_.]*\}")
-_ANY_PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 _CODEY = re.compile(r"\$\(|\$\{|`|;|\|\||&&|\||>|<|\\|\n|\.\./")
 
 
@@ -43,19 +42,39 @@ def _unknown(errs: list[str], where: str, d: dict, allowed) -> None:
             errs.append(f"{where}: unknown key {k!r}")
 
 
-def direct_errors(m: dict) -> list[str]:
+# A direct mapping's matchers are the harness's own tool names, and the harness
+# speaks the canonical protocol: a renamed tool would silently never match, so
+# the four classed kinds must use their canonical names (`other` is unconstrained).
+CANONICAL_TOOLS = {"shell": {"Bash"}, "edit": {"Edit", "Write", "MultiEdit"},
+                   "read": {"Read", "Grep", "Glob"}}
+
+
+def direct_errors(mapping: dict) -> list[str]:
     """Why delivery = "direct" is not allowed for this mapping (empty = allowed)."""
     errs: list[str] = []
-    if m.get("payload_out"):
+    if mapping.get("payload_out"):
         errs.append('delivery "direct" requires an empty payload_out (answers cannot be translated)')
-    pi = m.get("payload_in")
-    if isinstance(pi, dict):
-        for k, v in pi.items():
+    payload_in = mapping.get("payload_in")
+    if isinstance(payload_in, dict):
+        for k, v in payload_in.items():
             if k not in IDENTITY_PAYLOAD_IN:
                 errs.append(f'delivery "direct" requires an identity payload_in; {k!r} is not canonical')
             elif v != IDENTITY_PAYLOAD_IN[k]:
                 errs.append(f'delivery "direct" requires payload_in.{k} = '
                             f'{IDENTITY_PAYLOAD_IN[k]!r}, got {v!r}')
+    tools = mapping.get("tools")
+    if isinstance(tools, dict):
+        for cls, v in tools.items():
+            names = [v] if isinstance(v, str) else (v if isinstance(v, list) else [])
+            for name in names:
+                if not isinstance(name, str):
+                    continue
+                if cls == "mcp" and not name.startswith("mcp__"):
+                    errs.append(f'delivery "direct" requires tools.mcp names to start with '
+                                f'mcp__, got {name!r}')
+                elif cls in CANONICAL_TOOLS and name not in CANONICAL_TOOLS[cls]:
+                    errs.append(f'delivery "direct" requires tools.{cls} to be '
+                                f'{", ".join(sorted(CANONICAL_TOOLS[cls]))}, got {name!r}')
     return errs
 
 
@@ -63,48 +82,48 @@ def validate_mapping(src: Any) -> list[str]:
     """Return a list of error strings; empty means valid. src: path or dict."""
     if isinstance(src, (str, Path)):
         try:
-            with open(src, "rb") as f:
-                m = tomllib.load(f)
-        except (OSError, tomllib.TOMLDecodeError) as e:
-            return [f"cannot read mapping: {e}"]
+            with open(src, "rb") as handle:
+                mapping = tomllib.load(handle)
+        except (OSError, tomllib.TOMLDecodeError) as events:
+            return [f"cannot read mapping: {events}"]
     else:
-        m = src
+        mapping = src
     errs: list[str] = []
-    if not isinstance(m, dict):
+    if not isinstance(mapping, dict):
         return ["mapping must be a table"]
     for k in REQUIRED:
-        if k not in m:
+        if k not in mapping:
             errs.append(f"missing required key {k!r}")
-    _unknown(errs, "top level", m, REQUIRED + OPTIONAL)
-    if "schema" in m and (m["schema"] != 1 or isinstance(m["schema"], bool)):
-        errs.append(f"schema must be 1, got {m['schema']!r}")
+    _unknown(errs, "top level", mapping, REQUIRED + OPTIONAL)
+    if "schema" in mapping and (mapping["schema"] != 1 or isinstance(mapping["schema"], bool)):
+        errs.append(f"schema must be 1, got {mapping['schema']!r}")
     for k in ("name", "verified", "config_path", "format", "template", "context_file", "skills_dir"):
-        if k in m and not isinstance(m[k], str):
+        if k in mapping and not isinstance(mapping[k], str):
             errs.append(f"{k} must be a string")
-    if isinstance(m.get("name"), str) and not _NAME.match(m["name"]):
-        errs.append(f"name {m['name']!r} must match [a-z][a-z0-9_-]*")
+    if isinstance(mapping.get("name"), str) and not _NAME.match(mapping["name"]):
+        errs.append(f"name {mapping['name']!r} must match [a-z][a-z0-9_-]*")
     for k in ("config_path", "context_file", "skills_dir"):
-        v = m.get(k)
-        if isinstance(v, str) and (v.startswith("/") or ".." in v.split("/") or _codey(v)):
-            errs.append(f"{k} must be a plain relative path, got {v!r}")
-    if "delivery" in m:
-        if m["delivery"] not in DELIVERIES:
-            errs.append(f"delivery must be one of {', '.join(DELIVERIES)}, got {m['delivery']!r}")
-        elif m["delivery"] == "direct":
-            errs += direct_errors(m)
-    if isinstance(m.get("template"), str) and not _NAME.match(m["template"]):
-        errs.append(f"template {m['template']!r} must be a plain name")
-    if isinstance(m.get("format"), str) and m["format"] not in ("json", "toml", "yaml"):
-        errs.append(f"format {m['format']!r} not one of json, toml, yaml")
+        value = mapping.get(k)
+        if isinstance(value, str) and (value.startswith("/") or ".." in value.split("/") or _codey(value)):
+            errs.append(f"{k} must be a plain relative path, got {value!r}")
+    if "delivery" in mapping:
+        if mapping["delivery"] not in DELIVERIES:
+            errs.append(f"delivery must be one of {', '.join(DELIVERIES)}, got {mapping['delivery']!r}")
+        elif mapping["delivery"] == "direct":
+            errs += direct_errors(mapping)
+    if isinstance(mapping.get("template"), str) and not _NAME.match(mapping["template"]):
+        errs.append(f"template {mapping['template']!r} must be a plain name")
+    if isinstance(mapping.get("format"), str) and mapping["format"] not in ("json", "toml", "yaml"):
+        errs.append(f"format {mapping['format']!r} not one of json, toml, yaml")
 
-    t = m.get("tools")
-    if t is not None:
-        if not isinstance(t, dict):
+    tools = mapping.get("tools")
+    if tools is not None:
+        if not isinstance(tools, dict):
             errs.append("tools must be a table")
         else:
-            _unknown(errs, "tools", t, CLASSES)
-            for cls, v in t.items():
-                names = [v] if isinstance(v, str) else v
+            _unknown(errs, "tools", tools, CLASSES)
+            for cls, value in tools.items():
+                names = [value] if isinstance(value, str) else value
                 if not isinstance(names, list) or not names:
                     errs.append(f"tools.{cls} must be a string or non-empty list of strings")
                     continue
@@ -112,97 +131,107 @@ def validate_mapping(src: Any) -> list[str]:
                     if not isinstance(n, str) or not _TOOL.match(n):
                         errs.append(f"tools.{cls}: bad tool name {n!r}")
 
-    e = m.get("events")
-    if e is not None:
-        if not isinstance(e, dict):
+    events = mapping.get("events")
+    if events is not None:
+        if not isinstance(events, dict):
             errs.append("events must be a table")
         else:
-            _unknown(errs, "events", e, EVENTS)
-            for k, v in e.items():
-                if not isinstance(v, str) or not re.match(r"^[A-Za-z][A-Za-z0-9_.:-]*$", v):
-                    errs.append(f"events.{k}: bad native event name {v!r}")
+            _unknown(errs, "events", events, EVENTS)
+            for k, value in events.items():
+                if not isinstance(value, str) or not re.match(r"^[A-Za-z][A-Za-z0-9_.:-]*$", value):
+                    errs.append(f"events.{k}: bad native event name {value!r}")
 
-    c = m.get("capabilities")
-    if c is not None:
-        if not isinstance(c, dict):
+    caps = mapping.get("capabilities")
+    if caps is not None:
+        if not isinstance(caps, dict):
             errs.append("capabilities must be a table")
         else:
-            _unknown(errs, "capabilities", c, CAPS)
+            _unknown(errs, "capabilities", caps, CAPS)
             for k in CAPS:
-                if k not in c:
+                if k not in caps:
                     errs.append(f"capabilities.{k} is required")
-                elif not isinstance(c[k], bool):
+                elif not isinstance(caps[k], bool):
                     errs.append(f"capabilities.{k} must be a boolean")
 
-    pi = m.get("payload_in")
-    if pi is not None:
-        if not isinstance(pi, dict):
+    payload_in = mapping.get("payload_in")
+    if payload_in is not None:
+        if not isinstance(payload_in, dict):
             errs.append("payload_in must be a table")
         else:
-            for k, v in pi.items():
+            for k, value in payload_in.items():
                 if k == "extractor":
-                    if v not in EXTRACTORS:
-                        errs.append(f"payload_in.extractor {v!r} not in registry {EXTRACTORS}")
+                    if value not in EXTRACTORS:
+                        errs.append(f"payload_in.extractor {value!r} not in registry {EXTRACTORS}")
                     continue
-                base = k.split(".", 1)
-                if len(base) == 2 and base[0] not in CLASSES:
-                    errs.append(f"payload_in key {k!r}: unknown class {base[0]!r}")
-                elif len(base) == 1 and k not in ("tool_name", "cwd", "session_id", "tool_response", "event"):
+                key_parts = k.split(".", 1)
+                if len(key_parts) == 2:
+                    # the adapter places a classed key via CANON_PATHS; an unknown one would
+                    # land at a top-level dotted path nothing in the canonical payload reads
+                    if key_parts[0] not in CLASSES:
+                        errs.append(f"payload_in key {k!r}: unknown class {key_parts[0]!r}")
+                    elif k not in CANON_PATHS:
+                        known = ", ".join(sorted(p for p in CANON_PATHS if "." in p))
+                        errs.append(f"payload_in key {k!r} is not a canonical field (known: {known})")
+                elif k not in ("tool_name", "cwd", "session_id", "tool_response", "event"):
                     errs.append(f"payload_in: unknown canonical key {k!r}")
-                if not isinstance(v, str) or not _PATH.match(v):
-                    errs.append(f"payload_in.{k}: must be a dotted path, got {v!r}")
+                if not isinstance(value, str) or not _PATH.match(value):
+                    errs.append(f"payload_in.{k}: must be a dotted path, got {value!r}")
 
-    po = m.get("payload_out")
-    if po is not None:
-        if not isinstance(po, dict):
+    payload_out = mapping.get("payload_out")
+    if payload_out is not None:
+        if not isinstance(payload_out, dict):
             errs.append("payload_out must be a table")
         else:
-            _unknown(errs, "payload_out", po, OUT_KINDS)
-            for kind, spec in po.items():
+            _unknown(errs, "payload_out", payload_out, OUT_KINDS)
+            for kind, spec in payload_out.items():
                 if not isinstance(spec, dict):
                     errs.append(f"payload_out.{kind} must be a table")
                     continue
+                if kind == "ask" and isinstance(caps, dict) and caps.get("ask") is False:
+                    # SPEC "Wire protocol": the hook hardens ask to deny (it reads
+                    # GUARD_ASK_ENFORCED=0); a blocking entry would decide that for every hook,
+                    # and a non-blocking one fails the exit rule below, so neither belongs here
+                    errs.append("payload_out.ask is set while capabilities.ask is false: "
+                                "hardening ask is the hook's job (GUARD_ASK_ENFORCED), not the "
+                                "mapping's; remove the entry")
+                    continue
                 _unknown(errs, f"payload_out.{kind}", spec, OUT_FIELDS)
-                for f, v in spec.items():
-                    want = OUT_FIELDS.get(f)
+                for field, value in spec.items():
+                    want = OUT_FIELDS.get(field)
                     if want is None:
                         continue
-                    if not isinstance(v, want) or (want is int and isinstance(v, bool)):
-                        errs.append(f"payload_out.{kind}.{f} must be {want.__name__}")
-                    elif isinstance(v, str) and _codey(v):
-                        errs.append(f"payload_out.{kind}.{f}: code-like value {v!r}")
-                    if isinstance(v, str):
-                        for name in _ANY_PLACEHOLDER.findall(v):
-                            if name not in OUT_PLACEHOLDERS:
-                                errs.append(f"payload_out.{kind}.{f}: unknown placeholder {{{name}}} "
-                                            f"(known: {', '.join('{' + p + '}' for p in OUT_PLACEHOLDERS)})")
-    errs += deny_route_errors(m)
-    errs += ask_hardening_errors(m)
+                    if not isinstance(value, want) or (want is int and isinstance(value, bool)):
+                        errs.append(f"payload_out.{kind}.{field} must be {want.__name__}")
+                    elif field == "exit" and kind in ("deny", "ask") and value != 2:
+                        # 2 is the only documented block code; the adapter defaults a
+                        # missing exit to 0, and any other code does not block
+                        errs.append(f"payload_out.{kind}.exit must be 2, the canonical block "
+                                    f"exit, got {value!r} (nothing else blocks; 0 is an allow)")
+                    elif isinstance(value, str):
+                        bad = sorted(placeholder_names(value) - KNOWN_PLACEHOLDERS)
+                        if bad:
+                            errs.append(f"payload_out.{kind}.{field}: unknown placeholder(s) {bad} "
+                                        f"(known: {', '.join(sorted(KNOWN_PLACEHOLDERS))})")
+                        elif _codey(value):
+                            errs.append(f"payload_out.{kind}.{field}: code-like value {value!r}")
+                if kind in ("deny", "ask") and "exit" not in spec:
+                    errs.append(f"payload_out.{kind}.exit is missing and must be 2 "
+                                f"(the default exit 0 renders the {kind} as an allow)")
+    errs += deny_route_errors(mapping)
     return errs
 
 
-def ask_hardening_errors(m: dict) -> list[str]:
-    """With capabilities.ask = false the hook hardens ask to deny (it reads GUARD_ASK_ENFORCED=0;
-    SPEC "Wire protocol"). A payload_out.ask that blocks would harden it in the mapping too,
-    deciding for every hook, including one that chose to let ask through."""
-    caps, po = m.get("capabilities"), m.get("payload_out")
-    if not isinstance(caps, dict) or caps.get("ask") is not False or not isinstance(po, dict):
-        return []
-    spec = po.get("ask")
-    if isinstance(spec, dict) and isinstance(spec.get("exit"), int) and spec["exit"] != 0:
-        return [f"payload_out.ask blocks (exit {spec['exit']}) while capabilities.ask is false: "
-                "hardening ask is the hook's job (GUARD_ASK_ENFORCED), not the mapping's"]
-    return []
-
-
-def deny_route_errors(m: dict) -> list[str]:
+def deny_route_errors(mapping: dict) -> list[str]:
     """A deny must reach the harness as something that blocks. With no payload_out.deny the
     adapter falls back to JSON pass-through (json_answers) or exit 2 (exit_2_blocks); with
-    neither, a deny would leave as exit 0, which the harness reads as allow."""
-    caps, po = m.get("capabilities"), m.get("payload_out")
-    if not isinstance(caps, dict) or not isinstance(po, dict) or "deny" in po:
+    neither it can only refuse the deny at run time (a NOT-checked fault, and the call
+    proceeds), so such a mapping is refused here instead."""
+    capabilities, payload_out = mapping.get("capabilities"), mapping.get("payload_out")
+    if mapping.get("delivery") == "direct":
+        return []   # hooks run bare and speak the canonical protocol; no adapter renders a deny
+    if not isinstance(capabilities, dict) or not isinstance(payload_out, dict) or "deny" in payload_out:
         return []
-    if caps.get("json_answers") is True or caps.get("exit_2_blocks") is True:
+    if capabilities.get("json_answers") is True or capabilities.get("exit_2_blocks") is True:
         return []
     return ["payload_out.deny is required when neither capabilities.json_answers nor "
-            "capabilities.exit_2_blocks is true: without it a deny would leave as exit 0 (allow)"]
+            "capabilities.exit_2_blocks is true: without it a guard deny cannot block"]

@@ -1,0 +1,19 @@
+# What Claude Code reads of the discover-and-report inventory kinds.
+# Basis: the harness's own file layout (hook-script comments and the paths
+# its config names); not a live session. A kind left out here means the gap
+# report treats it as ignored, so only claim what is recorded.
+# Claude Code reads CLAUDE.md, .claude/skills and .claude/rules, and nothing under
+# .agents/ (code.claude.com/docs/en/memory and /skills, read 2026-11-02). It reads
+# AGENTS.md itself from v2.1.277, but only when no CLAUDE.md exists in or above the
+# working directory, so a separate CLAUDE.md shadows it. The table names CLAUDE.md so
+# the link is made for older versions and the shadowing case shows as unlinked-copy.
+# A repo that keeps AGENTS.md, .agents/skills or .agents/rules links them (equip and
+# adopt do) or the gap report says no-link / unlinked-copy.
+schema = 1
+name = "claude"
+
+[inventory]
+skills = ".claude/skills"
+rules = ".claude/rules"
+memory = ["CLAUDE.md"]
+claude_dir = ".claude"

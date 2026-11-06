@@ -38,6 +38,10 @@ const POLYMORPH_ARGS = [
 // The logger's whole environment (the spawn is given nothing else). PYTHONPATH is only
 // needed when polymorph runs from a source checkout rather than an install.
 const POLYMORPH_ENV = { PYTHONPATH: "/tmp/pm-opencode/src" } // example path
+// This plugin generation's version, sent as --plugin-version so a log line says which
+// plugin wrote it (lines without it read as unmarked in `discover summary`).
+// `polymorph capture` writes the real value here.
+const PLUGIN_VERSION = "0.0.0-example"
 
 function serialize(payload) {
   try {
@@ -63,7 +67,7 @@ function serialize(payload) {
 // can never throw, block, or surface an error.
 function pipeToPolymorph(payload) {
   try {
-    const child = spawn(POLYMORPH_CMD, POLYMORPH_ARGS, {
+    const child = spawn(POLYMORPH_CMD, [...POLYMORPH_ARGS, ...PROVENANCE_ARGS], {
       stdio: ["pipe", "ignore", "ignore"],
       env: POLYMORPH_ENV, // minimal: only what the logger needs, not OpenCode's environment
     })
@@ -77,9 +81,31 @@ function pipeToPolymorph(payload) {
   }
 }
 
+// Provenance for the log: this plugin generation's version and where the session runs
+// (OpenCode's event bus is server-global, so one log can hold lines from several working
+// directories). Best-effort: ctx.location is read defensively, a value the logger does not
+// accept becomes <invalid> on the line, and a missing one reads as unmarked in the summary.
+let PROVENANCE_ARGS = []
+
+function setProvenance(ctx) {
+  try {
+    const args = []
+    if (typeof PLUGIN_VERSION === "string" && PLUGIN_VERSION) {
+      args.push("--plugin-version=" + PLUGIN_VERSION)
+    }
+    if (typeof ctx?.location === "string" && ctx.location) {
+      args.push("--location=" + ctx.location)
+    }
+    PROVENANCE_ARGS = args
+  } catch {
+    PROVENANCE_ARGS = []
+  }
+}
+
 export default {
   id: "polymorph-discovery",
   async setup(ctx) {
+    setProvenance(ctx)
     const registrations = []
 
     // Register without ever letting a failure escape setup(): the call is made inside the

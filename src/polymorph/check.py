@@ -1,4 +1,4 @@
-"""`polymorph check`: static analysis of a repo's agent config.
+"""`polymorph manage check`: static analysis of a repo's agent config.
 
 Never executes a hook script, a harness or the network, and never writes files.
 Each check is a small function returning Findings with a stable code.
@@ -27,6 +27,8 @@ CODES = {
     "mapping-invalid": ("error", "A target's mapping fails validation or cannot be loaded."),
     "mapping-unverified": ("warning", "A mapping has no `verified` field."),
     "mapping-untested-live": ("note", "Block semantics and ask enforcement are unproven without a live test."),
+    "direct-ask-unenforceable": ("warning", "A direct-delivery mapping sets ask = false: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot observe the claim (issue #34)."),
+    "exit2-unhonoured": ("warning", "A mapping's deny or ask route renders as exit 2 while exit_2_blocks is false: the exit the route relies on is the one the mapping says does not block (issue #49)."),
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
     "hook-not-executable": ("error", "A hook script is not executable."),
@@ -36,9 +38,12 @@ CODES = {
     "decision-invalid": ("error", "A decision file or entry fails validation."),
     "setting-unmapped": ("note", "A setting has no cross-harness meaning."),
     "generated-drift": ("error", "A target's generated file differs from what generate would write."),
+    "loadout-drift": ("warning", "The mapping bytes equip consumed have changed since it ran (or the file is gone); the adapter re-reads mappings at run time."),
+    "loadout-invalid": ("error", "loadout.toml fails validation."),
     "fixtures-missing": ("warning", "A built-in mapping has no conformance fixtures."),
     "fixtures-skipped": ("note", "Fixtures are not checked for a repo-local mapping."),
     "fixture-failed": ("error", "A conformance fixture does not pass."),
+    "mapping-override": ("note", "A repo-local mapping overrides a built-in of the same name."),
 }
 
 
@@ -75,42 +80,91 @@ def check_hook_scripts(repo: Path) -> list[Finding]:
         return [_f("settings-invalid", None, f"{SETTINGS} not found", SETTINGS)]
     except ValueError as e:
         return [_f("settings-invalid", None, f"{SETTINGS}: {e}", SETTINGS)]
-    for event, groups in (data.get("hooks") or {}).items():
-        for group in groups or []:
-            for h in group.get("hooks", []):
-                if h.get("type", "command") != "command":
+    hooks = data.get("hooks") or {}
+    if not isinstance(hooks, dict):
+        return [_f("settings-invalid", None, f"{SETTINGS}: hooks must be an object", SETTINGS)]
+    for event, groups in hooks.items():
+        if not isinstance(groups, list) or not all(
+                isinstance(group, dict) and isinstance(group.get("hooks", []), list)
+                and all(isinstance(hook, dict) for hook in group.get("hooks", [])) for group in groups):
+            return out + [_f("settings-invalid", None,
+                             f"{SETTINGS}: hooks.{event} must be a list of matcher groups, each with a list of hook objects",
+                             SETTINGS)]
+        for group in groups:
+            for hook in group.get("hooks", []):
+                if hook.get("type", "command") != "command":
                     continue
-                cmd = h.get("command", "")
+                command = hook.get("command", "")
                 try:
-                    rel = resolve_script(cmd, repo)
+                    script_path = resolve_script(command, repo)
                 except ReaderError as e:
                     out.append(_f("hook-outside-hooks-dir", None, f"{event}: {e}", SETTINGS))
                     continue
-                path = repo / rel
+                path = repo / script_path
                 if not path.is_file():
-                    out.append(_f("hook-missing", None, f"{event}: {rel} does not exist", rel))
+                    out.append(_f("hook-missing", None, f"{event}: {script_path} does not exist", script_path))
                 elif not os.access(path, os.X_OK):
-                    out.append(_f("hook-not-executable", None, f"{event}: {rel} is not executable", rel))
+                    out.append(_f("hook-not-executable", None, f"{event}: {script_path} is not executable", script_path))
     return out
 
 
-def check_mapping(repo: Path, name: str, m: Mapping) -> list[Finding]:
-    out = [_f("mapping-invalid", name, e, _rel(repo, m.source)) for e in validate_mapping(m.source)]
-    if not m.verified:
+def check_mapping(repo: Path, name: str, mapping: Mapping) -> list[Finding]:
+    out = [_f("mapping-invalid", name, error, _rel(repo, mapping.source)) for error in validate_mapping(mapping.source)]
+    if not mapping.verified:
         out.append(_f("mapping-unverified", name, "mapping has no `verified` field; treat output as unverified",
-                      _rel(repo, m.source)))
+                      _rel(repo, mapping.source)))
     out.append(_f("mapping-untested-live", name, "not tested live: block semantics, ask enforcement unproven"))
+    # claims a hook cannot observe or enforce, from the delivery the mapping chose (issues #34, #35)
+    if mapping.delivery == "direct" and mapping.capabilities.get("ask") is False:
+        out.append(_f("direct-ask-unenforceable", name,
+                      'delivery = "direct" runs the hook bare: no adapter runs, so nothing sets '
+                      "GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening "
+                      "works only in a script written to detect this harness itself", _rel(repo, mapping.source)))
+    if mapping.delivery == "adapter" and (mapping.payload_out.get("deny") or mapping.payload_out.get("ask")) \
+            and not mapping.capabilities.get("exit_2_blocks"):
+        out.append(_f("exit2-unhonoured", name,
+                      "the payload_out deny/ask route renders as exit 2 while exit_2_blocks is false: "
+                      "the exit the route relies on is the one the mapping says does not block, so the "
+                      "call would proceed", _rel(repo, mapping.source)))
     return out
 
 
-def check_fixtures(repo: Path, name: str, m: Mapping) -> list[Finding]:
+def check_fixtures(repo: Path, name: str, mapping: Mapping) -> list[Finding]:
     """Built-in mappings only: replay fixtures/<name>/ through the adapter."""
-    if Path(m.source).resolve().parent != BUILTIN_DIR.resolve():
-        return [_f("fixtures-skipped", name, "repo-local mapping: fixtures not checked", _rel(repo, m.source))]
+    if Path(mapping.source).resolve().parent != BUILTIN_DIR.resolve():
+        return [_f("fixtures-skipped", name, "repo-local mapping: fixtures not checked", _rel(repo, mapping.source))]
     if not fixture_files(name):
         return [_f("fixtures-missing", name, f"no fixtures under fixtures/{name}/")]
     _, failures = run_fixtures(name)
     return [_f("fixture-failed", name, msg) for msg in failures]
+
+
+def check_loadout(repo: Path, name: str) -> list[Finding]:
+    """Provenance: the mapping bytes equip consumed still match the file it pinned.
+
+    The adapter re-reads the mapping at run time, so artifact swap after equip weakens
+    the guard with no other trace; the pin in loadout.toml makes it visible.
+    """
+    import hashlib
+
+    from .equip import EquipError, manifest_entries
+
+    try:
+        entries = manifest_entries(repo, name)
+    except EquipError as e:
+        return [_f("loadout-invalid", name, str(e))]
+    out: list[Finding] = []
+    for artifact in entries:
+        if not (artifact.mapping_path and artifact.mapping_hash):
+            continue
+        mapping_file = Path(artifact.mapping_path)
+        if not mapping_file.is_file():
+            out.append(_f("loadout-drift", name,
+                          f"the mapping equip consumed is gone: {artifact.mapping_path}"))
+        elif "sha256:" + hashlib.sha256(mapping_file.read_bytes()).hexdigest() != artifact.mapping_hash:
+            out.append(_f("loadout-drift", name,
+                          f"the mapping bytes equip consumed have changed: {artifact.mapping_path}"))
+    return out
 
 
 # --- driver -----------------------------------------------------------------
@@ -134,42 +188,44 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
 
     for name in names:
         try:
-            m = load_mapping(name, repo, warn=lambda msg: None)
+            mapping = load_mapping(name, repo,
+                             warn=lambda msg: findings.append(_f("mapping-override", name, msg)))
         except MappingError as e:
             findings.append(_f("mapping-invalid", name, str(e)))
             continue
-        findings += check_mapping(repo, name, m)
-        findings += check_fixtures(repo, name, m)
+        findings += check_mapping(repo, name, mapping)
+        findings += check_fixtures(repo, name, mapping)
+        findings += check_loadout(repo, name)
         if canon is None:
             continue
-        dfile = f"{DECISIONS_DIR}/{name}.toml"
-        decisions, derrs = load_decisions(repo, name, set(m.events.values()))
-        findings += [_f("decision-invalid", name, e, dfile) for e in derrs]
+        decisions_file = f"{DECISIONS_DIR}/{name}.toml"
+        decisions, decision_errors = load_decisions(repo, name, set(mapping.events.values()))
+        findings += [_f("decision-invalid", name, e, decisions_file) for e in decision_errors]
         try:
-            r = generate_target(repo, canon, m, decisions)
+            target_result = generate_target(repo, canon, mapping, decisions)
         except (ValueError, OSError) as e:
-            findings.append(_f("generated-drift", name, f"cannot compute generated file: {e}", m.config_path))
+            findings.append(_f("generated-drift", name, f"cannot compute generated file: {e}", mapping.config_path))
             continue
-        for mm in r.undecided:
-            findings.append(_f("decision-undecided", name, f"{mm.id}: {mm.detail}; options: {' | '.join(mm.options)}",
-                               dfile))
-        findings += [_f("decision-weakens-guard", name, f"{a.id} = {a.choice}: {a.text}", dfile)
-                     for a in r.applied if a.weakening]
-        findings += [_f("decision-stale", name, f"{sid} matches no mismatch now", dfile) for sid in r.stale]
-        findings += [_f("setting-unmapped", name, u) for u in r.unmapped]
-        if r.drift:
-            state = "missing" if not (repo / r.path).is_file() else "differs from generate output"
-            findings.append(_f("generated-drift", name, f"{r.path} {state}; run `polymorph generate`", r.path))
+        for mismatch in target_result.undecided:
+            findings.append(_f("decision-undecided", name, f"{mismatch.id}: {mismatch.detail}; options: {' | '.join(mismatch.options)}",
+                               decisions_file))
+        findings += [_f("decision-weakens-guard", name, f"{applied.id} = {applied.choice}: {applied.text}", decisions_file)
+                     for applied in target_result.applied if applied.weakening]
+        findings += [_f("decision-stale", name, f"{stale_id} matches no mismatch now", decisions_file) for stale_id in target_result.stale]
+        findings += [_f("setting-unmapped", name, unmapped_setting) for unmapped_setting in target_result.unmapped]
+        if target_result.drift:
+            state = "missing" if not (repo / target_result.path).is_file() else "differs from generate output"
+            findings.append(_f("generated-drift", name, f"{target_result.path} {state}; run `polymorph manage generate`", target_result.path))
     return findings
 
 
 def summarize(findings: list[Finding]) -> dict[str, int]:
-    return {s: sum(1 for f in findings if f.severity == s) for s in SEVERITIES}
+    return {summary: sum(1 for finding in findings if finding.severity == summary) for summary in SEVERITIES}
 
 
 def exit_code(findings: list[Finding], strict: bool = False) -> int:
-    s = summarize(findings)
-    return 1 if s["error"] or (strict and s["warning"]) else 0
+    summary = summarize(findings)
+    return 1 if summary["error"] or (strict and summary["warning"]) else 0
 
 
 # --- formats ----------------------------------------------------------------
@@ -177,42 +233,42 @@ def exit_code(findings: list[Finding], strict: bool = False) -> int:
 def format_text(findings: list[Finding]) -> str:
     lines: list[str] = []
     groups: dict[str | None, list[Finding]] = {}
-    for f in findings:
-        groups.setdefault(f.target, []).append(f)
-    for target in sorted(groups, key=lambda t: (t is not None, t or "")):
+    for finding in findings:
+        groups.setdefault(finding.target, []).append(finding)
+    for target in sorted(groups, key=lambda target_name: (target_name is not None, target_name or "")):
         lines.append(f"[{target}]" if target else "[repo]")
-        for f in groups[target]:
-            where = f" ({f.file})" if f.file else ""
-            lines.append(f"  {f.severity} {f.code} {target or '-'}: {f.message}{where}")
-    s = summarize(findings)
-    lines.append(f"{s['error']} error(s), {s['warning']} warning(s), {s['note']} note(s)")
+        for finding in groups[target]:
+            where = f" ({finding.file})" if finding.file else ""
+            lines.append(f"  {finding.severity} {finding.code} {target or '-'}: {finding.message}{where}")
+    summary = summarize(findings)
+    lines.append(f"{summary['error']} error(s), {summary['warning']} warning(s), {summary['note']} note(s)")
     return "\n".join(lines) + "\n"
 
 
 def format_json(findings: list[Finding]) -> str:
-    return json.dumps({"findings": [asdict(f) for f in findings], "summary": summarize(findings)}, indent=2) + "\n"
+    return json.dumps({"findings": [asdict(finding) for finding in findings], "summary": summarize(findings)}, indent=2) + "\n"
 
 
 def format_sarif(findings: list[Finding]) -> str:
-    used = sorted({f.code for f in findings})
+    used = sorted({finding.code for finding in findings})
     results = []
-    for f in findings:
-        res: dict = {
-            "ruleId": f.code,
-            "level": f.severity,
-            "message": {"text": f"{f.target}: {f.message}" if f.target else f.message},
+    for finding in findings:
+        sarif_result: dict = {
+            "ruleId": finding.code,
+            "level": finding.severity,
+            "message": {"text": f"{finding.target}: {finding.message}" if finding.target else finding.message},
         }
-        if f.file:
-            res["locations"] = [{"physicalLocation": {"artifactLocation": {"uri": f.file}}}]
-        results.append(res)
+        if finding.file:
+            sarif_result["locations"] = [{"physicalLocation": {"artifactLocation": {"uri": finding.file}}}]
+        results.append(sarif_result)
     doc = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
         "runs": [{
             "tool": {"driver": {
                 "name": "polymorph",
-                "rules": [{"id": c, "shortDescription": {"text": CODES[c][1]},
-                           "defaultConfiguration": {"level": CODES[c][0]}} for c in used],
+                "rules": [{"id": code, "shortDescription": {"text": CODES[code][1]},
+                           "defaultConfiguration": {"level": CODES[code][0]}} for code in used],
             }},
             "results": results,
         }],

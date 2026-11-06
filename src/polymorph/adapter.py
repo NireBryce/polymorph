@@ -56,15 +56,15 @@ def translate_in(mapping: dict, native: Any) -> dict:
         raise AdapterError("native payload is not a JSON object")
     canonical: dict[str, Any] = {}
     try:
-        for ckey, npath in (mapping.get("payload_in") or {}).items():
-            if ckey == "extractor":
+        for canon_key, native_path in (mapping.get("payload_in") or {}).items():
+            if canon_key == "extractor":
                 continue
-            if not isinstance(npath, str):
-                raise AdapterError(f"payload_in.{ckey} is not a path string")
-            value = lookup(native, npath, None)
+            if not isinstance(native_path, str):
+                raise AdapterError(f"payload_in.{canon_key} is not a path string")
+            value = lookup(native, native_path, None)
             if value is None:
                 continue
-            assign(canonical, CANON_PATHS.get(ckey, ckey), value)
+            assign(canonical, CANON_PATHS.get(canon_key, canon_key), value)
         for key in PASSTHROUGH:
             if key not in canonical and key in native:
                 canonical[key] = native[key]
@@ -73,9 +73,9 @@ def translate_in(mapping: dict, native: Any) -> dict:
             cls = _native_tool_class(mapping, name)
             if cls in CLASS_TOOL:
                 canonical["tool_name"] = CLASS_TOOL[cls]
-        ext = (mapping.get("payload_in") or {}).get("extractor")
-        if ext is not None:
-            for path, value in extractors.get(ext)(native).items():
+        extractor_name = (mapping.get("payload_in") or {}).get("extractor")
+        if extractor_name is not None:
+            for path, value in extractors.get(extractor_name)(native).items():
                 assign(canonical, path, value)
     except (ExprError, extractors.ExtractorError) as e:
         raise AdapterError(str(e)) from e
@@ -107,6 +107,11 @@ def _classify(answer: dict | None) -> tuple[str, dict[str, Any]]:
 def translate_out(mapping: dict, answer: dict | None) -> dict:
     kind, vals = _classify(answer)
     if kind == "none":
+        if answer is not None:
+            # the hook spoke, and nothing in its answer maps to a native form:
+            # a silent allow here would discard the guard's verdict
+            raise AdapterError(
+                f"hook answer has no decision polymorph can translate: {json.dumps(answer)[:200]}")
         return {"stdout": "", "exit": 0, "stderr": ""}
     spec = (mapping.get("payload_out") or {}).get(kind)
     caps = mapping.get("capabilities") or {}
@@ -122,12 +127,12 @@ def translate_out(mapping: dict, answer: dict | None) -> dict:
     text = vals["reason"] or vals["context"] or vals["message"]
     if caps.get("json_answers"):
         return {"stdout": json.dumps(answer), "exit": 0, "stderr": ""}
+    if kind == "deny" and caps.get("exit_2_blocks"):
+        return {"stdout": "", "exit": 2, "stderr": text}
     if kind == "deny":
-        if caps.get("exit_2_blocks"):
-            return {"stdout": "", "exit": 2, "stderr": text}
-        # validate rejects such a mapping; never let a deny leave as exit 0 (allow) unseen
-        raise AdapterError("the hook denied, but the mapping has no payload_out.deny and the "
-                           "harness takes neither JSON answers nor exit 2")
+        # no payload_out.deny and no way to block: exit 0 here would turn the guard's deny into an allow
+        raise AdapterError(f"the mapping has no way to express a deny (no payload_out.deny, "
+                           f"exit_2_blocks and json_answers false): {text or 'no reason given'}")
     return {"stdout": "", "exit": 0, "stderr": text}
 
 
@@ -140,18 +145,18 @@ def not_checked(mapping: dict | None, why: str) -> dict:
 
 
 def resolve_script(repo: Path, script: str) -> Path:
-    hooks = (repo / ".agents" / "hooks").resolve()
-    p = Path(script)
-    real = (p if p.is_absolute() else repo / p).resolve()
-    if not real.is_relative_to(hooks) or not real.is_file():
-        raise AdapterError(f"hook script {script!r} is not a file under {hooks}; refused")
+    hooks_dir = (repo / ".agents" / "hooks").resolve()
+    script_path = Path(script)
+    real = (script_path if script_path.is_absolute() else repo / script_path).resolve()
+    if not real.is_relative_to(hooks_dir) or not real.is_file():
+        raise AdapterError(f"hook script {script!r} is not a file under {hooks_dir}; refused")
     return real
 
 
 def find_repo(start: Path) -> Path:
-    for d in [start, *start.parents]:
-        if (d / ".agents").is_dir():
-            return d
+    for candidate_dir in [start, *start.parents]:
+        if (candidate_dir / ".agents").is_dir():
+            return candidate_dir
     raise AdapterError("no .agents directory found above the working directory")
 
 
@@ -159,31 +164,43 @@ _NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def load_mapping(repo: Path, name: str, extra_dir: Path | None = None, trust: list[Path] = ()) -> dict:
+    from .validate import validate_mapping
+
     if not _NAME.fullmatch(name):
         raise AdapterError(f"bad harness name {name!r}")
-    dirs = [repo / ".polymorph" / "basecamp" / "mappings", MAPPINGS_DIR]
+    # every compared root is resolved: a resolved --mappings against unresolved
+    # base dirs refused the repo's own mappings dir reached through a symlink
+    dirs = [(repo / ".polymorph" / "basecamp" / "mappings").resolve(), MAPPINGS_DIR.resolve()]
     if extra_dir is not None:
-        e = extra_dir.resolve()
-        if e not in dirs and e not in [t.resolve() for t in trust]:
+        extra_resolved = extra_dir.resolve()
+        if extra_resolved not in dirs and extra_resolved not in [trust_dir.resolve() for trust_dir in trust]:
             raise AdapterError(f"--mappings {extra_dir} is outside trusted dirs; add --trust-dir")
-        dirs.insert(0, e)
-    for d in dirs:
-        f = d / f"{name}.toml"
-        if f.is_file():
-            with open(f, "rb") as fh:
-                return tomllib.load(fh)
+        dirs.insert(0, extra_resolved)
+    for candidate_dir in dirs:
+        candidate_path = candidate_dir / f"{name}.toml"
+        if candidate_path.is_file():
+            with open(candidate_path, "rb") as handle:
+                raw = tomllib.load(handle)
+            validation_errors = validate_mapping(raw)
+            if validation_errors:
+                # an invalid mapping must be a visible NOT-checked, never a silently
+                # mis-wired guard: validation here is the runtime trust boundary
+                raise AdapterError(f"mapping {name} is invalid: {'; '.join(validation_errors)}")
+            return raw
     raise AdapterError(f"no mapping {name}.toml found")
 
 
-def run_hook(script: Path, canonical: dict, env_extra: dict, cwd: Path) -> subprocess.CompletedProcess:
+def run_hook(script: Path, canonical: dict, env_extra: dict, cwd: Path,
+             timeout: float = HOOK_TIMEOUT) -> subprocess.CompletedProcess:
     env = {**os.environ, **env_extra}
     return subprocess.run(
         [str(script)], input=json.dumps(canonical), capture_output=True, text=True,
-        env=env, cwd=cwd, timeout=HOOK_TIMEOUT,
+        env=env, cwd=cwd, timeout=timeout,
     )
 
 
-def adapt(mapping: dict, repo: Path, script: str, stdin_text: str) -> dict:
+def adapt(mapping: dict, repo: Path, script: str, stdin_text: str,
+          timeout: float = HOOK_TIMEOUT) -> dict:
     real = resolve_script(repo, script)
     try:
         native = json.loads(stdin_text)
@@ -191,16 +208,16 @@ def adapt(mapping: dict, repo: Path, script: str, stdin_text: str) -> dict:
         raise AdapterError(f"native payload is not valid JSON: {e}") from e
     canonical = translate_in(mapping, native)
     try:
-        cp = run_hook(real, canonical, capability_env(mapping), repo)
+        proc = run_hook(real, canonical, capability_env(mapping), repo, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise AdapterError(f"hook could not run: {e}") from e
-    if cp.returncode == 2:
+    if proc.returncode == 2:
         answer = {"hookSpecificOutput": {"permissionDecision": "deny",
-                                         "permissionDecisionReason": cp.stderr.strip()}}
+                                         "permissionDecisionReason": proc.stderr.strip()}}
         return translate_out(mapping, answer)
-    if cp.returncode != 0:
-        raise AdapterError(f"hook exited {cp.returncode}: {cp.stderr.strip()[:300]}")
-    out = cp.stdout.strip()
+    if proc.returncode != 0:
+        raise AdapterError(f"hook exited {proc.returncode}: {proc.stderr.strip()[:300]}")
+    out = proc.stdout.strip()
     answer = None
     if out:
         try:
@@ -213,19 +230,28 @@ def adapt(mapping: dict, repo: Path, script: str, stdin_text: str) -> dict:
 
 
 def run_adapter(argv: list[str] | None = None, stdin=None, stdout=None, stderr=None) -> int:
-    ap = argparse.ArgumentParser(prog="polymorph adapter")
-    ap.add_argument("--harness", required=True)
-    ap.add_argument("--mappings", type=Path)
-    ap.add_argument("--trust-dir", type=Path, action="append", default=[])
-    ap.add_argument("--repo", type=Path)
-    ap.add_argument("script", help="hook script (after --)")
-    args = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(prog="polymorph adapter")
+    parser.add_argument("--harness", required=True)
+    parser.add_argument("--mappings", type=Path)
+    parser.add_argument("--trust-dir", type=Path, action="append", default=[])
+    parser.add_argument("--repo", type=Path)
+    parser.add_argument("--timeout", type=float, default=HOOK_TIMEOUT,
+                        help="seconds before the hook is killed (a killed hook is NOT checked, never a deny)")
+    parser.add_argument("script", help="hook script (after --)")
     stdin, stdout, stderr = stdin or sys.stdin, stdout or sys.stdout, stderr or sys.stderr
     mapping = None
     try:
+        try:
+            args = parser.parse_args(argv)
+        except SystemExit as e:
+            # a usage error must land in the same visible NOT-checked path as every other
+            # fault: on a harness that reads exit 2 as deny, argparse's exit 2 would deny
+            raise AdapterError(f"usage error ({e.code})") from None
+        if not (args.timeout > 0) or args.timeout in (float("inf"), float("nan")):
+            raise AdapterError("--timeout must be finite and above 0")
         repo = (args.repo or find_repo(Path.cwd())).resolve()
         mapping = load_mapping(repo, args.harness, args.mappings, args.trust_dir)
-        result = adapt(mapping, repo, args.script, stdin.read())
+        result = adapt(mapping, repo, args.script, stdin.read(), timeout=args.timeout)
     except AdapterError as e:
         result = not_checked(mapping, str(e))
     except Exception as e:  # any fault: still visible, still never a deny

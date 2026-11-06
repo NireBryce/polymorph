@@ -87,10 +87,10 @@ needs any translation is a validation error (`mapping-invalid` in `check`). `cla
 **`adapter`** (default): the harness differs, so the hook goes through polymorph:
 
 ```
-python -m polymorph adapter --harness gemini -- "$CLAUDE_PROJECT_DIR/.agents/hooks/block-rm.sh"
+python3 -m polymorph adapter --harness gemini -- "$CLAUDE_PROJECT_DIR/.agents/hooks/block-rm.sh"
 ```
 
-This needs `python` on the harness's `PATH` with `polymorph` importable, and the harness
+This needs `python3` on the harness's `PATH` with `polymorph` importable, and the harness
 must set `CLAUDE_PROJECT_DIR` or the shell must expand it; both are assumptions the
 mapping does not check. At run time the adapter:
 
@@ -129,7 +129,14 @@ The adapter only reports these; **the hook script decides what to do with them.*
 canonical example: when `GUARD_ASK_ENFORCED=0` a well-written guard should answer `deny`
 instead of `ask`, because the harness would turn `ask` into allow. polymorph does not
 rewrite the answer for you. Hooks run `direct` get no variables from polymorph, since no
-adapter runs; a script that needs them must default sensibly when they are unset.
+adapter runs; a script that needs them must default sensibly when they are unset. A direct
+mapping that also sets `ask = false` is therefore flagged by `check` as
+`direct-ask-unenforceable`: the hardening the flag promises is unobservable by the hook,
+which can only apply it if it was written for this harness and detects it itself.
+An adapter mapping that cannot express a block at all (no `payload_out.deny`, and
+`exit_2_blocks` and `json_answers` both false) fails `validate`, so `check` reports it as
+`mapping-invalid`: a deny would otherwise become a visible NOT-checked fault and the call
+would proceed.
 
 Capabilities in a mapping are claims. Only a live test establishes them; see
 [Limits](limits.md).
@@ -159,24 +166,71 @@ Harnesses differ: one may have no post-tool event, no tool for a class, or no pa
 a hook reads. polymorph does not guess a substitute and does not drop the hook quietly.
 `generate` stops for that target (exit 3), writes nothing for it, and prints each item as a
 question with its options. The answer goes in `.polymorph/basecamp/decisions/NAME.toml`, keyed
-by `<hook-script>:<kind>` with a `choice` and a `date`. Skipping is always a choice you
+by `<hook-script>:<event>:<kind>` -- the hook's canonical event is part of the key, so a
+script registered under several events is decided per event -- with a `choice` and a `date`.
+Skipping is always a choice you
 record, and the choices that make a guard weaker (`run-empty`, moving a hook to another
-event) are flagged by `generate` and by `polymorph check`. Details: [SPEC](SPEC.md#decisions).
+event) are flagged by `generate` and by `polymorph manage check`. Details: [SPEC](SPEC.md#decisions).
+
+## Inventory and the gap report
+
+Beyond the transliterate kinds (settings, hooks), the reader's job, polymorph discovers
+the **discover-and-report** kinds: skills (`.agents/skills/`), rules (`.claude/rules/`,
+`.agents/rules/`), memory (`AGENTS.md`, `CLAUDE.md`) and the entries of `.claude/`. They
+are reported as paths and symlink targets -- contents are never opened, and nothing found
+is dropped. `polymorph inventory` prints that surface plus each harness's **gap report**:
+the provided paths the harness does not read, which it will silently ignore even after
+equipping: kinds it never reads (`unsupported`), and paths it reads that are missing
+(`no-link`), a second real copy (`unlinked-copy`, the drift between `AGENTS.md` and
+`CLAUDE.md`, or `.agents/` and `.claude/`) or a symlink to somewhere else (`points-elsewhere`).
+A symlink whose resolved target is already honoured content is a pointer, not a gap:
+`.claude/skills` -> `.agents/skills` when the table honours skills at `.agents/skills`, or
+`CLAUDE.md` -> `AGENTS.md` when the table honours `AGENTS.md` -- the harness reads those
+bytes through the other path, so the report leaves them out. A real second copy stays a
+gap: the pointer rule needs a symlink.
+
+What a harness honours is the **coverage table**, `coverage/NAME.toml` -- data with the
+same character as the mappings, not the mapping's `[capabilities]` flags (those say how a
+hook behaves; the coverage table says what the harness reads). A harness with no coverage
+table is *unknown*: the report says so instead of claiming gaps. See
+[the CLI reference](cli.md#inventory).
+
+## The env contract
+
+A loadout includes how a session runs, not only which files exist: `polymorph env` turns
+host facts in `.polymorph/basecamp/env.toml` (the machine key's path, the sockets a
+session must not inherit, per-harness session markers) into shell exports, or runs a
+command under them. It is **emit-only** — the key is a path, never opened; nothing is
+written; no daemon. Harness names come from the host facts and the mappings, so the same
+contract works for any harness the repo equips. See [the CLI reference](cli.md#env).
+
+## The equip run
+
+`polymorph equip --harness NAME` is the onboarding run: it writes the harness's config
+files (`manage generate`'s output), reports the honoured surface and the gap report from
+[the inventory](#inventory-and-the-gap-report), emits the [env contract](cli.md#env)
+lines, creates the symlinks the harness needs to read what the repo provides
+(`CLAUDE.md -> AGENTS.md` for Claude Code), and records a provenance manifest
+(`loadout.toml`: per issued artifact its sha256 and source, per symlink its target). Posture-aware: a committed basecamp gets committed artifacts; in a
+contributor checkout the artifacts are regenerable and `--gitignore` appends a marked,
+idempotent section to `.gitignore`. See [the CLI reference](cli.md#equip).
 
 ## What polymorph stores in a repo
 
 ```
 .polymorph/basecamp/
-  config.toml          enabled = ["zcode", ...]
-  mappings/NAME.toml   repo-local mapping; overrides a built-in of the same name, with a warning
-  decisions/NAME.toml  answers to generation-time mismatches (see below)
-  generated/NAME/      planned, not built
+  config.toml            enabled = ["zcode", ...]
+  mappings/NAME.toml     repo-local mapping; overrides a built-in of the same name, with a warning
+  coverage/NAME.toml     what one harness honours of the discover-and-report kinds (see [Inventory](#inventory-and-the-gap-report))
+  decisions/NAME.toml    answers to generation-time mismatches (see below)
+  loadout.toml           equip's provenance manifest: per issued artifact its sha256 and source; per symlink made its target
+  generated/NAME/        planned, not built
 ```
 
 `config.toml` accepts only the key `enabled`; anything else is an error. Generated harness
 configs are not stored here: they are written where the harness reads them, at the
 mapping's `config_path` (`.zcode/config.json`, `.claude/settings.json`, ...). Discovery
-logs live in `.polymorph-discovery/` in the directory you ran `discover init` from, kept
+logs live in `.polymorph/discovery/` in the directory you ran `discover init` from, kept
 out of `.agents/` so a raw log is never inside a tree you are likely to commit. polymorph
 does not add that folder to your `.gitignore`; do it yourself (see
 [Discovery](discovery.md#privacy)).

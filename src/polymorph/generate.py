@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,19 +33,22 @@ class TargetResult:
 
 
 def enabled_targets(repo: Path) -> list[str]:
-    f = repo / ENABLED_FILE
-    if not f.is_file():
+    config_file = repo / ENABLED_FILE
+    if not config_file.is_file():
         return []
-    data = tomllib.loads(f.read_text())
+    data = tomllib.loads(config_file.read_text())
     bad = set(data) - {"enabled"}
     if bad:
-        raise ValueError(f"{f}: unknown key(s) {sorted(bad)}")
+        raise ValueError(f"{config_file}: unknown key(s) {sorted(bad)}")
     return list(data.get("enabled", []))
 
 
-def adapter_command(harness: str, script: str) -> str:
+def adapter_command(harness: str, script: str, timeout: int | None = None) -> str:
+    extra = f" --timeout {timeout}" if timeout is not None else ""
+    # python3, never python: on a python3-only system a bare `python` fails with
+    # exit 127 before polymorph runs, and a nonzero non-2 exit does not block
     return (
-        f'python -m polymorph adapter --harness {harness} -- '
+        f'python3 -m polymorph adapter --harness {harness}{extra} -- '
         f'"$CLAUDE_PROJECT_DIR/{script}"'
     )
 
@@ -54,23 +58,23 @@ def direct_command(script: str) -> str:
     return f'"$CLAUDE_PROJECT_DIR/{script}"'
 
 
-def hook_command(m: Mapping, script: str) -> str:
-    if m.delivery == "direct":
+def hook_command(mapping: Mapping, script: str, timeout: int | None = None) -> str:
+    if mapping.delivery == "direct":
         return direct_command(script)
-    return adapter_command(m.name, script)
+    return adapter_command(mapping.name, script, timeout)
 
 
-def _matcher(h: Hook, m: Mapping) -> tuple[str | None, list[str]]:
+def _matcher(hook: Hook, mapping: Mapping) -> tuple[str | None, list[str]]:
     """Native matcher for a hook; second value lists classes with no native tool."""
-    if not h.classes:
+    if not hook.classes:
         return None, []
     names: list[str] = []
     missing: list[str] = []
-    for c in h.classes:
-        if c in m.tools:
-            names.extend(n for n in m.tools[c] if n not in names)
+    for tool_class in hook.classes:
+        if tool_class in mapping.tools:
+            names.extend(tool_name for tool_name in mapping.tools[tool_class] if tool_name not in names)
         else:
-            missing.append(c)
+            missing.append(tool_class)
     return "|".join(names), missing
 
 
@@ -84,31 +88,36 @@ CLASS_FIELDS = {
 BASE_FIELDS = ("tool_name", "cwd", "session_id", "tool_response", "event")
 
 
-def _provided(m: Mapping, cls: str) -> bool:
-    keys = set(m.payload_in)
-    if cls == "edit" and "extractor" in keys:
+def _provided(mapping: Mapping, tool_class: str) -> bool:
+    keys = set(mapping.payload_in)
+    if tool_class == "edit" and "extractor" in keys:
         return True
-    return bool(keys & set(CLASS_FIELDS[cls]))
+    return bool(keys & set(CLASS_FIELDS[tool_class]))
 
 
-def hook_mismatches(h: Hook, m: Mapping) -> list[Mismatch]:
-    """Everything the target lacks that this hook needs, before any decision."""
+def hook_mismatches(hook: Hook, mapping: Mapping) -> list[Mismatch]:
+    """Everything the target lacks that this hook needs, before any decision.
+
+    The id carries the hook's canonical event: one script registered under several events
+    gets one mismatch per event, and one decision answers only its own (issue #37).
+    """
     out: list[Mismatch] = []
-    base = dict(script=h.script, event=h.event, classes=h.classes)
-    if m.events.get(h.event) is None:
-        out.append(Mismatch(f"{h.script}:no-event", "no-event", detail=f"{m.name} has no {h.event} event",
+    base = dict(script=hook.script, event=hook.event, classes=hook.classes)
+    if mapping.events.get(hook.event) is None:
+        out.append(Mismatch(f"{hook.script}:{hook.event}:no-event", "no-event",
+                            detail=f"{mapping.name} has no {hook.event} event",
                             options=options_for("no-event"), **base))
-    _, missing = _matcher(h, m)
+    _, missing = _matcher(hook, mapping)
     if missing:
-        out.append(Mismatch(f"{h.script}:no-tool-class", "no-tool-class",
-                            detail=f"{m.name} has no tool for class(es) {', '.join(missing)}",
+        out.append(Mismatch(f"{hook.script}:{hook.event}:no-tool-class", "no-tool-class",
+                            detail=f"{mapping.name} has no tool for class(es) {', '.join(missing)}",
                             options=options_for("no-tool-class"), **base))
-    if m.delivery != "direct":  # direct delivery hands the hook the Claude payload unchanged
-        lacking = [c for c in h.classes if c in CLASS_FIELDS and c in m.tools and not _provided(m, c)]
+    if mapping.delivery != "direct":  # direct delivery hands the hook the Claude payload unchanged
+        lacking = [tool_class for tool_class in hook.classes if tool_class in CLASS_FIELDS and tool_class in mapping.tools and not _provided(mapping, tool_class)]
         if lacking:
-            fields = ", ".join(CLASS_FIELDS[c][0] if len(CLASS_FIELDS[c]) == 1 else "read.*" for c in lacking)
-            out.append(Mismatch(f"{h.script}:missing-field", "missing-field",
-                                detail=f"{m.name} payload_in does not map {fields}, which a {'/'.join(lacking)} hook reads",
+            fields = ", ".join(CLASS_FIELDS[tool_class][0] if len(CLASS_FIELDS[tool_class]) == 1 else "read.*" for tool_class in lacking)
+            out.append(Mismatch(f"{hook.script}:{hook.event}:missing-field", "missing-field",
+                                detail=f"{mapping.name} payload_in does not map {fields}, which a {'/'.join(lacking)} hook reads",
                                 options=options_for("missing-field"), **base))
     return out
 
@@ -121,111 +130,119 @@ class Resolution:
     notes: list[str] = field(default_factory=list)
 
 
-def _apply(res: Resolution, mm: Mismatch, d: Decision, weakening: bool, text: str) -> None:
-    if not any(a.id == mm.id for a in res.applied):
-        res.applied.append(Applied(mm.id, d.choice, weakening, text))
+def _apply(resolution: Resolution, mismatch: Mismatch, decision: Decision, weakening: bool, text: str) -> None:
+    if not any(applied.id == mismatch.id for applied in resolution.applied):
+        resolution.applied.append(Applied(mismatch.id, decision.choice, weakening, text))
 
 
-def _extra_fields_note(canon: Canon, m: Mapping) -> list[str]:
-    if m.delivery == "direct":
+def _extra_fields_note(canon: Canon, mapping: Mapping) -> list[str]:
+    if mapping.delivery == "direct":
         return []
-    tool_hooks = [h for h in canon.hooks if h.event != "session_start"]
-    classes = {c for h in tool_hooks for c in (h.classes or CLASS_FIELDS)}
-    used = set(BASE_FIELDS) | {f for c in classes for f in CLASS_FIELDS.get(c, ())}
-    extra = sorted(k for k in m.payload_in if k != "extractor" and k not in used)
+    tool_hooks = [hook for hook in canon.hooks if hook.event != "session_start"]
+    classes = {tool_class for hook in tool_hooks for tool_class in (hook.classes or CLASS_FIELDS)}
+    used = set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
+    extra = sorted(key for key in mapping.payload_in if key != "extractor" and key not in used)
     if not extra:
         return []
-    return [f"{m.name}: payload_in maps {', '.join(extra)}, which no hook here reads (not a question)"]
+    return [f"{mapping.name}: payload_in maps {', '.join(extra)}, which no hook here reads (not a question)"]
 
 
-def _claude_shape(canon: Canon, m: Mapping, existing: dict, wrapped: bool,
+def _claude_shape(canon: Canon, mapping: Mapping, existing: dict, wrapped: bool,
                   decisions: dict[str, Decision]) -> tuple[str, Resolution]:
     """wrapped: ZCode shape (hooks.enabled + hooks.events, per-hook enabled); else Claude Code settings shape."""
-    res = Resolution()
-    res.notes += _extra_fields_note(canon, m)
+    resolution = Resolution()
+    resolution.notes += _extra_fields_note(canon, mapping)
     events: dict[str, list[dict]] = {}
-    for h in canon.hooks:
-        native = m.events.get(h.event)
-        matcher, _ = _matcher(h, m)
+    for hook in canon.hooks:
+        native = mapping.events.get(hook.event)
+        matcher, _ = _matcher(hook, mapping)
         drop = False
-        for mm in hook_mismatches(h, m):
-            res.seen.add(mm.id)
-            d = decisions.get(mm.id)
-            if d is None:
-                if not any(u.id == mm.id for u in res.undecided):
-                    res.undecided.append(mm)
+        for mismatch in hook_mismatches(hook, mapping):
+            resolution.seen.add(mismatch.id)
+            decision = decisions.get(mismatch.id)
+            if decision is None:
+                if not any(existing.id == mismatch.id for existing in resolution.undecided):
+                    resolution.undecided.append(mismatch)
                 drop = True  # the default is skip; nothing is written while undecided
-            elif mm.kind == "no-event" and d.choice.startswith("substitute:"):
-                native = d.choice.split(":", 1)[1]
-                canon_ev = next((e for e, n in m.events.items() if n == native), None)
-                weak = canon_ev != h.event
-                _apply(res, mm, d, weak, f"{h.script} runs on {m.name} {native} instead of {h.event}"
-                       + (f" ({canon_ev} is a different event class)" if weak and canon_ev else ""))
-            elif mm.kind == "missing-field" and d.choice == "run-empty":
-                _apply(res, mm, d, True, f"{h.script} runs without the field {m.name} lacks; it sees it empty")
-            elif mm.kind == "no-tool-class":
-                _apply(res, mm, d, False, f"{h.script} not registered for the class(es) {m.name} lacks")
+            elif mismatch.kind == "no-event" and decision.choice.startswith("substitute:"):
+                native = decision.choice.split(":", 1)[1]
+                canonical_event = next((e for e, n in mapping.events.items() if n == native), None)
+                weak = canonical_event != hook.event
+                _apply(resolution, mismatch, decision, weak, f"{hook.script} runs on {mapping.name} {native} instead of {hook.event}"
+                       + (f" ({canonical_event} is a different event class)" if weak and canonical_event else ""))
+            elif mismatch.kind == "missing-field" and decision.choice == "run-empty":
+                _apply(resolution, mismatch, decision, True, f"{hook.script} runs without the field {mapping.name} lacks; it sees it empty")
+            elif mismatch.kind == "no-tool-class":
+                _apply(resolution, mismatch, decision, False, f"{hook.script} not registered for the class(es) {mapping.name} lacks")
                 if matcher is not None and not matcher:
                     drop = True
             else:  # skip: no-event or missing-field
-                _apply(res, mm, d, False, f"{h.script} not generated for {m.name}")
+                _apply(resolution, mismatch, decision, False, f"{hook.script} not generated for {mapping.name}")
                 drop = True
         if drop or native is None:
             continue
-        entry: dict = {"type": "command", "command": hook_command(m, h.script)}
+        entry: dict = {"type": "command", "command": hook_command(mapping, hook.script, hook.timeout)}
         if wrapped:
             entry["enabled"] = True
-        if h.timeout is not None:
-            entry["timeout"] = h.timeout
+        if hook.timeout is not None:
+            entry["timeout"] = hook.timeout
         groups = events.setdefault(native, [])
-        for g in groups:
-            if g.get("matcher") == matcher:
-                g["hooks"].append(entry)
+        for group in groups:
+            if group.get("matcher") == matcher:
+                group["hooks"].append(entry)
                 break
         else:
-            g = {"matcher": matcher, "hooks": [entry]} if matcher else {"hooks": [entry]}
-            groups.append(g)
+            group = {"matcher": matcher, "hooks": [entry]} if matcher else {"hooks": [entry]}
+            groups.append(group)
     doc = dict(existing)
     doc["hooks"] = {"enabled": True, "events": events} if wrapped else events
-    return json.dumps(doc, indent=2) + "\n", res
+    return json.dumps(doc, indent=2) + "\n", resolution
 
 
-def _claude_like(canon, m, existing, decisions):
-    return _claude_shape(canon, m, existing, True, decisions)
+def _claude_like(canon, mapping, existing, decisions):
+    return _claude_shape(canon, mapping, existing, True, decisions)
 
 
-def _claude_settings(canon, m, existing, decisions):
-    return _claude_shape(canon, m, existing, False, decisions)
+def _claude_settings(canon, mapping, existing, decisions):
+    return _claude_shape(canon, mapping, existing, False, decisions)
 
 
 TEMPLATES = {"claude-like": _claude_like, "claude-settings": _claude_settings}
 
 
-def generate_target(repo: Path, canon: Canon, m: Mapping,
+def generate_target(repo: Path, canon: Canon, mapping: Mapping,
                     decisions: dict[str, Decision] | None = None) -> TargetResult:
     """decisions None: load the target's decision file; an invalid one raises DecisionError."""
-    if m.format != "json" or m.template not in TEMPLATES:
-        raise ValueError(f"{m.name}: unsupported format/template {m.format}/{m.template}")
-    native_events = sorted(set(m.events.values()))
+    if mapping.format != "json" or mapping.template not in TEMPLATES:
+        raise ValueError(f"{mapping.name}: unsupported format/template {mapping.format}/{mapping.template}")
+    native_events = sorted(set(mapping.events.values()))
     if decisions is None:
-        decisions, errs = load_decisions(repo, m.name, set(native_events))
+        decisions, errs = load_decisions(repo, mapping.name, set(native_events))
         if errs:
-            raise DecisionError(f"{DECISIONS_FILE_FMT.format(m.name)}: " + "; ".join(errs))
-    out = repo / m.config_path
+            raise DecisionError(f"{DECISIONS_FILE_FMT.format(mapping.name)}: " + "; ".join(errs))
+    out = repo / mapping.config_path
+    # config_path comes from mapping data: refuse a target that leaves the repo
+    # through a symlinked component, for the read here and the write in generate()
+    real = Path(os.path.realpath(out))
+    if not real.is_relative_to(Path(os.path.realpath(repo))):
+        raise ValueError(f"{mapping.config_path!r} resolves outside the repository ({real}); "
+                         "refusing to read or write it")
     existing: dict = {}
-    old = None
+    previous_content = None
     if out.is_file():
-        old = out.read_text()
-        existing = json.loads(old)
-    content, res = TEMPLATES[m.template](canon, m, existing, decisions)
+        previous_content = out.read_text()
+        existing = json.loads(previous_content)
+        if not isinstance(existing, dict):
+            raise ValueError(f"{out}: existing config is not a JSON object; refusing to overwrite it")
+    content, resolution = TEMPLATES[mapping.template](canon, mapping, existing, decisions)
     warnings = []
-    if not m.verified:
-        warnings.append(f"{m.name}: mapping has no `verified` field; treat output as unverified")
+    if not mapping.verified:
+        warnings.append(f"{mapping.name}: mapping has no `verified` field; treat output as unverified")
     return TargetResult(
-        harness=m.name, path=m.config_path, content=content,
-        drift=(old != content) and not res.undecided,
-        unmapped=list(canon.unmapped), undecided=res.undecided, applied=res.applied,
-        stale=sorted(set(decisions) - res.seen), notes=res.notes, native_events=native_events,
+        harness=mapping.name, path=mapping.config_path, content=content,
+        drift=(previous_content != content) and not resolution.undecided,
+        unmapped=list(canon.unmapped), undecided=resolution.undecided, applied=resolution.applied,
+        stale=sorted(set(decisions) - resolution.seen), notes=resolution.notes, native_events=native_events,
         warnings=warnings,
     )
 
@@ -243,11 +260,11 @@ def generate(
     names = harnesses or enabled_targets(repo)
     results = []
     for name in names:
-        m = load_mapping(name, repo, mappings_dir, tuple(trust_dirs))
-        r = generate_target(repo, canon, m)
-        if not check and r.drift:
-            dest = repo / r.path
+        mapping = load_mapping(name, repo, mappings_dir, tuple(trust_dirs))
+        target_result = generate_target(repo, canon, mapping)
+        if not check and target_result.drift:
+            dest = repo / target_result.path
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(r.content)
-        results.append(r)
+            dest.write_text(target_result.content)
+        results.append(target_result)
     return results

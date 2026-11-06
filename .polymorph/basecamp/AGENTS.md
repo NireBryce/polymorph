@@ -27,7 +27,9 @@ loadout manager (its role), onboarding run, gap report — is fixed in
   mapping can fail open. Say what a change breaks, since nothing here
   promises compatibility.
 - **"push" means skill `ship`**: branch, PR, one confirmation covering
-  merge and branch deletion. Never push to `main` directly.
+  merge and branch deletion. Work lands on `experimental` by default;
+  `main` takes stabilized updates from it, by PR, once stable. Neither
+  branch takes a direct push.
 - **Branching work happens in its own worktree** (skill `use-a-worktree`).
 - **File issues and PRs only in `NireBryce/polymorph`**, unless the user
   names another project in their own message (skill `propose-issue`).
@@ -73,15 +75,19 @@ just test            # the unit tests: PYTHONPATH=src python3 -m unittest discov
 just check           # nix flake check: builds the package and runs the tests in the sandbox
 just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths
 just lint            # byte-compile, stdlib-only imports, no committed build output
-just preflight       # test + docs + lint + check: what CI runs
+just self-check      # dogfood: shipped mappings validate, fixtures pass, this repo's own agent layout has no coverage gaps
+just preflight       # test + docs + lint + check + self-check: what CI runs
+just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
 just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)
 just ship-land PR    # merge pinned to the head, sync main --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
 ```
 
 `git add` a new file before `just check`: flakes ignore untracked files, so
-a new test or fixture silently does not exist. Do not pipe a check into
-`tail` or `head`: the pipe's exit status is the last command's.
+a new test or fixture silently does not exist. Do not pipe a check into a
+filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and
+a failed stage reads as passed. Write the output to a file and read the
+exit status separately, or use `set -o pipefail`.
 
 ## Architecture
 
@@ -94,12 +100,14 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `adapter.py`, `exprs.py`, `extractors.py` | run a hook script behind a mapping: translate payload in, answer out |
 | `conformance.py` | replay `src/polymorph/fixtures/<harness>/*.json` through a mapping |
 | `decisions.py` | `.polymorph/basecamp/decisions/NAME.toml`: validate, `Mismatch`/`Decision`, the question format |
-| `check.py` | static analysis of a repo's agent config (`polymorph check`); runs nothing |
-| `capture.py`, `capture_drivers.py`, `data/` | `polymorph capture`: scratch dir, fixed steps, confirmation, report; shipped drivers (`opencode`, `claude`) and the plugin template |
+| `check.py` | static analysis of a repo's agent config (`polymorph manage check`); runs nothing |
+| `capture.py`, `capture_drivers.py`, `data/` | `polymorph capture`: scratch dir, fixed steps, confirmation, report; shipped drivers (`opencode`, `claude`, `zcode`) and the plugin template |
+| `probe.py`, `data/probe-guard-hook.py` | `polymorph discover probe`: drives one marker command per decision route through a driver-capable harness; the guard (token-scoped, decode file) and the interpreter fill `[capabilities]` with how each flag was observed; adapters in `ADAPTERS` (zcode only) |
+| `inventory.py`, `links.py`, `adopt.py`, `equip.py` | the gap report (coverage tables say what a harness reads); the symlinks `equip` and `adopt` make for `no-link` gaps (built-in tables only); the move into the basecamp store; the onboarding run |
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
 | `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
-| `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`) |
+| `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
 | `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home) and `patterns.md` (how the repo is developed with agents) |
@@ -123,7 +131,17 @@ a new test or fixture silently does not exist. Do not pipe a check into
 | `new-skill` | writing a skill |
 | `name-a-thing` | naming a new concept, command or file so the name says what it means |
 | `port-agent-tooling` | porting agent tooling in from another repo |
+| `promote-to-main` | bringing `experimental` to `main` with the usage reference, man page and docs true |
 | `note-a-pattern` | proposing a development pattern for the wiki when you notice one |
 
 Plain prose: say what a thing does and what you saw; no hedging adverbs, no
 "robust", "seamless" or "comprehensive".
+
+Names read at skimming speed. A function's name is its behavior, a variable's
+name is its content: someone skimming a diff should never need to open a
+function to know what a line does. No one-letter names in code you write
+(`duration_seconds`, not `d`; `flag_results`, not `caps`), unless the letter
+is the idiom of the code right beside it (`rc` for a return code, `i, rec`
+in this repo's existing loops). A name that needs a comment to be decoded
+gets a better name instead. Full code style — comments, renames, shipped
+templates, recorded declines — is in `wiki/code-style.md`.

@@ -24,12 +24,8 @@
     }
   },
   "native_out": {
-    "stdout": {
-      "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "additionalContext": "heads up: working tree is dirty"
-      }
-    },
-    "exit": 0
+    "stdout": "",
+    "exit": 0,
+    "stderr": "heads up: working tree is dirty"
   }
 }

@@ -30,19 +30,19 @@ class GhError(Exception):
 
 
 def gh_json(*args: str):
-    p = subprocess.run(["gh", *args], capture_output=True, text=True)
-    if p.returncode != 0:
-        raise GhError(f"gh {' '.join(args[:2])} failed: {p.stderr.strip() or p.stdout.strip()}")
+    proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise GhError(f"gh {' '.join(args[:2])} failed: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
-        return json.loads(p.stdout)
+        return json.loads(proc.stdout)
     except ValueError as e:
         raise GhError(f"gh {' '.join(args[:2])}: not JSON ({e})") from e
 
 
 def current_branch() -> str:
-    p = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True)
-    name = p.stdout.strip()
-    if p.returncode != 0 or not name:
+    proc = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True)
+    name = proc.stdout.strip()
+    if proc.returncode != 0 or not name:
         raise GhError("no PR or branch given and the current branch is detached or unknown")
     return name
 
@@ -51,9 +51,9 @@ def aggregate(runs: list[dict]) -> tuple[str, str]:
     """Collapse the runs on one commit to (status, conclusion)."""
     if not runs:
         return "none", "-"
-    if any(r.get("status") != "completed" for r in runs):
+    if any(run.get("status") != "completed" for run in runs):
         return "in_progress", "-"
-    bad = [r.get("conclusion") or "unknown" for r in runs if r.get("conclusion") != "success"]
+    bad = [run.get("conclusion") or "unknown" for run in runs if run.get("conclusion") != "success"]
     return "completed", (bad[0] if bad else "success")
 
 
@@ -77,7 +77,9 @@ class Result:
 
 def snapshot(target: str) -> tuple[dict, str, str]:
     pr = gh_json("pr", "view", target, "--json", "number,headRefOid,headRefName,baseRefName,isCrossRepository,mergeStateStatus,state")
-    runs = gh_json("run", "list", "--commit", pr["headRefOid"], "--json", "status,conclusion")
+    # --limit past gh's default: a failing run beyond the cutoff must not read as green
+    runs = gh_json("run", "list", "--commit", pr["headRefOid"], "--limit", "100",
+                   "--json", "status,conclusion")
     status, conclusion = aggregate(runs)
     return pr, status, conclusion
 
@@ -89,42 +91,42 @@ def wait(target: str | None = None, timeout: float = DEFAULT_TIMEOUT,
     while True:
         pr, status, conclusion = snapshot(target)
         merge = pr.get("mergeStateStatus") or "UNKNOWN"
-        base = dict(sha=pr["headRefOid"], status=status, conclusion=conclusion, merge_state=merge,
+        result_fields = dict(sha=pr["headRefOid"], status=status, conclusion=conclusion, merge_state=merge,
                     pr=str(pr["number"]), head_branch=pr["headRefName"],
                     base_branch=pr.get("baseRefName") or "",
                     # fail closed: anything but an explicit False counts as a fork
                     cross_repo=pr.get("isCrossRepository") is not False)
         if pr.get("state") != "OPEN":
-            return Result(**base, ok=False, code=1, reason=f"PR is {pr.get('state')}, not OPEN")
+            return Result(**result_fields, ok=False, code=1, reason=f"PR is {pr.get('state')}, not OPEN")
         if status == "completed" and conclusion != "success":
-            return Result(**base, ok=False, code=1, reason=f"CI concluded {conclusion}")
+            return Result(**result_fields, ok=False, code=1, reason=f"CI concluded {conclusion}")
         # a finished run can still leave mergeStateStatus UNKNOWN for a moment: keep polling
         if status == "completed" and merge not in ("UNKNOWN", "UNSTABLE", "BLOCKED"):
             if merge == "CLEAN":
-                return Result(**base, ok=True, code=0, reason="")
-            return Result(**base, ok=False, code=1, reason=f"mergeStateStatus is {merge}, not CLEAN")
+                return Result(**result_fields, ok=True, code=0, reason="")
+            return Result(**result_fields, ok=False, code=1, reason=f"mergeStateStatus is {merge}, not CLEAN")
         if clock() >= deadline:
-            return Result(**base, ok=False, code=2,
+            return Result(**result_fields, ok=False, code=2,
                           reason=f"timed out after {timeout:g}s (status {status}, merge state {merge})")
         print(f"{pr['headRefOid'][:7]} {status} {conclusion} {merge}: waiting", file=sys.stderr)
         sleep(interval)
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("target", nargs="?", help="PR number or branch (default: the current branch)")
-    ap.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="seconds (default 900)")
-    ap.add_argument("--interval", type=float, default=DEFAULT_INTERVAL, help="seconds between polls")
-    a = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("target", nargs="?", help="PR number or branch (default: the current branch)")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="seconds (default 900)")
+    parser.add_argument("--interval", type=float, default=DEFAULT_INTERVAL, help="seconds between polls")
+    args = parser.parse_args(argv)
     try:
-        r = wait(a.target, a.timeout, a.interval)
+        result = wait(args.target, args.timeout, args.interval)
     except (GhError, OSError) as e:
         print(f"ci-wait: {e}", file=sys.stderr)
         return 2
-    sys.stdout.write(r.lines())
-    if not r.ok:
-        print(f"ci-wait: not ready: {r.reason}", file=sys.stderr)
-    return r.code
+    sys.stdout.write(result.lines())
+    if not result.ok:
+        print(f"ci-wait: not ready: {result.reason}", file=sys.stderr)
+    return result.code
 
 
 if __name__ == "__main__":

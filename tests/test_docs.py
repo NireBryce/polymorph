@@ -31,7 +31,6 @@ class DocsChecks(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         write(self.root, 'AGENTS.md', '| `demo` | a demo |\n')
         write(self.root, '.agents/skills/demo/SKILL.md', SKILL)
-        write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n')
         write(self.root, 'docs/a.md', 'hi\n')
         write(self.root, 'src/polymorph/cli.py', CLI)
         write(self.root, 'README.md', '> **Experimental and unvetted.**\n[a](docs/a.md)\n\n## Cost and responsibility\n\ntext\n')
@@ -39,7 +38,7 @@ class DocsChecks(unittest.TestCase):
 
     def test_good_tree_passes(self):
         for check in docs.CHECKS:
-            if check not in (docs.check_cli, docs.check_cost):
+            if check not in (docs.check_cli, docs.check_cost, docs.check_generated):
                 self.assertEqual(check(self.root), [], check.__name__)
 
     def test_skill_not_listed(self):

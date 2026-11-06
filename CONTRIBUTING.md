@@ -37,10 +37,10 @@ Prerequisite: you know how the harness behaves, from a capture or a live session
    `name` equals the filename. Leave `verified` out unless a live session backs it, and
    if you add it, say exactly what was checked, how and when. Put the basis, and what is
    not covered, in a header comment as `src/polymorph/mappings/zcode.toml` does.
-2. `python -m polymorph validate src/polymorph/mappings/NAME.toml` until it prints `ok`.
+2. `python -m polymorph manage validate src/polymorph/mappings/NAME.toml` until it prints `ok`.
 3. Add fixtures `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`
    ([format](docs/writing-a-mapping.md#fixtures)). Prefer ones built from a real capture.
-4. `python -m polymorph conformance --harness NAME` passes.
+4. `python -m polymorph manage conformance --harness NAME` passes.
 5. If the harness's config file is not shaped like `claude-settings` or `claude-like`,
    that needs a new template in `generate.py`, which is a code change and needs tests.
 6. Add a test where behaviour is not already covered, and a CHANGELOG line.

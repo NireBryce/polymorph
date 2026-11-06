@@ -12,5 +12,6 @@ from pathlib import Path
 # The package is installed unzipped, so the resource traversable is a real directory.
 DATA_ROOT = Path(str(files("polymorph")))
 MAPPINGS_DIR = DATA_ROOT / "mappings"
+COVERAGE_DIR = DATA_ROOT / "coverage"
 FIXTURES_DIR = DATA_ROOT / "fixtures"
 DATA_DIR = DATA_ROOT / "data"   # files `capture` installs into a scratch directory

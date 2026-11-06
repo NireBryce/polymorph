@@ -92,36 +92,43 @@ in the log.
 
 
 def _drivers_text() -> str:
-    return "\n".join(f"  {d.name:<10} {d.summary}" for d in DRIVERS.values())
+    return "\n".join(f"  {driver.name:<10} {driver.summary}" for driver in DRIVERS.values())
 
 
 def _epilog() -> str:
-    untested = [d for d in DRIVERS.values() if d.untested]
+    untested = [driver for driver in DRIVERS.values() if driver.untested]
     lines = ["drivers:", _drivers_text()]
-    for d in untested:
-        lines.append(f"\nUNTESTED: the {d.name} driver {d.untested}.")
+    for driver in untested:
+        lines.append(f"\nUNTESTED: the {driver.name} driver {driver.untested}.")
     lines.append("\nA harness with no driver: `polymorph capture --print-prompts` prints the "
                  "prompt kit to paste by hand.")
     return "\n".join(lines)
 
 
 def build_parser(sub=None) -> argparse.ArgumentParser:
-    kw = dict(description=("Run a real harness through fixed steps in a scratch directory and write a "
+    parser_kwargs = dict(description=("Run a real harness through fixed steps in a scratch directory and write a "
                            "summary, a draft mapping and a report. It spends model credits and "
                            "auto-approves the harness's tool calls. COST: it runs a real AI model on your account and "
                            "spends tokens (money or plan usage); see README.md, \"Cost and responsibility\"."),
               epilog=_epilog(), formatter_class=argparse.RawDescriptionHelpFormatter)
-    p = sub.add_parser("capture", help="run the discovery procedure against a harness, headless, in a scratch directory", **kw) if sub is not None else argparse.ArgumentParser(prog="polymorph capture", **kw)
-    p.add_argument("--harness", help="driver name (see below); required unless --print-prompts")
-    p.add_argument("--yes", action="store_true", help="skip the typed confirmation (required when stdin is not a terminal)")
-    p.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
-    p.add_argument("--steps", nargs="+", metavar="STEP", help=f"run only these steps, in the fixed order: {', '.join(STEP_NAMES)}")
-    p.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS")
-    p.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS")
-    p.add_argument("--out", default=None, metavar="DIR", help="results directory (default ./polymorph-capture-NAME; must be absent or empty)")
-    p.add_argument("--print-prompts", action="store_true", help="print the prompt kit for a harness with no driver, run nothing, exit 0")
-    p.add_argument("--full", action="store_true", help="log raw payloads (commands, paths, contents); default is redacted")
-    return p
+    parser = sub.add_parser("capture", help="run the discovery procedure against a harness, headless, in a scratch directory", **parser_kwargs) if sub is not None else argparse.ArgumentParser(prog="polymorph capture", **parser_kwargs)
+    parser.add_argument("--harness", help="driver name (see below); required unless --print-prompts")
+    parser.add_argument("--yes", action="store_true", help="skip the typed confirmation (required when stdin is not a terminal)")
+    parser.add_argument("--keep", action="store_true", help="keep the scratch directory afterwards")
+    parser.add_argument("--steps", nargs="+", metavar="STEP", help=f"run only these steps, in the fixed order: {', '.join(STEP_NAMES)}")
+    parser.add_argument("--step-timeout", type=float, default=DEFAULT_STEP_TIMEOUT, metavar="SECONDS",
+                   help="kill a step after this many seconds (default %(default)s)")
+    parser.add_argument("--total-timeout", type=float, default=DEFAULT_TOTAL_TIMEOUT, metavar="SECONDS",
+                   help="skip the remaining steps after this many seconds (default %(default)s)")
+    parser.add_argument("--out", default=None, metavar="DIR", help="results directory (default ./polymorph-capture-NAME; must be absent or empty)")
+    parser.add_argument("--print-prompts", action="store_true", help="print the prompt kit for a harness with no driver, run nothing, exit 0")
+    parser.add_argument("--full", action="store_true",
+                   help="log raw payloads (commands, paths, contents); default is redacted. Needs --out "
+                        "and the long flag below, then asks you to type yes")
+    parser.add_argument("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo",
+                   dest="raw_in_repo", action="store_true",
+                   help="required with --full: accept a plain-text raw log (then type yes when asked)")
+    return parser
 
 
 def print_prompts(out) -> None:
@@ -208,25 +215,25 @@ def settled_count(log: Path, group: int | None = None) -> int:
     start = quiet_since = time.monotonic()
     while True:
         time.sleep(0.05)
-        now = _line_count(log)
-        if now != last:
-            last, quiet_since = now, time.monotonic()
-        t = time.monotonic()
-        if t - start >= SETTLE_CAP:
+        current_count = _line_count(log)
+        if current_count != last:
+            last, quiet_since = current_count, time.monotonic()
+        now = time.monotonic()
+        if now - start >= SETTLE_CAP:
             return last
-        if t - quiet_since >= SETTLE_SECONDS and not (group is not None and _group_alive(group)):
+        if now - quiet_since >= SETTLE_SECONDS and not (group is not None and _group_alive(group)):
             return last
 
 
 def harness_version(driver: Driver, env: dict, cwd: Path) -> str:
     """First line of `<harness> --version`, cut and made printable; the text is untrusted."""
     try:
-        r = subprocess.run(driver.version_argv(), cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+        result = subprocess.run(driver.version_argv(), cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=15, errors="replace")
     except (OSError, subprocess.TimeoutExpired) as e:
         return f"(could not run --version: {type(e).__name__})"
-    line = (r.stdout.strip() or r.stderr.strip()).splitlines()[:1]
-    text = "".join(c if c.isprintable() else "?" for c in (line[0] if line else ""))
+    first_lines = (result.stdout.strip() or result.stderr.strip()).splitlines()[:1]
+    text = "".join(char if char.isprintable() else "?" for char in (first_lines[0] if first_lines else ""))
     return text[:100].replace("`", "'") or "(no output)"
 
 
@@ -236,16 +243,16 @@ def tool_calls(log: Path) -> dict[str, dict]:
     """tool name -> {n, keys: {input key -> count}} from the log's tool events. Names and keys only."""
     if not log.exists():
         return {}
-    recs, _ = discover._load_records(log)
-    sel, _ = discover._select(recs)
+    recs, _, _ = discover._load_records(log)
+    selected, _ = discover._select(recs)
     table: dict[str, dict] = {}
-    for _, rec in sel:
-        _, tn, _ = discover._top(rec)
-        b = table.setdefault(discover._safe(tn) or "<invalid>", {"n": 0, "keys": {}})
-        b["n"] += 1
+    for _, rec in selected:
+        _, tool_name, _ = discover._top(rec)
+        bucket = table.setdefault(discover._safe(tool_name) or "<invalid>", {"n": 0, "keys": {}})
+        bucket["n"] += 1
         for k in rec.get("tool_input_keys") or []:
             k = discover._safe(str(k), discover._KEY_RE) or "<invalid key>"
-            b["keys"][k] = b["keys"].get(k, 0) + 1
+            bucket["keys"][k] = bucket["keys"].get(k, 0) + 1
     return table
 
 
@@ -261,15 +268,15 @@ def build_report(driver: Driver, version: str, results: list[dict], log: Path, f
     if driver.untested:
         lines.append(f"- driver status: UNTESTED ({driver.untested})")
     lines += ["", "## Steps", "", "| step | result | log lines |", "|---|---|---|"]
-    for r in results:
-        lines.append(f"| {r['name']} | {r['status']} | {r['lines']} |")
-    silent = [r["name"] for r in results if r["lines"] == 0 and r["status"] not in ("skipped", "not run")]
+    for result in results:
+        lines.append(f"| {result['name']} | {result['status']} | {result['lines']} |")
+    silent = [result["name"] for result in results if result["lines"] == 0 and result["status"] not in ("skipped", "not run")]
     lines += ["", "## Tool calls in the log", ""]
     if calls:
         lines += ["| tool | count | input keys (present/count) |", "|---|---|---|"]
-        for tn, b in sorted(calls.items(), key=lambda kv: (-kv[1]["n"], kv[0])):
-            ks = ", ".join(f"{k} {n}/{b['n']}" for k, n in sorted(b["keys"].items())) or "-"
-            lines.append(f"| {tn} | {b['n']} | {ks} |")
+        for tool_name, bucket in sorted(calls.items(), key=lambda item: (-item[1]["n"], item[0])):
+            keys_text = ", ".join(f"{k} {n}/{bucket['n']}" for k, n in sorted(bucket["keys"].items())) or "-"
+            lines.append(f"| {tool_name} | {bucket['n']} | {keys_text} |")
     else:
         lines.append("No tool events were logged.")
     lines += ["", "## Steps that produced no log line", ""]
@@ -308,10 +315,10 @@ def _bold(text: str, stdout) -> str:
 
 def warning_block(driver: Driver, steps, scratch: Path, full: bool, step_timeout: float,
                   total_timeout: float, stdout=None) -> str:
-    n = len(steps)
-    head = _bold(f"WARNING: THIS RUNS A REAL AI MODEL {n} TIME{'S' if n != 1 else ''} AND SPENDS TOKENS", stdout)
+    step_count = len(steps)
+    head = _bold(f"WARNING: THIS RUNS A REAL AI MODEL {step_count} TIME{'S' if step_count != 1 else ''} AND SPENDS TOKENS", stdout)
     lines = [RULE, head, RULE,
-             f"polymorph capture will run `{driver.binary}` {n} time(s), once per step.",
+             f"polymorph capture will run `{driver.binary}` {step_count} time(s), once per step.",
              "Every step spends tokens, and a step may take several model turns.",
              "  - If the harness is billed per token (an API key), this costs real money.",
              "  - If it is on a subscription plan (for example a coding plan), it counts against",
@@ -319,7 +326,7 @@ def warning_block(driver: Driver, steps, scratch: Path, full: bool, step_timeout
              "polymorph cannot tell which billing applies and cannot measure the cost.",
              "If you are not willing to pay, or are unsure what your plan bills, cancel now.", "",
              "Scope (not a cost; the cost is unknown):",
-             f"  model-driven steps: {n} ({', '.join(nm for nm, _ in steps)})",
+             f"  model-driven steps: {step_count} ({', '.join(step_name for step_name, _ in steps)})",
              f"  timeouts: {step_timeout:g}s per step, {total_timeout:g}s in total",
              f"  harness: {driver.name}  ({quoted(driver.step_argv('PROMPT'))})",
              f"  scratch dir: {scratch}  (created by polymorph; the working directory of every step)",
@@ -327,14 +334,14 @@ def warning_block(driver: Driver, steps, scratch: Path, full: bool, step_timeout
              "Tool calls are auto-approved inside the scratch directory. It is the working",
              "directory, not a sandbox: an auto-approved tool call can still reach files outside it.",
              "The prompts are:"]
-    lines += [f"  {nm}: {pr}" for nm, pr in steps]
+    lines += [f"  {step_name}: {prompt}" for step_name, prompt in steps]
     lines.append(RULE)
     return "\n".join(lines) + "\n"
 
 
 def short_notice(driver: Driver, steps) -> str:
-    n = len(steps)
-    return (f"NOTICE: running {driver.binary} {n} time(s) with tool calls auto-approved; this spends "
+    step_count = len(steps)
+    return (f"NOTICE: running {driver.binary} {step_count} time(s) with tool calls auto-approved; this spends "
             "tokens (per-token billing costs money; a subscription plan counts against its limits).\n"
             "--yes given: not asking.\n")
 
@@ -365,7 +372,7 @@ def interrupt_on_signals():
     The previous handlers are restored afterwards. Off the main thread (where signal handlers
     cannot be set) this does nothing.
     """
-    wanted = {signal.SIGINT: 130, signal.SIGTERM: 143, signal.SIGHUP: 129}
+    exit_codes_by_signal = {signal.SIGINT: 130, signal.SIGTERM: 143, signal.SIGHUP: 129}
     fired = False
 
     def handler(signum, frame):
@@ -373,11 +380,11 @@ def interrupt_on_signals():
         if fired:
             return
         fired = True
-        raise Interrupted(wanted[signum])
+        raise Interrupted(exit_codes_by_signal[signum])
 
     previous = {}
     try:
-        for sig in wanted:
+        for sig in exit_codes_by_signal:
             previous[sig] = signal.signal(sig, handler)
     except ValueError:   # not the main thread
         pass
@@ -416,16 +423,21 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
         print(f"polymorph capture: {what}. Known drivers:\n{_drivers_text()}\n"
               "For any other harness use `polymorph capture --print-prompts`.", file=stderr)
         return 2
+    try:
+        discover.require_out_for_full(getattr(args, "full", False), getattr(args, "out", None) is not None, "--out")
+    except ValueError as e:
+        print(f"polymorph capture: {e}", file=stderr)
+        return 2
     driver = DRIVERS[args.harness]
     if driver.blocked:
         print(f"polymorph capture: the {driver.name} driver is blocked: {driver.blocked}.", file=stderr)
         return 2
-    names = args.steps or list(STEP_NAMES)
-    bad = [n for n in names if n not in STEP_NAMES]
-    if bad:
-        print(f"polymorph capture: unknown step {bad[0]!r}; steps are {', '.join(STEP_NAMES)}", file=stderr)
+    requested_names = args.steps or list(STEP_NAMES)
+    unknown_steps = [step_name for step_name in requested_names if step_name not in STEP_NAMES]
+    if unknown_steps:
+        print(f"polymorph capture: unknown step {unknown_steps[0]!r}; steps are {', '.join(STEP_NAMES)}", file=stderr)
         return 2
-    steps = [(n, p) for n, p in STEPS if n in names]
+    steps = [(step_name, prompt) for step_name, prompt in STEPS if step_name in requested_names]
     env = minimal_env()
     if shutil.which(driver.binary, path=env.get("PATH", "")) is None:
         print(f"polymorph capture: {driver.binary!r} is not on PATH", file=stderr)
@@ -443,6 +455,12 @@ def run(args, stdin=None, stdout=None, stderr=None) -> int:
     if out_dir.exists() and (not out_dir.is_dir() or any(out_dir.iterdir())):
         print(f"polymorph capture: {out_dir} exists and is not an empty directory", file=stderr)
         return 2
+    if args.full:
+        try:
+            discover.confirm_full(out_dir, args.raw_in_repo, "--out", stdin, stdout)
+        except ValueError as e:
+            print(f"polymorph capture: {e}", file=stderr)
+            return 2
     interactive = stdin.isatty()
     if not interactive and not args.yes:
         print("polymorph capture: stdin is not a terminal; refusing without --yes", file=stderr)
@@ -494,12 +512,18 @@ def _confirm_and_capture(args, driver, steps, env, out_dir, stdin, stdout, stder
                           args.total_timeout, stdout)
     if args.yes:
         stdout.write(short_notice(driver, steps))
-    elif not confirm(stdin, stdout, block):
-        state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
-        print("cancelled: nothing was run and no scratch directory was left. "
-              "`polymorph capture --print-prompts` prints a manual procedure; "
-              "`--steps` runs fewer steps.", file=stdout)
-        return 0
+    else:
+        try:
+            ok = confirm(stdin, stdout, block)
+        except KeyboardInterrupt:
+            state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
+            raise
+        if not ok:
+            state["keep"] = False   # nothing was run; the directory goes, so do not claim to keep it
+            print("cancelled: nothing was run and no scratch directory was left. "
+                  "`polymorph capture --print-prompts` prints a manual procedure; "
+                  "`--steps` runs fewer steps.", file=stdout)
+            return 0
     return _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr)
 
 
@@ -510,7 +534,7 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
     version = harness_version(driver, env, scratch)
     results: list[dict] = []
     deadline = time.monotonic() + args.total_timeout
-    interrupted: KeyboardInterrupt | None = None
+    interruption: KeyboardInterrupt | None = None
     try:
         for name, prompt in steps:
             remaining = deadline - time.monotonic()
@@ -527,24 +551,26 @@ def _capture(args, driver, steps, scratch, out_dir, env, stdout, stderr) -> int:
             after = _line_count(log)   # run_step already waited for the log to settle
             results.append({"name": name, "status": status, "lines": after - before})
             print(f"{name}: {status}, {after - before} log lines", file=stdout)
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt as caught:
         # Tokens already spent are not thrown away: what the log holds is written out below.
         # Only the first signal raises (interrupt_on_signals), so this write is not cut short.
-        interrupted = e
-        done = {r["name"] for r in results}
-        results += [{"name": n, "status": "not run", "lines": 0} for n, _ in steps if n not in done]
+        interruption = caught
+        finished_names = {result["name"] for result in results}
+        results += [{"name": name, "status": "not run", "lines": 0}
+                    for name, _ in steps if name not in finished_names]
     finally:
         driver.remove(scratch)   # the logger goes even if a step raised or was interrupted
     report = build_report(driver, version, results, log, args.full, started)
     write_results(out_dir, driver, log, report)
-    print(f"results: {out_dir} (summary.txt, draft.toml, report.md, log.jsonl)", file=stdout)
-    if interrupted is not None:
+    listed = "summary.txt, draft.toml, report.md" + (", log.jsonl" if log.exists() else "")
+    print(f"results: {out_dir} ({listed})", file=stdout)
+    if interruption is not None:
         print("interrupted: the results above are partial results", file=stdout)
-        raise interrupted
+        raise interruption
     if args.full:
         print("WARNING: --full: log.jsonl holds raw commands and file contents; do not share it", file=stderr)
-    bad = [r for r in results if r["status"] != "ok"]
-    return 1 if bad else 0
+    failed_results = [result for result in results if result["status"] != "ok"]
+    return 1 if failed_results else 0
 
 
 def main(argv: list[str] | None = None, stdin=None, stdout=None, stderr=None) -> int:

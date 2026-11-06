@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,12 +14,12 @@ from polymorph.validate import validate_mapping
 DENY_ROUTE = "payload_out.deny is required"
 
 
-def draft_errors(path):
+def draft_errors(path_or_mapping):
     """validate's errors for a draft, less the one every draft has by design: it names no way
     for a deny to block until someone has checked that live."""
-    errs = validate_mapping(path)
-    assert any(e.startswith(DENY_ROUTE) for e in errs), errs
-    return [e for e in errs if not e.startswith(DENY_ROUTE)]
+    errors = validate_mapping(path_or_mapping)
+    assert any(error.startswith(DENY_ROUTE) for error in errors), errors
+    return [error for error in errors if not error.startswith(DENY_ROUTE)]
 
 SRC = str(Path(__file__).resolve().parent.parent / "src")
 
@@ -45,7 +46,7 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(doc["model"], "x")
         ev = doc["hooks"]
         self.assertEqual(list(ev), ["BeforeTool"])
-        self.assertIn("/.polymorph-discovery/h.jsonl",
+        self.assertIn("/.polymorph/discovery/h.jsonl",
                       ev["BeforeTool"][0]["hooks"][0]["command"])
 
     def test_init_cli_defaults(self):
@@ -95,6 +96,41 @@ class DiscoverTests(unittest.TestCase):
         self.assertEqual(r["tool_input_keys"], ["command", "timeout"])
         self.assertIn("ts", r)
 
+    def test_log_records_plugin_provenance(self):
+        out = self.d / "l.jsonl"
+        payload = {"tool_name": "Bash", "tool_input": {"command": "ls"}}
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="2.0.32", location="/tmp/pm-opencode")
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)))
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="bad version; rm -rf", location="x")
+        discover.log_stdin(str(out), io.StringIO(json.dumps(payload)),
+                           plugin_version="   ", location=None)
+        lines = [json.loads(l) for l in out.read_text().splitlines()]
+        self.assertEqual(lines[0]["plugin_version"], "2.0.32")
+        self.assertEqual(lines[0]["location"], "/tmp/pm-opencode")
+        self.assertNotIn("plugin_version", lines[1])
+        self.assertNotIn("location", lines[1])
+        self.assertEqual(lines[2]["plugin_version"], "<invalid>")
+        self.assertEqual(lines[2]["location"], "x")
+        self.assertNotIn("plugin_version", lines[3])
+
+    def test_provenance_value_must_match_as_a_whole(self):
+        # a trailing newline used to slip past the pattern ($ matches before one):
+        # a value that is not one clean shell-free token becomes <invalid>
+        rec = discover._record("{}", plugin_version="abc\n", location="/tmp/a\n")
+        self.assertEqual(rec["plugin_version"], "<invalid>")
+        self.assertEqual(rec["location"], "<invalid>")
+
+    def test_log_cli_provenance_flags(self):
+        out = self.d / "l.jsonl"
+        r = run_cli(["discover", "log", "--out", str(out), "--plugin-version", "1.2.3",
+                     "--location", "/tmp/scratch"], "{}")
+        self.assertEqual((r.returncode, r.stdout), (0, ""), r.stderr)
+        rec = json.loads(out.read_text())
+        self.assertEqual(rec["plugin_version"], "1.2.3")
+        self.assertEqual(rec["location"], "/tmp/scratch")
+
     def _log(self, payloads):
         f = self.d / "l.jsonl"
         for p in payloads:
@@ -124,6 +160,14 @@ class DiscoverTests(unittest.TestCase):
         self.assertIn("mcp__x__y (1 calls): mcp tool", text)
         self.assertIn('"shell.command" = "tool_input.command"', text)
         self.assertIn('pre_tool = "PreToolUse"', text)
+        # the payload whose tool name fails the pattern is counted, not dropped silently
+        self.assertIn("1 payload(s) with a tool name that fails the name pattern: ignored", text)
+        # capabilities are never guessed from payloads: conservative until a live check
+        caps = text.split("[capabilities]")[1].split("[payload_in]")[0]
+        for cap in ("ask = false", "post_event = false", "exit_2_blocks = false",
+                    "rewrites_input = false", "json_answers = false"):
+            self.assertIn(cap, caps)
+        self.assertIn("all false (conservative) until checked live", caps)
 
     def test_draft_empty_log_still_valid(self):
         f = self.d / "e.jsonl"
@@ -254,8 +298,139 @@ class SummaryTest(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("per tool", r.stdout)
 
+    def test_summary_marks_provenance_like_schema(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO("{}"), plugin_version="2.0.32", location="/tmp/a")
+            discover.log_stdin(str(f), io.StringIO("{}"), plugin_version="2.0.32", location="/tmp/b")
+            discover.log_stdin(str(f), io.StringIO("{}"))
+            out = discover.summarize(f)
+            self.assertIn("plugin versions: 2.0.32 (2), unmarked (1)", out)
+            self.assertIn("locations: /tmp/a (1), /tmp/b (1), unmarked (1)", out)
+            # a log from a plugin too old to send them reads as unmarked, not an error
+            old = Path(d) / "old.jsonl"
+            old.write_text(json.dumps({"schema": 1, "ts": 1.0, "raw": {"tool_name": "Bash"}}) + "\n")
+            out = discover.summarize(old)
+            self.assertIn("log line schema: 1 (1)", out)
+            self.assertIn("plugin versions: unmarked (1)", out)
+            self.assertIn("locations: unmarked (1)", out)
+
+
+class SummaryPerSessionTest(unittest.TestCase):
+    @staticmethod
+    def _payload(event, sid, call):
+        return json.dumps({"hook_event_name": event, "hookEventName": event,
+                           "tool_name": "Bash", "toolName": "Bash",
+                           "session_id": sid, "sessionId": sid,
+                           "tool_use_id": call, "tool_input": {"command": "echo hi"}})
+
+    def test_per_session_block_for_multi_session_logs(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            for sid, call in (("sess_aaaaaaaa", "call_1111"), ("sess_bbbbbbbb", "call_2222"),
+                              ("sess_bbbbbbbb", "call_3333")):
+                discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", sid, call)))
+                discover.log_stdin(str(f), io.StringIO(self._payload("PostToolUse", sid, call)))
+            out = discover.summarize(f)
+            self.assertIn("per session: payloads, events, pairing", out)
+            self.assertIn("sess_bbbbbbbb  4 payloads  PostToolUse 2, PreToolUse 2;  "
+                          "2 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            self.assertIn("sess_aaaaaaaa  2 payloads  PostToolUse 1, PreToolUse 1;  "
+                          "1 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            r = run_cli(["discover", "summary", str(f)])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("per session:", r.stdout)
+
+    def test_single_session_log_has_no_per_session_block(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", "sess_aaaaaaaa",
+                                                                 "call_1111")))
+            out = discover.summarize(f)
+            self.assertNotIn("per session:", out)
+
+    def test_session_without_an_id_reads_as_no_session_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            discover.log_stdin(str(f), io.StringIO(self._payload("PreToolUse", "sess_aaaaaaaa",
+                                                                 "call_1111")))
+            discover.log_stdin(str(f), io.StringIO('{"hook_event_name": "PreToolUse", '
+                                                   '"tool_name": "Bash", '
+                                                   '"tool_use_id": "call_2222"}'))
+            out = discover.summarize(f)
+            self.assertIn("<no session id>  1 payloads  PreToolUse 1", out)
+
+    def test_old_format_log_session_id_is_not_printed_raw(self):
+        # a log line with only `raw` (older logs, hand edits) skips the write-time id check;
+        # the summary must not print a newline or escape from it
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            with open(f, "w") as fh:
+                for sid in ("a1", "b2\nFORGED LINE\x1b[31m"):
+                    fh.write(json.dumps({"raw": {"hook_event_name": "PreToolUse",
+                                                 "tool_name": "Bash", "session_id": sid,
+                                                 "tool_input": {}}}) + "\n")
+            out = discover.summarize(f)
+            self.assertNotIn("FORGED", out)
+            self.assertNotIn("\x1b", out)
+            self.assertIn("<invalid>  1 payloads  PreToolUse 1", out)
+
+    def test_pairs_by_toolCallId_when_tool_use_id_is_absent(self):
+        # zcode names its call id toolCallId; a payload carrying only that used to
+        # redact it and pair nothing, reporting every line "without an id"
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "l.jsonl"
+            for event in ("PreToolUse", "PostToolUse"):
+                discover.log_stdin(str(f), io.StringIO(json.dumps(
+                    {"hook_event_name": event, "hookEventName": event,
+                     "tool_name": "Bash", "toolName": "Bash",
+                     "toolCallId": "call_aaa", "tool_input": {"command": "echo hi"}})))
+            out = discover.summarize(f)
+            self.assertIn("1 paired (0 arrived out of order), 0 before without after, "
+                          "0 after without before, 0 without an id", out)
+            # the id is kept verbatim under redaction, like the other call-id keys
+            rec = json.loads(f.read_text().splitlines()[0])
+            self.assertEqual(rec["raw"]["toolCallId"], "call_aaa")
+
 
 class RedactTest(unittest.TestCase):
+    def test_name_and_id_patterns_match_the_whole_string(self):
+        # issue #50: a `$` anchor also matches before a trailing newline, so a
+        # value ending in one was kept verbatim as a name or an id
+        self.assertIsNone(discover._safe("Bash\n"))
+        self.assertIsNone(discover._safe("PreToolUse\n", discover._EVENT_RE))
+        self.assertFalse(discover._id_shaped("toolu_01ABC\n"))
+        self.assertEqual(discover._safe("Bash"), "Bash")
+        self.assertEqual(discover._id_shaped("toolu_01ABC"), True)
+        rec = discover._record(json.dumps({"tool_name": "Bash\n", "tool_use_id": "toolu_01ABC\n"}),
+                               redact=True)
+        self.assertEqual(rec["tool_name"], "<invalid>")
+        self.assertEqual(rec["raw"]["tool_use_id"],
+                         {"type": "string", "length": len("toolu_01ABC\n")})
+
+    def test_credential_shaped_ids_are_reduced(self):
+        # a credential matches the id shape class too; it must not survive as an "id".
+        # the fakes carry the real token *prefixes* with flat suffixes: enough to
+        # match the credential patterns, too dull for secret scanners to report
+        with tempfile.TemporaryDirectory() as d:
+            token = "ghp_aaaaaaaaaaaa"
+            jwt = "eyJzzzzzzzzzz.sGpb"
+            sk = "sk-proj-aaaa"
+            f = _mk(d, [{"tool_use_id": token, "session_id": jwt,
+                         "prompt_id": sk, "id": "toolu_01ABCdef"}])
+            text = f.read_text()
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["tool_use_id"], {"type": "string", "length": len(token)})
+            self.assertEqual(r["raw"]["session_id"]["type"], "string")
+            self.assertEqual(r["raw"]["prompt_id"]["type"], "string")
+            self.assertEqual(r["session_id"], discover.INVALID)   # the top-level field is shape-gated too
+            self.assertEqual(r["raw"]["id"], "toolu_01ABCdef")   # a real id shape still pairs
+            for leak in (token, jwt, sk):
+                self.assertNotIn(leak, text)
+
     def test_default_keeps_keys_and_drops_values(self):
         with tempfile.TemporaryDirectory() as d:
             payloads = [dict(p, cwd="/home/someone/proj", transcript_path="/home/someone/.t/x.jsonl")
@@ -272,6 +447,139 @@ class RedactTest(unittest.TestCase):
             self.assertEqual(r["tool_input_keys"], ["command"])
             self.assertEqual(r["tool_name"], "Bash")
             self.assertTrue(r["redacted"])
+
+    def test_structural_values_survive_only_when_id_shaped(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                         "permission_mode": "default", "effort": "high; rm -rf /",
+                         "duration_ms": 42, "source": "x" * 200}])
+            text = f.read_text()
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["permission_mode"], "default")
+            self.assertEqual(r["raw"]["duration_ms"], 42)
+            self.assertEqual(r["raw"]["effort"], {"type": "string", "length": len("high; rm -rf /")})
+            self.assertEqual(r["raw"]["source"], {"type": "string", "length": 200})
+            self.assertNotIn("rm -rf", text)
+
+    def test_non_ascii_secret_is_reduced_not_kept(self):
+        with tempfile.TemporaryDirectory() as d:
+            secret = "пароль-🔑"
+            f = _mk(d, [{"tool_name": "Bash", "cwd": "/home/اليوزر/proj",
+                         "tool_input": {"command": secret}}])
+            text = f.read_text()
+            self.assertNotIn(secret, text)
+            self.assertNotIn("/home/اليوزر/proj", text)
+            r = json.loads(text.splitlines()[0])
+            self.assertEqual(r["raw"]["cwd"], {"type": "string", "length": len("/home/اليوزر/proj")})
+
+    def test_full_keeps_raw_and_init_bakes_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "f.jsonl"
+            discover.log_stdin(str(f), io.StringIO(json.dumps(CLAUDE_PAYLOADS[0])), redact=False)
+            self.assertIn("SECRETCMD", f.read_text())
+            cfg = Path(d) / "s.json"
+            discover.init_config("h", str(cfg), log_dir=d)
+            self.assertNotIn("--full", cfg.read_text())
+            cfg2 = Path(d) / "s2.json"
+            discover.init_config("h", str(cfg2), log_dir=d, redact=False)   # the CLI gate is tested below
+            self.assertIn("log --full --out", cfg2.read_text())
+
+    def test_full_without_a_log_dir_is_refused_with_the_reason(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full"])
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("raw commands, file contents and paths", r.stderr)
+        self.assertIn("--log-dir", r.stderr)
+        self.assertIn("--i-really-want-this-in-the-repo-raw", r.stderr)
+        self.assertFalse(cfg.exists())
+
+    def test_the_long_flag_does_not_waive_the_missing_log_dir(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        for flag in ("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo"):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full", flag])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("REFUSED", r.stderr)
+        self.assertFalse(cfg.exists())
+
+    def _repo_and_cfg(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        (self.d / "repo" / ".git").mkdir(parents=True)
+        (self.d / "outside").mkdir()
+        return self.d / "repo", self.d / "outside", self.d / "c.json"
+
+    def test_full_with_a_log_dir_but_no_long_flag_is_refused(self):
+        repo, outside, cfg = self._repo_and_cfg()
+        for where in (repo / "logs", outside):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full",
+                         "--log-dir", str(where)])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("--full needs --i-really-want-this-in-the-repo-raw", r.stderr)
+            self.assertIn("Nothing hides or encrypts the log", r.stderr)
+            self.assertFalse(cfg.exists())
+
+    def test_the_long_flag_without_a_terminal_is_still_refused(self):
+        repo, _, cfg = self._repo_and_cfg()
+        for flag in ("--i-really-want-this-in-the-repo-raw", "--i-really-want-this-in-the-repo"):
+            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg), "--full",
+                         "--log-dir", str(repo / "logs"), flag])
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("nobody to type yes", r.stderr)
+            self.assertIn("inside the git repo", r.stderr)
+            self.assertFalse(cfg.exists())
+
+    def test_confirm_full_needs_the_flag_and_then_the_word_yes(self):
+        repo, outside, _ = self._repo_and_cfg()
+
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+        discover.confirm_full(repo / "x", True, "--out", Tty("yes\n"), io.StringIO())
+        discover.confirm_full(outside / "x", True, "--out", Tty("YES\n"), io.StringIO())
+        for answer in ("y\n", "\n", "no\n", "yes please\n"):
+            with self.assertRaises(ValueError, msg=answer):
+                discover.confirm_full(repo / "x", True, "--out", Tty(answer), io.StringIO())
+        with self.assertRaises(ValueError) as cm:   # the flag is required even for a perfect answer
+            discover.confirm_full(outside / "x", False, "--out", Tty("yes\n"), io.StringIO())
+        self.assertIn("--i-really-want-this-in-the-repo-raw", str(cm.exception))
+        out = io.StringIO()
+        discover.confirm_full(repo / "x", True, "--out", Tty("yes\n"), out)
+        self.assertIn("inside the git repo", out.getvalue())
+        out = io.StringIO()
+        discover.confirm_full(outside / "x", True, "--out", Tty("yes\n"), out)
+        self.assertIn("outside any git repo", out.getvalue())
+        self.assertIn('Type "yes"', out.getvalue())
+
+    def test_a_git_worktree_file_counts_as_a_repo(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / ".git").write_text("gitdir: /elsewhere\n")   # linked worktrees have a .git file
+        self.assertEqual(discover.containing_repo(d / "a" / "b"), d.resolve())
+
+    def test_there_is_no_encryption_option(self):
+        for sub in ("init", "log"):
+            h = run_cli(["discover", sub, "--help"]).stdout
+            self.assertNotIn("encrypt", h.lower(), sub)
+        self.assertNotEqual(run_cli(["discover", "decrypt", "x", "--identity", "y"]).returncode, 0)
+
+    def test_default_log_dir_is_under_dot_polymorph(self):
+        self.d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.d, True)
+        cfg = self.d / "c.json"
+        r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("/.polymorph/discovery/h.jsonl", cfg.read_text())
+
+    def test_non_json_not_leaked_by_default(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "l.jsonl"
+            r = run_cli(["discover", "log", "--out", str(out)], "TOPSECRET not json")
+            self.assertEqual((r.returncode, r.stdout), (0, ""))
+            self.assertNotIn("TOPSECRET", out.read_text())
 
     def test_key_names_made_of_content_are_dropped(self):
         # an MCP tool may key its input by file path; the key is content, not a field name
@@ -290,26 +598,6 @@ class RedactTest(unittest.TestCase):
             discover.log_stdin(str(g), io.StringIO(json.dumps({"tool_input": {"/home/someone/p": 1}})),
                                redact=False)
             self.assertIn("/home/someone/p", g.read_text())
-
-    def test_full_keeps_raw_and_init_bakes_it(self):
-        with tempfile.TemporaryDirectory() as d:
-            f = Path(d) / "f.jsonl"
-            discover.log_stdin(str(f), io.StringIO(json.dumps(CLAUDE_PAYLOADS[0])), redact=False)
-            self.assertIn("SECRETCMD", f.read_text())
-            cfg = Path(d) / "s.json"
-            discover.init_config("h", str(cfg), log_dir=d)
-            self.assertNotIn("--full", cfg.read_text())
-            cfg2 = Path(d) / "s2.json"
-            r = run_cli(["discover", "init", "--harness", "h", "--config-path", str(cfg2), "--full"])
-            self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertIn("log --full --out", cfg2.read_text())
-
-    def test_non_json_not_leaked_by_default(self):
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "l.jsonl"
-            r = run_cli(["discover", "log", "--out", str(out)], "TOPSECRET not json")
-            self.assertEqual((r.returncode, r.stdout), (0, ""))
-            self.assertNotIn("TOPSECRET", out.read_text())
 
 
 class ErrorSidecarTest(unittest.TestCase):
@@ -617,6 +905,51 @@ class NoisyLogTest(unittest.TestCase):
         self.assertIn("drafted from 4 observed payloads", r.stdout)
 
 
+class SlowestDeltasTest(unittest.TestCase):
+    """The slowest pre->post deltas block: fail-open hook latency, one command to see."""
+
+    def setUp(self):
+        self._d = tempfile.TemporaryDirectory()
+        self.addCleanup(self._d.cleanup)
+        log_entries = [
+            # the 60 s fail-open shape: a hook awaited out to its timeout kill
+            _oc("execute.before", 100.0, "call_slow", "m1", tool="shell", input=SHELL_IN),
+            _oc("execute.after", 160.1, "call_slow", "m1", tool="shell", output=RESULT),
+            _oc("execute.before", 200.0, "call_fast", "m1", tool="read", input={"path": "/f"}),
+            _oc("execute.after", 200.12, "call_fast", "m1", tool="read", output={"output": "x"}),
+            _oc("execute.before", 300.0, "call_un", "m1", tool="shell", input=SHELL_IN),
+            # post landed before pre: no delta, the pairing line counts it
+            _oc("execute.before", 400.0, "call_rev", "m1", tool="shell", input=SHELL_IN),
+            _oc("execute.after", 399.0, "call_rev", "m1", tool="shell", output=RESULT),
+        ]
+        self.f = _mk_ts(self._d.name, log_entries)
+
+    def test_descending_with_tool_and_call_id(self):
+        out = discover.summarize(self.f)
+        self.assertIn("slowest pre->post deltas (logger write time; includes the hook wait):", out)
+        self.assertIn("  60.100s  shell  call_slow", out)
+        self.assertIn("  0.120s  read  call_fast", out)
+        self.assertLess(out.index("60.100s"), out.index("0.120s"))
+        self.assertNotIn("call_un", out)     # before without after: no delta
+        self.assertNotIn("call_rev", out)    # post before pre: counted on the pairing line
+
+    def test_capped_at_five(self):
+        log_entries = []
+        for pair_number in range(7):
+            call_id = f"c{pair_number}"
+            log_entries.append(_oc("execute.before", 10.0 * pair_number, call_id, "m1",
+                                   tool="shell", input=SHELL_IN))
+            log_entries.append(_oc("execute.after", 10.0 * pair_number + pair_number + 1, call_id,
+                                   "m1", tool="shell", output=RESULT))
+        out = discover.summarize(_mk_ts(self._d.name, log_entries))
+        self.assertEqual(out.count("s  shell  c"), 5)
+
+    def test_absent_without_pairing(self):
+        only_before = [_oc("execute.before", 1.0, "call_x", "m1", tool="shell", input=SHELL_IN)]
+        out = discover.summarize(_mk_ts(self._d.name, only_before))
+        self.assertNotIn("slowest", out)
+
+
 class OutputKeyPathsTest(unittest.TestCase):
     def test_nested_output_keys_kept_values_hidden(self):
         with tempfile.TemporaryDirectory() as d:
@@ -632,6 +965,16 @@ class OutputKeyPathsTest(unittest.TestCase):
             m = Path(d) / "m.toml"
             m.write_text(text)
             self.assertEqual(draft_errors(m), [])
+
+    def test_output_like_aliases_get_the_same_shape(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = _mk(d, [{"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                         "result": {"exit": 0}, "tool_result": {"text": "hi"},
+                         "toolResult": {"text": "ho"}}])
+            r = json.loads(f.read_text().splitlines()[0])
+            self.assertEqual(r["raw"]["result"]["exit"], {"type": "number", "length": 1})
+            self.assertEqual(r["raw"]["tool_result"]["text"], {"type": "string", "length": 2})
+            self.assertEqual(r["raw"]["toolResult"]["text"], {"type": "string", "length": 2})
 
     def test_depth_is_limited_and_odd_keys_dropped(self):
         deep = {"a": {"b": {"c": {"d": {"e": "x"}}}}, "/etc/passwd": 1, "ok_key": 2}
@@ -696,3 +1039,107 @@ class NewFeatureRedactionTest(unittest.TestCase):
             r = json.loads(f.read_text())
         self.assertEqual(r["raw"]["messageID"], "msg_9")
         self.assertEqual(r["raw"]["id"]["type"], "string")
+
+
+class RedactionFixTests(unittest.TestCase):
+    """The 2026-11-01 review fixes: ids guard their shape, key names are log content."""
+
+    def record(self, payload):
+        return discover._record(json.dumps(payload))
+
+    def test_tool_use_id_that_is_not_an_id_is_reduced(self):
+        rec = self.record({"tool_name": "Bash", "tool_use_id": "echo SECRETCMD; cat /etc/shadow"})
+        self.assertEqual(rec["raw"]["tool_use_id"],
+                         {"type": "string", "length": len("echo SECRETCMD; cat /etc/shadow")})
+
+    def test_real_tool_use_id_still_survives_for_pairing(self):
+        rec = self.record({"tool_name": "Bash", "tool_use_id": "toolu_01Ab-2"})
+        self.assertEqual(rec["raw"]["tool_use_id"], "toolu_01Ab-2")
+
+    def test_unsafe_tool_input_keys_are_masked(self):
+        rec = self.record({"tool_name": "X", "tool_input": {"cat /etc/shadow > /tmp/x": 1, "cmd": "ls"}})
+        masked = rec["raw"]["tool_input"]
+        self.assertIn("cmd", masked)
+        self.assertIn("<invalid key>", masked)
+        self.assertNotIn("cat /etc/shadow", json.dumps(masked))
+
+    def test_unsafe_top_level_keys_are_masked_in_the_keys_field(self):
+        rec = self.record({"tool_name": "X", "cat /etc/shadow": 1})
+        self.assertNotIn("cat /etc/shadow", rec["keys"])
+        self.assertIn("<invalid key>", rec["keys"])
+
+
+class SummaryRobustnessTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.log = Path(tmp.name) / "log.jsonl"
+
+    def test_unparseable_lines_are_counted_not_dropped(self):
+        good = discover._record(json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
+        self.log.write_text(json.dumps(good) + '\ntorn{"raw": {"tool_name"\n')
+        recs, other, broken = discover._load_records(self.log)
+        self.assertEqual((len(recs), other, broken), (1, 0, 1))
+        self.assertIn("unparseable lines: 1", discover.summarize(self.log))
+
+    def test_hostile_key_shapes_do_not_crash_summary(self):
+        line = json.dumps({"schema": 1, "ts": 1.0, "raw": {"tool_name": "X"},
+                           "keys": 5, "tool_input_keys": {"a": 1}})
+        self.log.write_text(line + "\n")
+        text = discover.summarize(self.log)
+        self.assertIn("payloads: 1", text)
+
+
+class ReloadFinishGuardTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cfg = Path(tmp.name) / "settings.json"
+        self.scratch = Path(tmp.name) / "scratch.jsonl"
+        self.cfg.write_text('{"hooks": {}}\n')
+
+    def test_finish_does_not_resurrect_a_deleted_config(self):
+        discover.reload_check_start(str(self.cfg), str(self.scratch))
+        self.cfg.unlink()
+        seen, msg = discover.reload_check_finish(str(self.cfg), str(self.scratch))
+        self.assertFalse(self.cfg.exists())
+        self.assertIn("gone", msg)
+
+    def test_finish_does_not_rewrite_when_the_user_removed_the_hook(self):
+        discover.reload_check_start(str(self.cfg), str(self.scratch))
+        users_version = '{"hooks": {}, "note": "reformatted by hand"}'
+        self.cfg.write_text(users_version)
+        _, msg = discover.reload_check_finish(str(self.cfg), str(self.scratch))
+        self.assertEqual(self.cfg.read_text(), users_version)
+
+
+class InitShapeTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cfg = Path(tmp.name) / "cfg.json"
+
+    def test_init_autodetects_the_claude_like_shape(self):
+        self.cfg.write_text('{"hooks": {"enabled": true, "events": {"PreToolUse": []}}}')
+        discover.init_config("h", str(self.cfg), "PreToolUse")
+        doc = json.loads(self.cfg.read_text())
+        self.assertIn("PreToolUse", doc["hooks"]["events"])
+        self.assertNotIn("PreToolUse", doc["hooks"])
+
+    def test_init_log_dir_change_replaces_the_logger(self):
+        discover.init_config("h", str(self.cfg), "PreToolUse", log_dir=Path(self.cfg.parent) / "d1")
+        first = self.cfg.read_text()
+        discover.init_config("h", str(self.cfg), "PreToolUse", log_dir=Path(self.cfg.parent) / "d2")
+        doc = json.loads(self.cfg.read_text())
+        groups = doc["hooks"]["PreToolUse"]
+        self.assertEqual(len(groups), 1, "a changed --log-dir must replace the logger, not add one")
+        self.assertIn("/d2/", groups[0]["hooks"][0]["command"])
+        self.assertNotIn("/d1/", groups[0]["hooks"][0]["command"])   # not "d1": a temp dir name can contain it
+
+
+class LeafPathTests(unittest.TestCase):
+    def test_full_log_deep_dicts_report_object(self):
+        deep = {"a": {"b": {"c": {"d": {"e": {"f": 1}}}}}}
+        paths = dict(discover._leaf_paths(deep, "out"))
+        # the old walk omitted a dict it ran out of depth on; now it reports "object"
+        self.assertEqual(paths.get("out.a.b.c.d"), "object")

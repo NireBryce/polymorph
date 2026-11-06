@@ -3,13 +3,22 @@
 Run as `python -m polymorph ...` or, after an install, `polymorph ...`. Exit codes: `0`
 success; `1` the command ran and found a problem (drift, findings, failed fixtures, an
 invalid mapping); `2` usage or internal error (`polymorph: error: ...` on stderr);
-`3` (`generate` only) a hook needs something the target lacks and no decision answers it. The
-adapter and `discover log` have their own rules, below.
+`3` (`manage generate` only) a hook needs something the target lacks and no decision answers it. The
+adapter and `discover log` have their own rules, below. Every flag, as the program defines it, is
+in [the usage reference](usage.md); the same is `man/polymorph.1` (`man -l man/polymorph.1`).
 
-## `generate`
+## `manage`
+
+The maintainer half: commands that write the basecamp and generate the harness
+configs it issues -- `manage generate`, `manage check`, `manage validate`,
+`manage conformance` and `manage adopt`, each documented below. The contributor half is
+`equip`; `adapter` and `env` are launch-time; `discover` and `capture` serve harness
+mappers.
+
+## `manage generate`
 
 ```
-polymorph generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]
+polymorph manage generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]
 ```
 
 Writes each target's config file from `.agents/settings.json`.
@@ -26,6 +35,10 @@ Output, per target: `[NAME] wrote|would write|unchanged PATH (DRIFT|ok)`, then i
 lines:
 
 - `warning:` the mapping has no `verified` field.
+- `warning: sessions already running will not load the new hooks; restart the session` --
+  printed under the `wrote` and `unchanged` lines of a run that wrote or found the config
+  already generated (`--check` prints nothing: it writes nothing). Hook wiring is read when a
+  session starts, so a session opened before the config landed never sees the new hooks.
 - `question:` an undecided mismatch (see below); the target is then `NOT WRITTEN`.
 - `decided:` / `weakened:` a recorded decision that was applied; `weakened` for `run-empty` and for a `substitute` that moves the hook to a different event.
 - `warning: stale decision` a decision whose id matches nothing now.
@@ -36,17 +49,19 @@ lines:
 payload field (`missing-field`) that a hook needs, `generate` writes nothing for that target,
 prints one `question:` block per item (id, hook, problem, options, default `skip`) and exits
 `3` after handling the other targets. Answer in `.polymorph/basecamp/decisions/NAME.toml` and
-run again; it never prompts. `--check` also exits 3 for undecided items. Format and choices:
+run again; it never prompts. `--check` also exits 3 for undecided items. A decision id is
+`<hook-script>:<event>:<kind>` (the hook's canonical event: a script registered under two
+events is decided per event). Format and choices:
 [SPEC, Decisions](SPEC.md#decisions).
 
 Other top-level keys already in the target file are kept; the whole `hooks` key is
 rewritten. Hooks you added to that file by hand are lost. Invalid JSON in the existing
 file is an error.
 
-## `check`
+## `manage check`
 
 ```
-polymorph check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
+polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
 ```
 
 Static analysis. Runs no hook, harness or network, writes no file. Exit 0 when there are
@@ -55,7 +70,7 @@ internal errors.
 
 | Flag | Meaning |
 |---|---|
-| `--repo`, `--harness` | As for `generate`. No targets gives the `no-targets` error. |
+| `--repo`, `--harness` | As for `manage generate`. No targets gives the `no-targets` error. |
 | `--format` | `text` (default), `json` or `sarif` (SARIF 2.1.0, one result per finding, a location when the finding has a file). |
 | `--strict` | Warnings fail the run too. |
 
@@ -70,6 +85,8 @@ grouped by target, then a summary line.
 | `mapping-invalid` | error | Mapping fails validation or cannot be loaded. |
 | `mapping-unverified` | warning | Mapping has no `verified` field. |
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
+| `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
+| `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
 | `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
@@ -81,40 +98,205 @@ grouped by target, then a summary line.
 | `fixtures-missing` | warning | A built-in mapping has no fixtures. |
 | `fixtures-skipped` | note | A repo-local mapping: fixtures are not checked. |
 | `fixture-failed` | error | A fixture did not replay. |
+| `mapping-override` | note | A repo-local mapping overrides a built-in of the same name. |
 
 If a hook command is rejected, checks derived from the config (decisions, unmapped, drift) are
 skipped for that run. `mapping-untested-live` is a note, so even `--strict` never makes it
 fail: it is a standing reminder, not a result.
 
+## `equip`
+
+```
+polymorph equip --harness NAME [--repo .] [--dry-run] [--gitignore] [--no-links]
+```
+
+The onboarding run: one command that equips a harness and prints what it got. It
+composes the finished parts -- `manage generate`'s config files, the inventory's gap
+report, and the env contract -- then records provenance.
+
+Output, per harness:
+
+- `wrote|would write|unchanged .zcode/config.json` -- the generated config (`--dry-run`
+  writes nothing). An undecided mismatch prints `NOT WRITTEN` with a count;
+  `manage generate` prints the questions.
+- `warning: sessions already running will not load the new hooks; restart the session` --
+  printed once by an equip that wrote or found the config already generated (`--dry-run`
+  prints nothing; a `NOT WRITTEN` target prints nothing either). Hook wiring is read when a
+  session starts, so a session opened before the config landed never sees the new hooks.
+- `honoured surface:` the discover-and-report kinds the coverage table says the harness
+  honours. With no coverage table: `coverage: no coverage table; nothing is known` --
+  nothing is claimed.
+- `linked|would link PATH -> TARGET` -- a symlink made for a `no-link` gap, so the harness reads
+  what the repo provides (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`).
+  Only `no-link` is acted on; a real file or directory, or a symlink to somewhere else, is
+  left as it is and stays in the gap list. `link refused PATH: reason` names a link not made.
+  Links come only from built-in coverage tables. Each is recorded in the manifest.
+  `--no-links` makes none and reports the gap.
+- `gaps (will be silently ignored):` the provided paths the harness does not read, each with a
+  reason (`unsupported`, `no-link`, `unlinked-copy`, `points-elsewhere`) and a fix. See `inventory`.
+- `env contract:` the exports from env.toml (`no env.toml; no env contract emitted`
+  when there are none; `env: env.toml is invalid, ...` with the reason when it exists but fails validation). Emit-only: applying them is the caller's job (`polymorph env
+  --exec` runs a command under them).
+- `manifest: .polymorph/basecamp/loadout.toml` -- the provenance manifest: per issued
+  artifact, its sha256 and what generated it, so edits and staleness are checkable
+  later; per symlink made, its target (`[links.NAME]`).
+- `posture:` `maintainer` when the basecamp config is committed (issued artifacts are
+  committed with it); `contributor` when it is not -- the artifacts are regenerable,
+  and equip prints the `.gitignore` lines. `--gitignore` appends a marked, idempotent
+  section; polymorph never touches `.gitignore` any other way.
+
+Exit 0; 2 on usage errors.
+
+## `inventory`
+
+```
+polymorph inventory [--repo .] [--harness NAME ...] [--json]
+```
+
+The discover-and-report half of the loadout: what the repo provides for each
+non-transliterate kind — skills (`.agents/skills/`), rules (`.claude/rules/`,
+`.agents/rules/`), memory (`AGENTS.md`, `CLAUDE.md`) and the entries of `.claude/` — then
+each harness's gap report. It reads directory structure and symlink targets only; file
+contents are never opened. Every found path is reported, including a skill directory with
+no `SKILL.md`.
+
+| Flag | Meaning |
+|---|---|
+| `--repo PATH` | Repo root. Default `.`. |
+| `--harness NAME` | Report only this harness's gaps. Repeatable. Default: every coverage table found. |
+| `--json` | `{"inventory": {kind: [{"path", "target"}...]}, "gaps": [{"harness", "kind", "path", "reason", "reads", "fix"}...]}`. |
+
+A harness reads fixed paths (its coverage table). A provided path is **reached** when one of
+them resolves to it, directly or through a symlink; otherwise it is a gap with a `reason`:
+
+| reason | Meaning |
+|---|---|
+| `unsupported` | the table has no path for this kind: the harness ignores it |
+| `no-link` | the harness reads a path that does not exist (Claude Code reads `CLAUDE.md`, `.claude/skills`, `.claude/rules`; the repo has `AGENTS.md`, `.agents/skills`, `.agents/rules` and no link) |
+| `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
+| `points-elsewhere` | the harness reads a symlink that leads somewhere else |
+
+A symlink whose resolved target is already honoured content is a **pointer**, not a gap,
+and is left out of the report: a memory file the table names, or a path inside (or equal
+to) a directory the table honours for some kind (`.claude/skills` -> `.agents/skills` when
+the table honours skills there). A real second copy is never a pointer: that is
+`unlinked-copy` drift.
+
+For `no-link` the `fix` text is the command that makes the link
+(`polymorph equip --harness claude links CLAUDE.md -> AGENTS.md`); `equip` and `manage adopt`
+create it. For the other reasons the `fix` text says what to do by hand.
+
+What a harness honours comes from its **coverage table**, `coverage/NAME.toml` — shipped
+beside the mappings, overridable at `.polymorph/basecamp/coverage/NAME.toml` (with a
+warning, like mappings). It is not the mapping's `[capabilities]` flags: those say how a
+hook behaves; the coverage table says what the harness reads. A harness with no coverage
+table prints `no coverage table; nothing is known` — absence is unknown, never a gap. A
+symlinked path reports its resolved target, so a basecamp store shows through. Gap lines
+do not fail the run: the report is information, not a check.
+
+## `manage adopt`
+
+```
+polymorph manage adopt [--repo .] [--dry-run] [--no-links]
+```
+
+Moves a repo's agent files at rest into the basecamp store and replaces each original path
+with a relative symlink into it — the maintainer-side conversion that puts a repo into
+store-and-symlink shape (issue #24). Candidates: `AGENTS.md`, `CLAUDE.md`,
+`.agents/skills/` (to `skills/`), `.claude/rules/` and `.agents/rules/` (to
+`rules/claude/`, `rules/agents/`). Hook scripts and `.agents/settings.json` are never
+touched: they stay where the harness reads them.
+
+Per candidate it prints one of `moved|already|absent|refused [kind] PATH`, then a count
+line. Refusals (per path; exit 1 when any): a path that is already a symlink is left alone
+and reported with where it points; a path with uncommitted changes, or one git ignores (`git status
+--porcelain --ignored`), is refused — no clean tree and no committed copy, no safety net; a store copy that already exists
+beside a real file at rest is refused rather than overwritten. A second run on an adopted
+repo is a no-op. `--dry-run` reports without writing.
+
+After the move, adopt closes every `no-link` gap of every harness that has a coverage table:
+`linked [HARNESS] PATH -> TARGET` per link (`would link` under `--dry-run`), `link refused
+[HARNESS] PATH: reason` per link it will not make (exit 1). It links only where nothing exists;
+a real file or directory at the path a harness reads is left alone and stays a gap.
+`--no-links` skips this step. The links are recorded in `loadout.toml`. adopt writes nothing outside the
+repository and never edits a file through a symlink: the store copy is the only one
+written.
+
+## `env`
+
+```
+polymorph env [--repo .] [--harness NAME] [--exec CMD]
+```
+
+Emits the **env contract** — shell exports a harness session should run under — from the
+host facts in `.polymorph/basecamp/env.toml`, or runs CMD under it. **Emit-only**: the
+agent key is referenced by path and its contents are never read, printed or moved;
+nothing is written anywhere; there is no daemon. The output is valid shell, safe to
+`eval`.
+
+Host facts (all sections optional, unknown keys are errors):
+
+```toml
+schema = 1
+
+[key]                    # the machine's agent key
+path = "~/.ssh/agent_key"  # rendered path; echoed, never opened
+scope = "repos/ORG/*"    # optional free text, echoed in the info line
+
+[vault]                  # sockets a harness session must not inherit
+unset = ["SSH_AUTH_SOCK"]
+
+[harness.NAME]           # per-harness session markers
+exports = ["POLYMORPH_HARNESS=NAME"]
+```
+
+Emission, in order: a comment header; `# agent key: PATH (scope: ...)`; `unset` of the
+vault names; `export GIT_SSH_COMMAND='ssh -i PATH -o IdentitiesOnly=yes'`; the harness's
+exports (values shell-quoted). Without `--harness`, the base contract only (no session
+markers). A `--harness` name must have a `[harness.NAME]` section or a mapping — the
+contract keys off harness names from the host facts and the mappings, never a hardcoded
+list.
+
+| Flag | Meaning |
+|---|---|
+| `--repo PATH` | Repo root. Default `.`. |
+| `--harness NAME` | Emit that harness's session markers; also validated against host facts and mappings. |
+| `--exec CMD` | Run CMD under `sh -c` with the contract applied to the environment (vault names removed, exports set), and exit with its status. |
+
+env.toml holds **machine facts**: if the repo is shared across machines, keep it out of
+git yourself — polymorph never edits `.gitignore`.
+
 ## `adapter`
 
 ```
-polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] [--timeout S] -- SCRIPT
 ```
 
 The runtime shim. Generated configs call it; you rarely do, except to test by hand.
 Reads the harness's JSON payload on stdin, runs SCRIPT (which must be a file under the
 repo's `.agents/hooks/`; the repo is the nearest ancestor of the working directory with an
 `.agents/` folder), and writes the harness-shaped answer to stdout/stderr and exits with
-its exit code. The `--` is required. Details and failure behaviour:
+its exit code. `--timeout S` kills the hook after S seconds (default 60); a killed or mis-used adapter
+lands in the same NOT-checked path as every other fault -- a usage error, an invalid
+mapping or a timeout is never a deny and never exit 2. The `--` is required. Details and failure behaviour:
 [Concepts](concepts.md#delivery-direct-and-adapter). Any fault prints
 `polymorph adapter: this tool call was NOT checked by the guard hook (...)` and does not
 deny.
 
-## `validate`
+## `manage validate`
 
 ```
-polymorph validate FILE.toml
+polymorph manage validate FILE.toml
 ```
 
 Checks one mapping file against schema 1 and prints `FILE: ok` (exit 0), or one
 `error: ...` line per problem on stderr (exit 1). It checks the file alone: it does not
 compare `name` to the filename or check that `generate` can use the `format`/`template`.
 
-## `conformance`
+## `manage conformance`
 
 ```
-polymorph conformance [--harness NAME]
+polymorph manage conformance [--harness NAME]
 ```
 
 Replays `src/polymorph/fixtures/NAME/*.json` (all harnesses without `--harness`) through the adapter's
@@ -129,7 +311,7 @@ Run the [discovery](discovery.md) procedure against a harness by itself.
 
 ```
 polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-timeout S]
-                  [--total-timeout S] [--out DIR] [--full]
+                  [--total-timeout S] [--out DIR] [--full] [--i-really-want-this-in-the-repo-raw]
 polymorph capture --print-prompts
 ```
 
@@ -144,6 +326,7 @@ polymorph and chosen by name; an unknown name exits 2, lists the known drivers a
 |---|---|---|
 | `opencode` | `opencode run --standalone --auto PROMPT`, logger plugin in `.opencode/plugins/polymorph-discovery/index.js` (from [the example plugin](examples/opencode-discovery-plugin.js)) | Flags from `opencode run --help` (v2.0.32); not run by the tests or by the author's session |
 | `claude` | `claude -p PROMPT --permission-mode bypassPermissions --setting-sources project`, hooks in `.claude/settings.json` | **Blocked**: `capture --harness claude` refuses to run (exit 2). It has never run against a real `claude`, it needs `--permission-mode bypassPermissions`, and whether hooks fire under `-p` is unconfirmed, so a run could spend tokens and log nothing. Use `--print-prompts`. It is unblocked by removing `blocked` in `capture_drivers.py` once a person has confirmed it live. |
+| `zcode` | `ELECTRON_RUN_AS_NODE=1 <package>/lib/ZCode/zcode <package>/lib/ZCode/resources/glm/zcode.cjs --prompt PROMPT --mode yolo` (paths derived from the `zcode` wrapper on PATH; the wrapper itself boots the GUI), hooks in `.zcode/config.json` | **Blocked**: `capture --harness zcode` refuses to run (exit 2). The invocation comes from the 2026-11-05 headless probe (the desktop's own agent spawn), but no headless session in it made a tool call -- all died at model authentication -- so whether workspace hooks fire headlessly is unconfirmed and a run could spend tokens and log nothing. Finishing the probe (a working provider for the standalone CLI, one session reaching a tool call; see [the observed zcode session](observed-zcode-session.md)) is the unblock; then remove `blocked` in `capture_drivers.py`. |
 
 Steps (fixed constants, in this order; `--steps` selects a subset): `shell` (`echo hello`),
 `file` (write, read and delete `scratch.txt`), `search`, `background` (`sleep 2; echo done`).
@@ -157,7 +340,8 @@ Nothing read from a log, a mapping or a harness reply is used as a prompt or a c
 | `--steps STEP ...` | Run only these steps. |
 | `--step-timeout S` / `--total-timeout S` | Per step (default 120) and overall (default 600) limits, in seconds; each must be finite and above 0 (else exit 2). A timed-out step's process group is killed. |
 | `--out DIR` | Results directory; default `./polymorph-capture-NAME`; must be absent or empty, and creatable and writable: checked before the first step (else exit 2). |
-| `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. |
+| `--full` | Log raw payloads (commands, paths, contents). Default is redacted. The results then hold a raw log: do not share it. Needs `--out DIR` (without one: exit 2 with a loud explanation), the long flag below, and then a typed `yes`. |
+| `--i-really-want-this-in-the-repo-raw` | Also spelled `--i-really-want-this-in-the-repo`. Required with `--full`, wherever `--out` points. It is not enough alone: you are then asked to type `yes` (no terminal: refused). `--yes` answers the cost question only, not this one. |
 | `--print-prompts` | Print the [prompt kit](discovery.md#prompt-kit-for-a-harness-capture-has-no-driver-for) and exit 0, running nothing. |
 
 Confirmation: a framed warning says it runs a real model once per step, spends tokens, may
@@ -187,7 +371,8 @@ Capture what an unmapped harness sends to hooks. Walkthrough: [Discovery](discov
 ```
 polymorph discover init --harness NAME --config-path P [--event-name E] [--matcher M]
                         [--shape claude-settings|claude-like] [--log-dir DIR]
-                        [--full] [--env-be-very-careful]
+                        [--full] [--i-really-want-this-in-the-repo-raw]
+                        [--env-be-very-careful]
 ```
 
 Adds a catch-all logger hook to the harness's config file `P`, as its own matcher group beside
@@ -200,8 +385,9 @@ any hooks already there. Prints `wrote P`.
 | `--event-name E` | Native event to hook. Default `PreToolUse`. |
 | `--matcher M` | Native tool matcher. Default `*`. |
 | `--shape` | `claude-settings` (default, `hooks.<Event>`) or `claude-like` (`hooks.enabled` + `hooks.events`, ZCode's). |
-| `--log-dir DIR` | Absolute directory for the log. Default `./.polymorph-discovery` under the current directory. |
-| `--full` | Log raw payloads. See below. |
+| `--log-dir DIR` | Absolute directory for the log. Default `./.polymorph/discovery` under the current directory. |
+| `--full` | Log raw payloads. See below. Needs `--log-dir DIR` (without one: exit 2 with a loud explanation), the long flag below, and then a typed `yes`. |
+| `--i-really-want-this-in-the-repo-raw` | Also spelled `--i-really-want-this-in-the-repo`. Required with `--full`, wherever `--log-dir` points. It is not enough alone: you are then asked to type `yes` (no terminal: refused). |
 | `--env-be-very-careful` | Log environment variable names. See below. |
 
 If `P` exists it must be a JSON object; every other key, event and matcher group is kept
@@ -215,7 +401,7 @@ that ran `init` and the absolute log path, so it works from any directory.
 ### `discover log`
 
 ```
-polymorph discover log [--full] [--env-be-very-careful] --out FILE
+polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--location LOC] --out FILE
 ```
 
 The logger hook itself: reads one payload on stdin and appends one JSON line to FILE. It
@@ -223,14 +409,25 @@ The logger hook itself: reads one payload on stdin and appends one JSON line to 
 non-JSON input, so it can never block the harness. Failures go to `NAME.errors.jsonl`
 beside the log when that folder is writable.
 
+`--plugin-version` and `--location` are provenance for the calling plugin: which plugin
+generation wrote the line, and where its session runs (an event bus can be server-global,
+so one log can hold lines from several working directories). A value is recorded verbatim
+when it is short and free of shell characters, replaced by `<invalid>` when it is not, and
+the key is left off when the caller did not pass it; `discover summary` marks all three
+cases the way it marks the schema.
+
 ### `discover summary`
 
 ```
 polymorph discover summary FILE.jsonl [--include EVENT ...] [--event EVENT ...]
 ```
 
-Prints payload count, non-object lines and session count, the log-line schema marks, then
-per-event top-level keys and per-tool `tool_input` keys, each with counts. Names and counts only.
+Prints payload count, non-object lines and session count, the log-line schema marks, the
+plugin-version and location marks, then per-event top-level keys and per-tool `tool_input`
+keys, each with counts. Names and counts only. When the log holds more than one session,
+a `per session:` block sits between the pairing line and the tables: payloads, per-event
+counts and pairing per session, so sessions sharing one log read separately in one
+command (issue #57).
 
 By default only **tool events** (lines with a tool name) are used, so a flood of session
 events from a server-wide bus does not drown them; the hidden event names and counts are
@@ -238,8 +435,16 @@ printed on a `hidden:` line. `--include EVENT` (repeatable) adds an event to the
 `--event EVENT` (repeatable) replaces the default with exactly those events. Lines are
 sorted by `ts` before counting, because each hook event is logged by its own process and
 lines can land out of order. When lines carry a call id and a message id (`tool_use_id` or
-`id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines are paired by
-them and the `pairing` line reports paired, out-of-order, unpaired and id-less counts.
+`toolCallId` / `id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines
+are paired by them and the `pairing` line reports paired, out-of-order, unpaired and
+id-less counts. When paired lines carry timestamps, a `slowest pre->post deltas` block
+follows the pairing line -- up to five, largest first, each with the delta, the tool name
+and the call id -- so fail-open hook latency is one command to see instead of a hand join:
+a hook awaited out to its timeout kill shows as a delta near that timeout. A delta is the
+gap between the two logger lines' write times (one process per hook event, each writing at
+its start), so it approximates what the harness waited on the pre-hook rather than
+measuring hook duration; a pair whose post landed before its pre carries no delta (the
+pairing line counts it).
 
 ### `discover draft`
 
@@ -277,6 +482,44 @@ Tests whether a running harness re-reads its hook config without a restart.
 
 `--shape` defaults to what the existing file looks like.
 
+### `discover probe`
+
+```
+polymorph discover probe --harness NAME [--into DRAFT.toml] [--yes] [--keep] [--full]
+                         [--step-timeout S] [--total-timeout S]
+```
+
+Observes `[capabilities]` live instead of defaulting them to false (issue #14). It runs a
+scripted session -- one synthetic marker command per decision route -- through a harness a
+[capture](#capture) driver can run headlessly, with a **probe guard** wired beside the
+discovery logger: a shipped hook script that denies only commands carrying that run's
+random token (every other command passes untouched, so the probe can never block a real
+call) and answers per case -- allow, exit-2 deny, JSON deny, JSON ask, input rewrite --
+writing one decode line (`case event answer call-id`) to `<log without .jsonl>-decode.log`
+per dispatched case, the join protocol from
+[Discovery, "Capability probes and a decode file"](discovery.md#capability-probes-and-a-decode-file).
+
+It prints a `[capabilities]` table with one evidence comment per line --
+`observed`, `derived` (for example: under redaction a landed rewrite shows as a PostToolUse
+command length that grew; the rewritten echo is longer by construction) or `untested` (the
+value stays `false`) -- and, for each flag, the same how-line on stdout. Exit 0 when all
+five flags settled, 1 when some are untested (an empty log prints the pending-trust hint:
+a wired hook that never fires may be pending trust, not a broken mapping), 2 on usage errors.
+
+| Flag | Meaning |
+|---|---|
+| `--harness NAME` | A driver with a probe adapter. Today that is `zcode` only (a claude-like guard); for `opencode` the guard design is issue #2, and the command exits 2. A blocked driver refuses first (exit 2). |
+| `--into DRAFT.toml` | Replace only that draft's `[capabilities]` block, leaving `verified` and every other table untouched; refuses a draft without the block, and restores the original if the spliced file stops validating. Without it the table is only printed. |
+| `--yes` | Skip the question (required when stdin is not a terminal). The cost warning still prints, as a short notice. |
+| `--keep` | Keep the scratch directory and print its path. |
+| `--full` | Log raw payloads. Needs `--keep` (exit 2 without it): the raw log must survive the run. |
+| `--step-timeout S` / `--total-timeout S` | Per run (default 120) and overall (default 300) limits; the guard hook itself is capped at 10 s and fails open, bounded. |
+
+Confirmation, scratch-directory handling, minimal environment and signal cleanup are the
+same as [capture](#capture). Nothing from a mapping, a log or a harness reply becomes code
+or a command: the guard is shipped template code with constants written in, and the
+prompts are constants with the token formatted in. A probe never sets `verified`.
+
 ## The redaction default and `--env-be-very-careful`
 
 Discovery logs are **redacted by default**. Keys are kept. Only structural values
@@ -287,13 +530,18 @@ survive verbatim: event name, tool name, session and tool-use ids, permission mo
 Two kinds of value are kept for structure. Call and message ids (`id`, `tool_use_id`,
 `call_id`, `messageID` and similar) stay verbatim, but only when they look like ids
 (letters, digits, `_ . : -`, at most 128 characters); anything else under those names is
-reduced like any other value. Output-like objects (`tool_response`, `output`, `result`)
+reduced like any other value -- and so is a value that matches the id shape but looks like
+a credential (GitHub, OpenAI, AWS, Slack and GitLab token formats; JWTs). Output-like
+objects (`tool_response`, `output`, `result`)
 keep their nested key names to three levels and the key count is capped, with each leaf
 reduced to `{type, length}`; a key name that is not a plain identifier is replaced by
 `<invalid key>`. Each log line also carries `schema: 1`; older lines without it still read.
 
 `--full` (on `init`, which bakes it into the hook command, or on `log`) records raw
-payloads, including commands, file paths and file contents. A `--full` log must not be
+payloads, including commands, file paths and file contents, in plain text. Nothing encrypts or
+hides the log, so a secret scanner would see a leak, which is intended. `init --full` (and
+`capture --full`) therefore asks for an explicit log directory, the long
+`--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. A `--full` log must not be
 shared, attached to an issue or committed.
 
 `--env-be-very-careful` makes the logger look at its process environment and record the

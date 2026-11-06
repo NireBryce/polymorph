@@ -27,6 +27,10 @@ _CLASS_RULES = (
 )
 _CLASS_ORDER = ("shell", "edit", "read", "mcp", "other")
 
+# The resolved script path is embedded in generated shell command lines, so it
+# may contain nothing a shell would interpret (quotes, $, backticks, whitespace).
+_SCRIPT_CHARS = re.compile(r"[A-Za-z0-9._+/-]+")
+
 
 class ReaderError(Exception):
     pass
@@ -70,7 +74,13 @@ def resolve_script(command: str, repo: Path) -> str:
     hooks_dir = Path(os.path.realpath(repo / HOOKS_DIR))
     if not real.is_relative_to(hooks_dir):
         raise ReaderError(f"hook script {command!r} resolves outside {HOOKS_DIR}/")
-    return str(real.relative_to(Path(os.path.realpath(repo))))
+    script = str(real.relative_to(Path(os.path.realpath(repo))))
+    if not _SCRIPT_CHARS.fullmatch(script):
+        raise ReaderError(
+            f"hook script {command!r}: script paths may contain only plain path characters "
+            "(no quotes, whitespace, $, backticks or shell metacharacters)"
+        )
+    return script
 
 
 def read_claude(repo: str | Path) -> Canon:
@@ -91,24 +101,36 @@ def read_claude(repo: str | Path) -> Canon:
         if key == "hooks":
             continue
         if key == "permissions" and isinstance(val, dict):
-            for sub, items in val.items():
-                n = len(items) if isinstance(items, list) else 1
-                unmapped.append(f"permissions.{sub} ({n} entries)")
+            for perm_key, items in val.items():
+                count = len(items) if isinstance(items, list) else 1
+                unmapped.append(f"permissions.{perm_key} ({count} entries)")
         else:
             unmapped.append(key)
 
-    for event, groups in (data.get("hooks") or {}).items():
-        canon_event = EVENT_MAP.get(event)
-        if canon_event is None:
-            unmapped.append(f"hooks.{event}")
-            continue
-        for group in groups:
-            classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
-            for h in group.get("hooks", []):
-                if h.get("type", "command") != "command":
-                    unmapped.append(f"hooks.{event}[type={h.get('type')}]")
-                    continue
-                script = resolve_script(h.get("command", ""), repo)
-                t = h.get("timeout")
-                hooks.append(Hook(canon_event, classes, script, int(t) if t is not None else None))
+    try:
+        for event, groups in (data.get("hooks") or {}).items():
+            canon_event = EVENT_MAP.get(event)
+            if canon_event is None:
+                unmapped.append(f"hooks.{event}")
+                continue
+            for group in groups:
+                classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
+                for hook_entry in group.get("hooks", []):
+                    if hook_entry.get("type", "command") != "command":
+                        unmapped.append(f"hooks.{event}[type={hook_entry.get('type')}]")
+                        continue
+                    script = resolve_script(hook_entry.get("command", ""), repo)
+                    timeout = hook_entry.get("timeout")
+                    # a positive number of seconds, stored unchanged: int(2.5) here used to
+                    # truncate a fractional timeout, and int("30") coerced a string silently
+                    if timeout is not None and (isinstance(timeout, bool)
+                                                or not isinstance(timeout, (int, float))
+                                                or timeout <= 0):
+                        raise ReaderError(f"hook {script}: timeout must be a positive number "
+                                          f"of seconds, got {timeout!r}")
+                    hooks.append(Hook(canon_event, classes, script, timeout))
+    except (AttributeError, TypeError, ValueError) as e:
+        # a malformed entry is a settings problem, not a crash: check reports
+        # settings-invalid and keeps going, generate exits 2 with the message
+        raise ReaderError(f"malformed hooks entry: {e}") from e
     return Canon(tuple(hooks), tuple(unmapped))

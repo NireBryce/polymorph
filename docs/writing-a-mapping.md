@@ -12,7 +12,7 @@ claim that a wrong answer can turn into a hook that never fires.
 Validate as you go:
 
 ```sh
-python -m polymorph validate .polymorph/basecamp/mappings/mytool.toml
+python -m polymorph manage validate .polymorph/basecamp/mappings/mytool.toml
 ```
 ```
 .polymorph/basecamp/mappings/mytool.toml: ok
@@ -21,12 +21,14 @@ python -m polymorph validate .polymorph/basecamp/mappings/mytool.toml
 
 ## Worked example: `zcode`
 
-This is `src/polymorph/mappings/zcode.toml`, annotated. ZCode accepts the same hook protocol as Claude
-Code, so almost every field is identity.
+This is `src/polymorph/mappings/zcode.toml`, annotated. ZCode accepts the same hook config shape as
+Claude Code, so almost every field is identity; the answer side differs (see the mapping's header
+comment).
 
 ```toml
 schema = 1
 name = "zcode"
+verified = "2026-11-04, live probe session (payload shape, exit 2 blocks, JSON answers ignored, post event fires, ask drew no prompt); 2026-10-30, nixos-configs hook comments (payload shape, ask-as-allow)"
 config_path = ".zcode/config.json"
 format = "json"
 delivery = "direct"
@@ -39,7 +41,7 @@ skills_dir = ".agents/skills"
 |---|---|---|
 | `schema` | yes | Must be the integer `1`. |
 | `name` | yes | Harness name; `--harness zcode` and `enabled = ["zcode"]` refer to it. |
-| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Add it only after its block semantics were seen in a live session (a deny stopped a tool call), and write what was checked. Until then, put the mapping's basis in a header comment, as zcode does. No shipped mapping has it yet. |
+| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, naming the evidence and its date (`src/polymorph/mappings/zcode.toml` holds one written from hook comments and later extended by a live probe). |
 | `config_path` | yes | Where the harness reads hooks, relative to the repo root. No leading `/`, no `..`. |
 | `format` | yes | `json`, `toml` or `yaml` pass validation, but `generate` only writes `json`. |
 | `template` | yes | The shipped writer: `claude-settings` (`hooks.<Event>`, as Claude Code) or `claude-like` (`hooks.enabled` plus `hooks.events.<Event>`, per-hook `enabled: true`, as ZCode). Templates are named code in polymorph, never code from the mapping. A harness whose file looks like neither needs a new template, which is a code change. |
@@ -110,14 +112,15 @@ left is a canonical key; the right is a dotted path into the native JSON (list i
 allowed as numbers: `args.0.path`). The adapter builds the canonical payload from these.
 
 Accepted canonical keys: `tool_name`, `cwd`, `session_id`, `tool_response`, `event`, and
-`CLASS.field` for a class in the tool list (`shell.command`, `edit.file_path`,
-`read.file_path`, `read.path`, `read.pattern`, `read.glob`), plus `extractor`. The adapter
-places `shell.command` at `tool_input.command`, `edit.file_path` and `read.file_path` at
-`tool_input.file_path`. Other `CLASS.field` keys are accepted by validation, but the
-adapter currently stores them at that dotted name (for example `read.path`) rather than
-under `tool_input`; see [Limits](limits.md#known-gaps). Missing source values are skipped,
-not errors. `tool_response`, `session_id` and `cwd` are copied through if present even
-when unlisted.
+the six classed fields `shell.command`, `edit.file_path`, `read.file_path`, `read.path`,
+`read.pattern`, `read.glob`, plus `extractor`. A classed key must be one of those six:
+a typo (`shell.cmd`) or a key for a class with no canonical field (`mcp.server`) is a
+validation error, because the adapter would store the value where nothing in the canonical
+payload reads it. The adapter places each classed field at its canonical path:
+`shell.command` at `tool_input.command`, `edit.file_path` and `read.file_path` at
+`tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` at
+`tool_input.path`/`.pattern`/`.glob`. Missing source values are skipped, not errors.
+`tool_response`, `session_id` and `cwd` are copied through if present even when unlisted.
 
 `extractor = "apply_patch_paths"` (optional) names a built-in that pulls file paths out of
 a patch-style edit tool's text (`*** Update File: path` lines) into `tool_input.file_path`
@@ -136,10 +139,6 @@ is an error. The output is built as data and JSON-encoded, never pasted into a s
 zcode has no entries because it reads Claude's answers unchanged: with none, and
 `json_answers = true`, the adapter passes the canonical answer through.
 
-A deny must have a way to block. Without `payload_out.deny`, the adapter passes it through as
-JSON (`json_answers = true`) or as exit 2 (`exit_2_blocks = true`); with neither, `validate`
-rejects the mapping, because the deny would leave as exit 0, which a harness reads as allow.
-
 A harness that blocks by exit code, like the draft `gemini` mapping, looks like this:
 
 ```toml
@@ -148,8 +147,23 @@ deny = { exit = 2, stderr = "{reason}" }
 ```
 
 There is no `ask` entry. When `capabilities.ask` is `false`, the hook hardens `ask` to deny
-itself (it reads `GUARD_ASK_ENFORCED=0`), so the mapping does not: `validate` rejects a
-`payload_out.ask` with a non-zero `exit` alongside `ask = false`.
+itself (it reads `GUARD_ASK_ENFORCED=0`), so the mapping does not: `validate` rejects any
+`payload_out.ask` alongside `ask = false`.
+
+An adapter-delivery mapping needs at least one way to express a block: a `deny` entry,
+`exit_2_blocks = true`, or `json_answers = true` (the canonical JSON passes a deny
+through). With none of the three, `validate` rejects the mapping (and `check` reports
+`mapping-invalid`): at run time a guard deny would become a visible NOT-checked fault and the
+call would proceed, so the mapping could not enforce anything. A `discover draft` has none
+of the three, so it fails `validate` until someone records how the harness blocks.
+
+`exit` is required on `deny` and `ask` entries and must be `2`, the canonical block code
+(an `ask` entry exists only when `capabilities.ask` is `true`; see above).
+The adapter defaults a missing exit to `0`, which is an allow, and no other code is
+documented to block, so `validate` rejects a missing exit and any value but `2` — a deny
+or ask that renders as anything else fails open silently. `allow`, `warn` and `remind`
+entries are unconstrained. Because a valid mapping's `deny` entry always blocks, the
+rule above counts it as a real route.
 
 How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
@@ -165,14 +179,13 @@ with no `payload_out` entry falls back to pass-through (JSON harness), exit 2 pl
 Start from the draft:
 
 ```sh
-python -m polymorph discover draft .polymorph-discovery/mytool.jsonl --name mytool > mytool.toml
+python -m polymorph discover draft .polymorph/discovery/mytool.jsonl --name mytool > mytool.toml
 ```
 
 then fix what its comments say to confirm (`config_path`, `template`, classes marked
 `guessed from name`, unclassified tools), fill in `[capabilities]` by testing, and add
 `[payload_out]` if the harness needs answers translated. A draft has empty
-`[payload_out]` and every capability `false`, which `validate` refuses until you record how
-a deny blocks (see `[payload_out]` above); leave `delivery` unset until you know the
+`[payload_out]`, which `validate` accepts; leave `delivery` unset until you know the
 harness is genuinely identity.
 
 ## Fixtures
@@ -195,12 +208,12 @@ regressions in the mapping. They live in `src/polymorph/fixtures/NAME/CASE.json`
 - `native_out`: what the adapter must emit. `stdout` is a JSON value (compared parsed), a
   string (compared verbatim), or empty/`null` for no output; `exit` is an integer.
 
-Unknown or missing keys fail with a shape error. The shipped `claude` and `zcode` mappings have at least the four
+Unknown or missing keys fail with a shape error. The verified shipped mappings have at least the four
 fixtures `deny`, `ask`, `warn`, `remind` (the draft `gemini` mapping has none, and `check`
 warns `fixtures-missing`). Replay them:
 
 ```sh
-python -m polymorph conformance --harness zcode
+python -m polymorph manage conformance --harness zcode
 ```
 ```
 4 passed, 0 failed

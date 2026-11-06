@@ -18,6 +18,10 @@ saying "done".
 2. `just preflight`, reading the output rather than the exit status.
 3. For a check the change adds or edits: undo the core of the change and
    confirm the check fails for that reason.
+4. For your own just-landed batch: probe the runtime boundary by hand
+   through the CLI (a bad mapping through `adapter`, a new finding through
+   `check`) -- the unit suite cannot show what a hand-run can
+   (wiki/patterns.md, post-landing probe).
 
 ## Read for
 
@@ -36,6 +40,16 @@ saying "done".
 - **A log or fixture holding real commands, paths or tokens.**
 - **Public text** that narrates what could slip past a guard instead of
   stating what it enforces.
+
+## Whole-repo sweeps
+
+For a review of the whole tool rather than one change: two read-only subagents sweep
+disjoint module groups (the big unglamorous ones -- discover, capture -- are their own
+group), each with the checklist above in its prompt, asked for file:line findings with
+a concrete trigger and a confidence. Every finding is verified with a failing test
+before the fix; design-level items become issues instead of changes, because they need
+a contract decision. The 2026-11-01 sweep (redaction holes, the adapter's usage-error
+exit, the hard-coded hook timeout) is the worked example.
 
 ## Saying the outcome
 

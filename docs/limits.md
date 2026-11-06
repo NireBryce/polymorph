@@ -8,7 +8,7 @@ trust a generated hook config.
 
 ## What `check` does and does not tell you
 
-A clean `polymorph check` means: the hook scripts named in your settings exist, are
+A clean `polymorph manage check` means: the hook scripts named in your settings exist, are
 executable and live under `.agents/hooks/`; each mapping is valid; the generated files on
 disk match what `generate` would write; the shipped fixtures replay.
 
@@ -30,13 +30,14 @@ The `verified` field of a mapping is free text. polymorph checks only that it is
 it does not read it, and nothing stops anyone writing it for a mapping that was not tested.
 The convention this project follows:
 
-- **Absent** means unverified. Drafts, the `gemini` mapping, and anything written from an
+- **Absent** means unverified. Drafts, the `claude` and `gemini` mappings, and anything written from an
   issue report start here. `generate` warns and `check` raises `mapping-unverified`.
-- **Present** means a live session: the generated config loaded in the actual harness, a
-  hook seen to fire, and a deny seen to stop a tool call. Capture of payloads alone, or
-  reading hook-script comments, is not that. The text says who checked what, when and how,
-  and claims only what was checked.
-- What a mapping rests on before then goes in its header comment, not in `verified`.
+- **Present** means a named person looked at a named source on a named date, and the text
+  says what and how: for example, "payload shape from a captured session on DATE" or "read
+  from hook-script comments, not a live run". The text should claim only what was checked.
+- **Verified for real use** needs a live session: the generated config loaded in the actual
+  harness, a hook seen to fire, and a deny seen to stop a tool call. Capture of payloads
+  alone is not that.
 
 Things a live test needs to settle for a mapping, because payloads cannot show them: does
 exit 2 block; does a JSON decision field block, and what is its name; is `ask` enforced or
@@ -49,8 +50,8 @@ and the safe default is `false`.
 
 | Mapping | `verified` | Basis |
 |---|---|---|
-| `claude` | absent | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)). Block semantics not live-tested. |
-| `zcode` | absent | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow). Not a live run of polymorph's output. `exit_2_blocks`, `post_event`, `rewrites_input`, `skills_dir` and `context_file` are best guesses. |
+| `claude` | absent | Hook files running under Claude Code with these field names, plus a captured session via t3code (see [observed-t3code.md](observed-t3code.md)) and a live VS Code session whose payloads matched `payload_in`. No deny seen to stop a call, so no `verified`. |
+| `zcode` | present | Comments in hook scripts that already run under ZCode (payload shape, `ask` treated as allow), plus two live probe rounds on 2026-11-04 (see [observed-zcode-session.md](observed-zcode-session.md)): exit 2 blocks, JSON answers are ignored, the post event fires, input rewrites are not honoured. `skills_dir` and `context_file` are best guesses. |
 | `gemini` | absent | A draft from an issue sketch. Every name is a guess. No fixtures. |
 
 Read the mapping's own header comment before relying on it; it states what is and is not
@@ -79,10 +80,6 @@ covered.
   only to them is skipped for those targets and reported as a gap.
 - `generate` rewrites the whole `hooks` key of the target file; hooks added there by hand
   are lost.
-- The adapter reads `payload_in` entries of the form `read.path`, `read.pattern` and
-  `read.glob` but stores them under those names rather than in `tool_input`, so a hook
-  that looks in `tool_input.path` will not see them. `shell.command`, `edit.file_path` and
-  `read.file_path` are placed correctly. Direct delivery is unaffected (no translation).
 - A mapping's `format` may validate as `toml` or `yaml`, but only `json` can be generated,
   and only with the `claude-settings` and `claude-like` templates.
 - `context_file` and `skills_dir` are recorded and validated but nothing uses them yet.
@@ -116,16 +113,5 @@ combination may cause adverse effects.
 
 [SPEC.md](SPEC.md) is the contract. Where the code does something it does not say:
 
-- The spec says discovery logs are "gitignored". Only polymorph's own repository ignores
-  `.polymorph-discovery/`; `discover init` does not edit your `.gitignore`.
-- The spec's CLI summary omits some flags that exist: `generate --mappings --trust-dir`,
-  `adapter --mappings --trust-dir`, `discover init --shape --log-dir --env-be-very-careful`,
-  `discover log --env-be-very-careful`, and `discover reload-check --event-name --matcher
-  --shape`. [CLI reference](cli.md) lists them.
-- The spec's mapping example lists `payload_in`, `payload_out`, `[tools]`, `[events]` and
-  all five capabilities as if optional; `validate` (and so `check`) requires all of them,
-  although `generate` itself loads a mapping without them.
 - The spec says fixtures cover deny, ask, warn and remind "for each mapping"; `gemini` has
   none.
-- The spec's `read.path`, `read.pattern` and `read.glob` appear in the direct-delivery
-  identity table as `tool_input.*`; the adapter does not place them there (above).

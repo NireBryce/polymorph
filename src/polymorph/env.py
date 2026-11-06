@@ -1,0 +1,200 @@
+"""The env contract: host facts in, shell exports out. Emit-only.
+
+Slice 2 of the loadout pivot (docs/plan-loadout-pivot.md). Host facts live in
+`.polymorph/basecamp/env.toml` -- machine data, not the tool's: the agent
+key's rendered path, the sockets a harness must not inherit, and per-harness
+session markers. The contract is emitted as shell exports (or a command is
+run under them). Emit-only means the key is referenced by path and its
+contents are never read, printed or moved; nothing is written anywhere; there
+is no daemon. Harness names come from the host facts and the mappings, never
+a hardcoded list.
+"""
+from __future__ import annotations
+
+import os
+import re
+import shlex
+import subprocess
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+ENV_FILE = ".polymorph/basecamp/env.toml"
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_HARNESS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+# The key path is embedded in GIT_SSH_COMMAND, which git executes through a
+# shell: nothing a shell would interpret may appear in it.
+_KEY_PATH = re.compile(r"[/A-Za-z0-9._~+-]+")
+# Exports reach a child process's environment verbatim; polymorph does not set
+# loader, interpreter or shell variables on anyone's behalf.
+_UNSAFE_EXPORT_NAMES = frozenset({
+    "PATH", "IFS", "GIT_SSH_COMMAND", "NODE_OPTIONS", "PYTHONPATH", "PYTHONHOME",
+    "PYTHONSTARTUP", "BASH_ENV", "ENV", "GCONV_PATH", "LD_PRELOAD",
+})
+_UNSAFE_EXPORT_PREFIXES = ("LD_", "DYLD_")
+
+
+class EnvError(ValueError):
+    """Raised when env.toml is missing, invalid, or names an unknown harness."""
+
+
+@dataclass(frozen=True)
+class KeyFacts:
+    path: str
+    scope: str | None = None
+
+
+@dataclass(frozen=True)
+class EnvFacts:
+    key: KeyFacts | None
+    unset: tuple[str, ...] = ()
+    harness: dict[str, tuple[str, ...]] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.harness is None:
+            object.__setattr__(self, "harness", {})
+
+    def exports_for(self, harness: str | None) -> tuple[str, ...]:
+        if harness is None:
+            return ()
+        return self.harness.get(harness, ())
+
+
+def _one_line(value: str, what: str, source: str) -> str:
+    if not isinstance(value, str) or not value or "\n" in value:
+        raise EnvError(f"{source}: {what} must be a non-empty single line")
+    return value
+
+
+def _key_path(value: str, source: str) -> str:
+    _one_line(value, "[key] path", source)
+    if not _KEY_PATH.fullmatch(value):
+        raise EnvError(f"{source}: [key] path must contain only plain path characters "
+                       "(no whitespace, quotes, $ or shell metacharacters); it is embedded "
+                       "in GIT_SSH_COMMAND, which git runs through a shell")
+    return value
+
+
+def _ssh_command(path: str) -> str:
+    return f"ssh -i {path} -o IdentitiesOnly=yes"
+
+
+def parse_env(raw: dict, source: str = "") -> EnvFacts:
+    """Validate a parsed env.toml (closed-world) into EnvFacts."""
+    if not isinstance(raw, dict):
+        raise EnvError(f"{source or 'env.toml'}: not a table")
+    unknown = sorted(set(raw) - {"schema", "key", "vault", "harness"})
+    if unknown:
+        raise EnvError(f"{source}: unknown key(s) {', '.join(unknown)}")
+    if raw.get("schema") != 1 or isinstance(raw.get("schema"), bool):
+        raise EnvError(f"{source}: schema must be 1")
+
+    key = None
+    if "key" in raw:
+        table = raw["key"]
+        if not isinstance(table, dict):
+            raise EnvError(f"{source}: [key] must be a table")
+        unknown_keys = sorted(set(table) - {"path", "scope"})
+        if unknown_keys:
+            raise EnvError(f"{source}: unknown [key] entry(ies) {', '.join(unknown_keys)}")
+        if "path" not in table:
+            raise EnvError(f"{source}: [key] needs path")
+        key = KeyFacts(path=_key_path(table["path"], source),
+                       scope=_one_line(table["scope"], "[key] scope", source) if "scope" in table else None)
+
+    unset: tuple[str, ...] = ()
+    if "vault" in raw:
+        table = raw["vault"]
+        if not isinstance(table, dict):
+            raise EnvError(f"{source}: [vault] must be a table")
+        unknown_keys = sorted(set(table) - {"unset"})
+        if unknown_keys:
+            raise EnvError(f"{source}: unknown [vault] entry(ies) {', '.join(unknown_keys)}")
+        names = table.get("unset", [])
+        if not isinstance(names, list) or not all(isinstance(var_name, str) and _ENV_NAME.match(var_name) for var_name in names):
+            raise EnvError(f"{source}: [vault] unset must be a list of environment variable names")
+        unset = tuple(names)
+
+    harness: dict[str, tuple[str, ...]] = {}
+    if "harness" in raw:
+        table = raw["harness"]
+        if not isinstance(table, dict):
+            raise EnvError(f"{source}: [harness] must be a table")
+        for name, table in sorted(table.items()):
+            if not isinstance(name, str) or not _HARNESS_NAME.match(name):
+                raise EnvError(f"{source}: [harness.{name}] is not a harness name")
+            if not isinstance(table, dict):
+                raise EnvError(f"{source}: [harness.{name}] must be a table")
+            unknown_keys = sorted(set(table) - {"exports"})
+            if unknown_keys:
+                raise EnvError(f"{source}: unknown [harness.{name}] entry(ies) {', '.join(unknown_keys)}")
+            exports = table.get("exports", [])
+            if not isinstance(exports, list):
+                raise EnvError(f"{source}: [harness.{name}] exports must be a list of NAME=value strings")
+            for export in exports:
+                if not isinstance(export, str) or "=" not in export or not _ENV_NAME.match(export.split("=", 1)[0]):
+                    raise EnvError(f"{source}: [harness.{name}] export {export!r} is not NAME=value")
+                var = export.split("=", 1)[0]
+                if "\n" in export:
+                    raise EnvError(f"{source}: [harness.{name}] export {var} must be one line")
+                if var in _UNSAFE_EXPORT_NAMES or var.startswith(_UNSAFE_EXPORT_PREFIXES):
+                    raise EnvError(f"{source}: [harness.{name}] refuses to export {var}: "
+                                   "polymorph does not set loader, interpreter or shell variables")
+            harness[name] = tuple(exports)
+
+    return EnvFacts(key=key, unset=unset, harness=harness)
+
+
+def load_env(repo: str | Path = ".") -> EnvFacts:
+    """Read and validate `.polymorph/basecamp/env.toml`."""
+    path = Path(repo) / ENV_FILE
+    if not path.is_file():
+        raise EnvError(f"no env contract at {ENV_FILE} (host facts are the tool's input, not its output)")
+    return parse_env(tomllib.loads(path.read_text()), str(path))
+
+
+def contract_lines(facts: EnvFacts, harness: str | None = None) -> list[str]:
+    """The contract as valid shell, one statement per line, comments included."""
+    head = f"# polymorph env contract -- harness: {harness}" if harness else "# polymorph env contract"
+    lines = [head]
+    if facts.key:
+        scope = f" (scope: {facts.key.scope})" if facts.key.scope else ""
+        lines.append(f"# agent key: {facts.key.path}{scope}")
+    if facts.unset:
+        lines.append("unset " + " ".join(sorted(facts.unset)))
+    if facts.key:
+        ssh_command = _ssh_command(facts.key.path)
+        lines.append(f"export GIT_SSH_COMMAND={shlex.quote(ssh_command)}")
+    for export in sorted(facts.exports_for(harness)):
+        name, value = export.split("=", 1)
+        lines.append(f"export {name}={shlex.quote(value)}")
+    return lines
+
+
+def _harness_known(repo: Path, name: str, facts: EnvFacts) -> bool:
+    if name in facts.harness:
+        return True
+    from .mapping import MappingError, load_mapping
+
+    try:
+        load_mapping(name, repo)
+        return True
+    except MappingError:
+        return False
+
+
+def run_exec(repo: str | Path, harness: str | None, cmd: str) -> int:
+    """Run cmd under `sh -c` with the contract applied to the environment."""
+    repo_path = Path(repo)
+    facts = load_env(repo_path)
+    if harness is not None and not _harness_known(repo_path, harness, facts):
+        raise EnvError(f"unknown harness {harness!r}: no [harness.{harness}] in {ENV_FILE} and no mapping")
+    env = os.environ.copy()
+    for name in facts.unset:
+        env.pop(name, None)
+    if facts.key:
+        env["GIT_SSH_COMMAND"] = _ssh_command(facts.key.path)
+    for export in facts.exports_for(harness):
+        name, value = export.split("=", 1)
+        env[name] = value
+    return subprocess.run(["sh", "-c", cmd], env=env).returncode
