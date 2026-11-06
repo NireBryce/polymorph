@@ -34,6 +34,12 @@ page is the full guide, and both get edited in the same change.
 - **When a rename makes the old name ungreppable, say what it was** on the
   declaration: one line containing the old string, so a search for the old
   name lands somewhere that explains it.
+- **A scripted rename edits string literals too.** A word-boundary regex
+  rename reaches f-string prefixes (`f"..."` becomes the new name), `!r`
+  conversions, escape sequences (`"\n"`), short flag strings (`"-d"`) and
+  English articles in comments and messages. Grep the rename's diff for
+  the new name touching quotes, `!`, backslashes and dashes, and read
+  every changed line that is not code, before trusting the pass.
 
 ## Scripts and templates
 
