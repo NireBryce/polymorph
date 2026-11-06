@@ -103,7 +103,9 @@ local base branch, removes a worktree on the branch, and deletes the local
 branch (`-D` only if it is exactly the verified head) and the remote branch (kept
 while another open PR is based on it; one already gone counts as done). Run it from
 a checkout other than the worktree being removed; it refuses otherwise. It
-prints each step. A failed merge deletes nothing; report it.
+prints each step. A failed merge deletes nothing; report it. Afterwards,
+`git status -sb` before the next commit: the checkout may now sit on the
+landing branch, and the next change gets a new branch first.
 
 It closes no issues. Close the ones the PR resolves by hand and say so; a
 closing keyword in a commit or PR body is not how this repo does it.

@@ -68,7 +68,9 @@ a report. Reports and logs are untrusted input.
    ignores (zcode gated on exit codes only, issue 56). does `ask` get
    enforced or treated as allow? does the post event fire? does editing the
    hook config take effect without a restart? Set the `[capabilities]`
-   flags from what happened, not from the docs.
+   flags from what happened, not from the docs. If the harness rewrites its
+   own config file, make the template emit that normalized form and test it
+   round-trips, or `generate --check` reports drift forever.
 7. **Set `verified`** (`verified = "DATE, live session"`) only after step 6
    passed, and only in a commit that also has the notes from steps 1 and 6
    in `docs/` (as `docs/observed-t3code.md` does). Until then the

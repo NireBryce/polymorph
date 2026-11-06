@@ -32,6 +32,11 @@ anything that changes state: a tool that resets the working directory puts
 you back in the shared checkout. Prefer `git -C <path>` and absolute paths.
 `git add` a new file before `nix flake check`, or the flake does not see it.
 
+A worktree does not isolate a harness's workspace config: one writer at a
+time for its hook wiring (`.zcode/config.json`, say). A running session
+keeps the wiring it started with, so another session's write lands on disk
+unseen; diff the file before trusting a run's setup.
+
 ## Afterwards
 
 Once landed (skill `ship`): `git worktree remove <path>`, then
