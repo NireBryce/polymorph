@@ -93,6 +93,33 @@ window arrangement. Derived: a wired hook that never fires in ZCode may be pendi
 not a broken mapping — confirm a hook actually fires before debugging the mapping
 (issue 55).
 
+## The headless CLI and hook trust (probe, 2026-11-05)
+
+A headless probe of the CLI (driven from a live session; report in a scratch dir) found:
+
+- The `zcode` wrapper on PATH boots the desktop app (`--version`, `--help` included). The
+  real CLI is the app's own bundle run through Electron-as-node -- the spawn the desktop
+  uses for its agents:
+  `ELECTRON_RUN_AS_NODE=1 <package>/lib/ZCode/zcode <package>/lib/ZCode/resources/glm/zcode.cjs COMMAND`.
+  `version` prints `0.17.1` headless -- the agent runtime's version, a different number from
+  the app's 3.17.2. Sessions run via `--prompt` (`--mode` defaults to yolo for `--prompt`
+  per the CLI's own help; not behaviorally observed). Other headless subcommands:
+  `doctor`, `skills list`, `hooks trust status|review|grant|revoke`, `app-server --stdio`.
+- Hook trust works headless through the CLI itself: `hooks trust grant --workspace DIR
+  --hook-digest <sha> ...` grants persistent trust, and the runtime's own digests matched
+  the hand-computed declaration-digest formula exactly. Hand-writing records (the section
+  above) is no longer the only route.
+- Unproven: whether workspace hooks fire in a headless session at all. Every `--prompt`
+  session died at model authentication before making a tool call -- the account provider
+  the desktop uses does not materialize in `--prompt` mode (injected over the protocol),
+  and the standalone CLI had no usable provider key. The sessions did read the scratch
+  hook wiring.
+- Open anomaly: headless sessions logged `config.project_hooks.pending_trust` for hooks
+  that every CLI trust surface (`hooks trust status`, `hooks trust review --json`) reported
+  `trusted_persistent`. Either a diagnostic from a config-loader path that does not read
+  the trust store, or a real gate discrepancy -- one session that reaches a tool call
+  settles it.
+
 ## Hook answers and failure behavior (3.17.2)
 
 Observed on 2026-11-04 in **ZCode 3.17.2**, with a probe hook wired on `PreToolUse` and
