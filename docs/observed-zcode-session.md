@@ -120,6 +120,18 @@ A headless probe of the CLI (driven from a live session; report in a scratch dir
   the trust store, or a real gate discrepancy -- one session that reaches a tool call
   settles it.
 
+The trust digest formula, reproduced 26/26 against existing records (kept here because
+it took a headless session's runtime to confirm it): the store's digest is
+`sha256(JSON.stringify(["workspace-hook-declaration", 1, sourceRelativePath,
+sourceDiscoveryOrder, event, matcher, matcherIndex, hookIndex,
+["command", command, asyncIsTrue, shellPart], resolvedTimeoutMs, resolvedMaxOutputBytes]))`
+with `shellPart` one of `["unset"] | ["true"] | ["string", s]`, `resolvedTimeoutMs =
+hook.timeoutMs ?? (hook.timeout ? hook.timeout * 1000 : 60000)` clamped with
+`Math.max(1, Math.round(...))`, default `maxOutputBytes` 32768, and an appended
+`["onError", "deny"]` entry when the hook sets `onError: "deny"`. `hooks trust status
+--json` prints the same digests, and `hooks trust grant --workspace DIR --hook-digest ...`
+(`--all-current --bundle-digest <sha>` for the batch form) grants from them headlessly.
+
 Outcome (probe closed 2026-11-06, still one tool call short of the proof): with browser
 login done and a provider rule enabled, a headless session selected a model and reached
 Z.ai's API -- which answered `429`, code `1305` ("service may be temporarily overloaded")
