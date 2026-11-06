@@ -83,8 +83,9 @@ just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status
 just ship-land PR    # merge pinned to the head, sync main --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
 ```
 
-`git add` a new file before `just check`: flakes ignore untracked files, so
-a new test or fixture silently does not exist. Do not pipe a check into a
+`git add` a new file before `just check` or `just docs`: flakes and the docs
+check (`git ls-files`) ignore untracked files, so a new test, fixture or page
+silently does not exist to them. Do not pipe a check into a
 filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and
 a failed stage reads as passed. Write the output to a file and read the
 exit status separately, or use `set -o pipefail`.
@@ -110,7 +111,7 @@ exit status separately, or use `set -o pipefail`.
 | `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
-| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home) and `patterns.md` (how the repo is developed with agents) |
+| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, and `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written) |
 | `.github/` | CI (`check.yml` runs `just preflight`), PR and issue templates |
 | `.githooks/` | opt-in pre-commit (`just install-hooks`) |
 
