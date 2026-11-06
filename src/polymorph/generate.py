@@ -43,7 +43,7 @@ def enabled_targets(repo: Path) -> list[str]:
     return list(data.get("enabled", []))
 
 
-def adapter_command(harness: str, script: str, timeout: int | None = None) -> str:
+def adapter_command(harness: str, script: str, timeout: int | float | None = None) -> str:
     extra = f" --timeout {timeout}" if timeout is not None else ""
     # python3, never python: on a python3-only system a bare `python` fails with
     # exit 127 before polymorph runs, and a nonzero non-2 exit does not block
@@ -58,7 +58,7 @@ def direct_command(script: str) -> str:
     return f'"$CLAUDE_PROJECT_DIR/{script}"'
 
 
-def hook_command(mapping: Mapping, script: str, timeout: int | None = None) -> str:
+def hook_command(mapping: Mapping, script: str, timeout: int | float | None = None) -> str:
     if mapping.delivery == "direct":
         return direct_command(script)
     return adapter_command(mapping.name, script, timeout)
