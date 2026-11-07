@@ -10,30 +10,32 @@
 
 ## What polymorph does
 
-Coding-agent harnesses (Claude Code, ZCode, Gemini CLI and others) each read their own
-config files, name their tools and events differently, and disagree on what a hook's exit
-code means. A repo that keeps guard hooks (a script that refuses `git reset --hard`, say)
-for one harness has to hand-copy and hand-translate them for every other harness, and the
-copies drift. A harness that does not recognise a file ignores it without saying so.
+polymorph converts a repo's Claude Code hook configuration into the hook configuration
+files of other coding-agent harnesses, such as ZCode and Gemini CLI.
 
-polymorph reads the repo's Claude Code agent config once and writes what each other
-harness needs:
+Harnesses read different config files, name tools and events differently, and disagree on
+what a hook's exit code means. A repo that keeps guard hooks for one harness (for example,
+a script that refuses `git reset --hard`) has to copy and translate them by hand for every
+other harness, and the copies drift apart. A harness that does not recognise a file
+ignores it without a warning.
+
+polymorph works in four steps:
 
 1. It **reads** `.agents/settings.json` and the hook scripts under `.agents/hooks/` into a
    canonical config.
-2. It **generates** each enabled harness's own hook config from that canonical config and a
+2. It **generates** each enabled harness's hook config from that canonical config and a
    per-harness **mapping** (a TOML file; see below).
-3. It **reports gaps**: settings and files with no equivalent in a harness are listed, never
-   silently dropped.
+3. It **reports gaps**: it lists the settings and files that have no equivalent in a
+   harness.
 4. It **checks** statically that the generated files match what the mappings say.
 
-What differs between harnesses (config file location, tool names, event names, what an exit
-code means) lives in mappings and coverage tables, which are declarative TOML, not in code.
-Python 3.11+, standard library only.
+The differences between harnesses (config file location, tool names, event names, exit
+code meanings) are recorded in mappings and coverage tables, which are declarative TOML
+files. polymorph needs Python 3.11+ and uses only the standard library., standard library only.
 
-## Terms you will see
+## Terms
 
-The full list is in [Vocabulary](docs/vocabulary.md). The ones you need first:
+The full list is in [Vocabulary](docs/vocabulary.md).
 
 | Term | Meaning |
 |---|---|
@@ -51,7 +53,7 @@ How these fit together: [Concepts](docs/concepts.md).
 
 ## Status
 
-What works today, and what has been run:
+Implemented and covered by unit tests:
 
 - **Reads** `.agents/settings.json` and `.agents/hooks/` into a canonical config (three
   events, five tool classes). Settings with no cross-harness meaning are reported as
@@ -66,26 +68,26 @@ What works today, and what has been run:
   `polymorph manage adopt` (move files into the basecamp and symlink them back),
   `polymorph env` and `polymorph equip --harness NAME`.
 
-Not done: skills, rules and `AGENTS.md`/`CLAUDE.md` are discovered and reported but not
+Not implemented: skills, rules and `AGENTS.md`/`CLAUDE.md` are discovered and reported but not
 transliterated into other harnesses' formats. The plan and its slices are in
 [Loadout pivot plan](docs/plan-loadout-pivot.md).
 
 ## What it is not
 
 - **Not a security boundary.** The hooks it wires up are usually string matchers over a
-  command line. They catch honest mistakes, not a determined or confused agent.
+  command line. They catch common mistakes. They do not stop an agent that works around them.
 - **Not proof that your guards work.** `polymorph manage check` is static. It never runs a
   hook, a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
 - **Not verified against live harnesses.** Every shipped mapping says in its `verified`
-  field or its header comment what it actually rests on.
+  field or its header comment what it rests on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** A loadout is a set of initial
   conditions loaded at every agent launch. On a harness that keeps memory across launches,
   reloading them can accumulate, duplicate or contradict what the memory already holds.
-  This is untested and probably will stay so. See [Limits](docs/limits.md#built-in-memory).
+  No such test is planned. See [Limits](docs/limits.md#built-in-memory).
 
 ## Cost and responsibility
 
@@ -152,8 +154,8 @@ Step 2 on a repo with a `permissions` block prints something like:
 not translate it. `manage check` before step 3 fails with `generated-drift` because the
 file does not exist yet; after step 3 it passes.
 
-Commit `.zcode/config.json` and run `polymorph manage check --strict` in CI so the two
-never disagree. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
+Commit `.zcode/config.json` and run `polymorph manage check --strict` in CI, so CI fails
+when the committed file no longer matches `.agents/settings.json`. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
 
 ## Commands
 
@@ -212,13 +214,13 @@ Where the code lives:
 | `tests/` | unit tests (`fixture_repo/` is a sample agent config) |
 | `docs/` | [SPEC](docs/SPEC.md) is the contract; the rest explains it |
 
-Run the tests before sending a change (standard library only; please add no dependency):
+Run the tests before sending a change (standard library only; do not add dependencies):
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-Project ground rules: mapping content is data and never executed; hook scripts resolve
+Rules for changes: mapping content is data and never executed; hook scripts resolve
 under `.agents/hooks/`; a mapping without `verified` stays without it until a live session
 backs it; a change that makes a doc stale fixes the doc in the same change. Never run
 `polymorph capture` or a real harness without reading
