@@ -43,9 +43,9 @@ The full list is in [Vocabulary](docs/vocabulary.md).
 |---|---|
 | **canonical config** | The harness-neutral form of the repo's hooks and settings, read from the Claude Code layout. |
 | **mapping** | A TOML file (`schema = 1`) describing one harness: config path, tool and event names, capabilities, payload layout, answer format. Data only; nothing in it is executed. |
-| **coverage table** | A per-harness TOML file listing which kinds of repo files (skills, rules and so on) the harness reads. A kind the repo has and the table lacks is a gap. |
+| **coverage table** | A per-harness TOML file listing which kinds of repo files (skills, rules, and so on) the harness reads. A kind the repo has and the table lacks is a gap. |
 | **basecamp** | The repo's store of canonical agent files at `.polymorph/basecamp/`. The paths agents expect (`AGENTS.md`, `.agents/skills/`) are symlinks into it. |
-| **loadout** | What polymorph hands a harness: generated hook configs, pointers to basecamp files, the env contract and the gap report. |
+| **loadout** | What polymorph hands a harness: generated hook configs, pointers to basecamp files, the env contract, and the gap report. |
 | **equip** | The verb: `polymorph equip --harness NAME` writes the loadout for one harness. |
 | **gap report** | The part of the loadout naming what the harness will silently ignore even after equipping. |
 | **env contract** | Shell exports from `polymorph env` (agent key path, sockets a session must not inherit, harness session markers). |
@@ -64,13 +64,13 @@ Implemented and covered by unit tests:
   with `--check` for drift. Repo-local mappings under `.polymorph/basecamp/mappings/`
   override the built-ins, with a warning.
 - **Ships mappings** for `zcode` (with a `verified` field stating what it rests on),
-  `claude` and a `gemini` draft (neither has `verified`).
-- **Checks** statically, with stable finding codes and text, JSON and SARIF 2.1.0 output.
+  `claude`, and a `gemini` draft (neither has `verified`).
+- **Checks** statically, with stable finding codes and text, JSON, and SARIF 2.1.0 output.
 - **Inventories and equips**: `polymorph inventory` (coverage tables and the gap report),
   `polymorph manage adopt` (move files into the basecamp and symlink them back),
-  `polymorph env` and `polymorph equip --harness NAME`.
+  `polymorph env`, and `polymorph equip --harness NAME`.
 
-Only settings and hooks are translated. Skills, rules and memory files
+Only settings and hooks are translated. Skills, rules, and memory files
 (`AGENTS.md`/`CLAUDE.md`) are discovered and reported, not rewritten: harnesses read them as
 plain files, so `equip` creates a symlink where a harness expects a path that does not
 exist. The plan is in [Loadout pivot plan](docs/plan-loadout-pivot.md).
@@ -93,7 +93,7 @@ The per-mapping basis is in [Limits](docs/limits.md#what-verified-means).
   command line. They catch common mistakes. They do not stop an agent that works around
   them.
 - **Not proof that your guards work.** `polymorph manage check` is static. It never runs a
-  hook, a harness or the network. A clean `check` means the generated files match what the
+  hook, a harness, or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
 - **Not verified for real use.** Live checks so far are listed under [Status](#status).
@@ -103,7 +103,7 @@ The per-mapping basis is in [Limits](docs/limits.md#what-verified-means).
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** A loadout is a set of initial
   conditions loaded at every agent launch. On a harness that keeps memory across launches,
-  reloading them can accumulate, duplicate or contradict what the memory already holds.
+  reloading them can accumulate, duplicate, or contradict what the memory already holds.
   No such test is planned. See [Limits](docs/limits.md#built-in-memory).
 
 ## Cost and responsibility
@@ -124,7 +124,7 @@ the prompt kit in [Discovery](docs/discovery.md)), runs a real AI model on your 
   provider's terms for use through third-party tools. Nothing runs unless you type `yes`
   (or pass `--yes`, which you should do only knowing all of the above).
 - polymorph is experimental and unvetted and, as the Apache-2.0 licence says, is provided
-  without warranty. The maintainers accept no liability for charges, data loss or action
+  without warranty. The maintainers accept no liability for charges, data loss, or action
   taken against an account.
 
 ## Install
@@ -174,7 +174,7 @@ Every flag is in the [CLI reference](docs/cli.md).
 | Command | What it does |
 |---|---|
 | `manage generate` | Write each enabled harness's config from `.agents/settings.json`. `--check` writes nothing and exits 1 on drift. |
-| `manage check` | Static analysis for CI: scripts exist and are executable, mappings valid, generated files current, fixtures replay. Text, JSON or SARIF. |
+| `manage check` | Static analysis for CI: scripts exist and are executable, mappings valid, generated files current, fixtures replay. Text, JSON, or SARIF. |
 | `manage adopt` | Move agent files at rest into the basecamp store and symlink them back. |
 | `manage validate` | Check one mapping file against schema 1. |
 | `manage conformance` | Replay the shipped fixtures through the adapter. |
@@ -199,12 +199,12 @@ Every flag is in the [CLI reference](docs/cli.md).
 |---|---|
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
 | `discover probe` | Drive a scripted session through one marker command per decision route and print the `[capabilities]` block with how each flag was observed. `zcode` is the only adapter. Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
-| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Drivers: `opencode` runs; `claude` and `zcode` refuse to run and say why (neither has been seen working headless). Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
+| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping, and a report. Drivers: `opencode` runs; `claude` and `zcode` refuse to run and say why (neither has been seen working headless). Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
 
 ## Contributing
 
 [CONTRIBUTING](CONTRIBUTING.md) covers reporting a harness, reporting a bug, adding a
-mapping and the rules for code and doc changes. The most useful contributions right now
+mapping, and the rules for code and doc changes. The most useful contributions right now
 are reports of how a specific harness's hooks behave, and bug reports with a minimal
 reproduction. This section is the map you need before opening the code.
 
@@ -217,7 +217,7 @@ Where the code lives:
 | `src/polymorph/canonical.py` | the canonical payload keys and where each sits in a Claude payload |
 | `src/polymorph/mapping.py`, `validate.py` | load a mapping and validate it against schema 1 |
 | `src/polymorph/generate.py`, `decisions.py` | canonical config + mapping -> harness config; recorded decisions for mismatches |
-| `src/polymorph/adapter.py`, `exprs.py`, `extractors.py` | the runtime shim, its dotted-path expressions and its named built-in extractors |
+| `src/polymorph/adapter.py`, `exprs.py`, `extractors.py` | the runtime shim, its dotted-path expressions, and its named built-in extractors |
 | `src/polymorph/conformance.py` | replay fixtures through a mapping |
 | `src/polymorph/check.py` | static analysis behind `manage check` |
 | `src/polymorph/inventory.py`, `equip.py`, `links.py` | gap report, onboarding run, the symlinks `equip` makes for `no-link` gaps |
@@ -228,7 +228,7 @@ Where the code lives:
 | `src/polymorph/resources.py` | locate the shipped data directories |
 | `src/polymorph/mappings/`, `fixtures/`, `coverage/`, `data/` | shipped per-harness data, and templates used by `capture` and `probe` |
 | `tests/` | unit tests (`fixture_repo/` is a sample agent config) |
-| `scripts/` | the `ci-wait`, `ship-land` and reference-generation recipes; `run_recipe.py` runs any recipe without `just` |
+| `scripts/` | the `ci-wait`, `ship-land`, and reference-generation recipes; `run_recipe.py` runs any recipe without `just` |
 | `docs/` | [SPEC](docs/SPEC.md) is the contract; the rest explains it |
 
 Run the checks before sending a change. Do not add dependencies.
@@ -243,7 +243,7 @@ just install-hooks   # optional: a pre-commit hook that runs docs and lint
 RECIPE` runs a recipe from the justfile. `check`, and so `preflight`, need Nix. The tests
 use stub harnesses only; none of them runs a real model.
 
-Before running `polymorph capture`, `discover probe` or a real harness, read
+Before running `polymorph capture`, `discover probe`, or a real harness, read
 [Cost and responsibility](#cost-and-responsibility).
 
 ## Documentation

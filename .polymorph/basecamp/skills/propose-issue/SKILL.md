@@ -1,7 +1,7 @@
 ---
 name: propose-issue
 description: How to propose a GitHub issue for a real bug found in this repo while working on something else.
-when_to_use: You noticed a real bug, gap or stale doc here that is outside the current task.
+when_to_use: You noticed a real bug, gap, or stale doc here that is outside the current task.
 ---
 
 # Proposing an issue

@@ -25,7 +25,7 @@ A hook has:
 
 | Field | Meaning |
 |---|---|
-| `event` | `session_start`, `pre_tool` or `post_tool`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`. |
+| `event` | `session_start`, `pre_tool`, or `post_tool`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`. |
 | `classes` | Which tools it applies to, from `shell`, `edit`, `read`, `mcp`, `other`. Empty means all tools. |
 | `script` | Path of the hook script relative to the repo root, always under `.agents/hooks/`. |
 | `timeout` | Seconds, if the settings give one. |
@@ -40,7 +40,7 @@ Tool classes come from Claude's `matcher` regex, split on `|`:
 | starts with `mcp__` | `mcp` |
 | anything else | `other` |
 
-A missing, empty or `*` matcher means all tools. `session_start` hooks are always all.
+A missing, empty, or `*` matcher means all tools. `session_start` hooks are always all.
 
 Everything the reader cannot translate is listed as **unmapped** and reported by `generate`
 and `check`: any top-level key other than `hooks` (`attribution`, `model`, ...), each
@@ -52,7 +52,7 @@ whose `type` is not `command`. Nothing is dropped silently. In particular, **Cla
 
 A mapping is a TOML file, `schema = 1`, that says how one harness differs from the
 canonical shape: where its config lives, what its tools and events are called, what it can
-do, how its payloads are laid out and how its answers must look. Field by field in
+do, how its payloads are laid out, and how its answers must look. Field by field in
 [Writing a mapping](writing-a-mapping.md).
 
 Where mappings are looked up, in order:
@@ -66,7 +66,7 @@ Where mappings are looked up, in order:
 A mapping's `name` must equal its filename (without `.toml`).
 
 Mappings are data. Expressions are dotted paths and `{placeholder}` substitution only; no
-field is ever executed, shell-expanded or loaded as code. Unknown keys are an error.
+field is ever executed, shell-expanded, or loaded as code. Unknown keys are an error.
 
 ## Delivery: direct and adapter
 
@@ -104,7 +104,7 @@ mapping does not check. At run time the adapter:
    on stdout) and renders it with `payload_out`.
 
 **Adapter faults never become a deny.** A bad payload, an unrunnable or crashing script,
-non-JSON output, a timeout or an internal error produces a visible message,
+non-JSON output, a timeout, or an internal error produces a visible message,
 `polymorph adapter: this tool call was NOT checked by the guard hook (...)`, and lets the
 call proceed. If the harness accepts JSON answers the message goes out as a `systemMessage`
 with exit 0; otherwise on stderr with exit 1. This is a deliberate choice (a broken shim
@@ -144,7 +144,7 @@ Capabilities in a mapping are claims. Only a live test establishes them; see
 ## Trust model
 
 - Hook scripts must resolve (after `realpath`, so symlinks cannot escape) under
-  `<repo>/.agents/hooks/`. The reader, `check` and the adapter all enforce it.
+  `<repo>/.agents/hooks/`. The reader, `check`, and the adapter all enforce it.
 - A hook command must be a single bare path. `script.sh --flag` and `python x.py` are
   refused.
 - Mappings are parsed as data. Extractors are named built-ins selected by name from a

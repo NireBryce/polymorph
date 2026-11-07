@@ -25,7 +25,7 @@ Do not write the page unasked: the wiki is written on a yes, the same way
 `propose-issue` files.
 
 On a yes, the pattern lands as a row on `wiki/patterns.md` — what it is,
-why it exists, what it costs, and the skill, check or hook that carries it —
+why it exists, what it costs, and the skill, check, or hook that carries it —
 linked from where it is enforced. The page indexes; it does not restate.
 
 ## Fixture cases

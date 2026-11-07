@@ -14,7 +14,7 @@ use; each entry that does says what breaks.
   gains an optional risk-and-impact field, and PR bodies and change-proposing issues end
   with a risk and an impact out of 10 (`wiki/risk-and-impact.md`).
 - **`ship-land` closes the issues a PR resolves (issue 99):** after a confirmed merge,
-  `scripts/ship_land.py` closes each issue the PR body names with `Closes`, `Fixes` or
+  `scripts/ship_land.py` closes each issue the PR body names with `Closes`, `Fixes`, or
   `Resolves #N` (same repository only; an issue already closed is left alone) and comments
   the PR and merge commit on it. GitHub acts on those keywords only for PRs into the default
   branch, and work lands on `experimental`. Breaks: a PR body that used a closing keyword
@@ -25,27 +25,27 @@ use; each entry that does says what breaks.
   `scripts/self_check.py` so every recipe is in that subset.
 
 - **Maintainer commands moved under `manage` (breaking):** `polymorph generate`, `check`,
-  `validate` and `conformance` are now `polymorph manage generate`, `manage check`, `manage
-  validate` and `manage conformance` (the new `adopt` lives there too); the old top-level
-  names are a usage error (exit 2). Breaks: every script, CI job and pre-commit hook that
-  calls the old names. `adapter`, `discover` and `capture` stay top-level, as do the new
-  `equip`, `inventory` and `env`. Hook configs written by an older `generate` call
+  `validate`, and `conformance` are now `polymorph manage generate`, `manage check`, `manage
+  validate`, and `manage conformance` (the new `adopt` lives there too); the old top-level
+  names are a usage error (exit 2). Breaks: every script, CI job, and pre-commit hook that
+  calls the old names. `adapter`, `discover`, and `capture` stay top-level, as do the new
+  `equip`, `inventory`, and `env`. Hook configs written by an older `generate` call
   `polymorph adapter`, which did not move. The `generated-drift` finding now names
   `polymorph manage generate`; it named the old command.
 - **`validate` refuses a deny that cannot block:** a mapping with no `payload_out.deny` and
   neither `json_answers` nor `exit_2_blocks` is rejected, because the adapter would have sent
   the deny as exit 0 (allow); the adapter now reports that case as "NOT checked". Breaks: `discover
   draft` output fails `validate` for this reason until the reviewer records how the harness
-  blocks. `payload_out` strings may use only `{reason}`, `{context}` and `{message}`; a typo
+  blocks. `payload_out` strings may use only `{reason}`, `{context}`, and `{message}`; a typo
   such as `{reasn}` used to pass validation and turn every deny into "NOT checked".
   The `check` code `deny-unenforceable` (issue #35), which warned about the same shape,
   is removed: such a mapping is now `mapping-invalid`, an error.
 - **Redacted discovery logs drop key names that are not plain names** (letters, digits, `_`,
   `-`): a file path used as a `tool_input` key became visible in `tool_input_keys` and the
   raw record. Such keys are now `<invalid key>`; `--full` is unchanged.
-- **`capture` keeps partial results:** Ctrl-C, SIGTERM or SIGHUP after some steps used to
+- **`capture` keeps partial results:** Ctrl-C, SIGTERM, or SIGHUP after some steps used to
   discard the log (and, without `--keep`, the scratch directory with it). It now writes
-  `report.md`, `summary.txt`, `draft.toml` and `log.jsonl` from what was logged, marking the
+  `report.md`, `summary.txt`, `draft.toml`, and `log.jsonl` from what was logged, marking the
   cut step `interrupted` and the rest `not run`, then exits with the signal's status.
 - **Review sweep, second pass:** `polymorph adapter` (the command `generate` writes into harness
   configs) now accepts `--timeout` and `--repo`, and hands its whole command line to the adapter,
@@ -57,13 +57,13 @@ use; each entry that does says what breaks.
   mentions `*** `). `check` reports malformed hook groups as `settings-invalid` instead of
   crashing. `equip` keeps other harnesses' entries in `loadout.toml` and reports an invalid
   `env.toml` instead of printing "no env.toml". Redacted discovery logs no longer keep raw
-  `event`, `tool_name` or `session_id` text under the alias keys; a value that is not a plain
+  `event`, `tool_name`, or `session_id` text under the alias keys; a value that is not a plain
   name or id is logged as `<invalid>`. `discover init` no longer removes another harness's
   logger whose name ends with its own. `generate` refuses an existing config that is not a JSON
   object; the reader refuses a hook `timeout` that is not above 0; `env.toml` `exports` must be
   a list; `adopt` refuses a gitignored file.
 - **Trusted-output refusals:** polymorph refuses to emit what it cannot guarantee. A hook
-  script whose resolved repo-relative path contains a quote, whitespace, `$`, a backtick or
+  script whose resolved repo-relative path contains a quote, whitespace, `$`, a backtick, or
   another shell metacharacter is refused by the reader (the path is embedded in generated
   command lines, where such a name could smuggle a second command). A mapping's `config_path`
   that resolves outside the repository -- through a symlinked component -- is refused for the
@@ -75,7 +75,7 @@ use; each entry that does says what breaks.
   `ask` route with `exit = 0`.
 - **Hardening follow-ups:** the deferred items from the same security pass. `env` refuses a
   `[key] path` with anything a shell would interpret (it is embedded in `GIT_SSH_COMMAND`,
-  which git executes through a shell) and refuses to export loader, interpreter or shell
+  which git executes through a shell) and refuses to export loader, interpreter, or shell
   variables (`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `IFS`,
   `GIT_SSH_COMMAND`, ...). Generated commands say `python3`, not `python` (a bare `python`
   on a python3-only system fails with exit 127 before polymorph runs, which harnesses read
@@ -98,7 +98,7 @@ use; each entry that does says what breaks.
   is the harness that needs them; ZCode reads `AGENTS.md` and `.agents/skills` itself.
 - **Gap report (breaking, experimental):** the report now compares the path a harness reads
   with where the repo keeps the file. Each gap carries a `reason`: `unsupported`, `no-link`
-  (Claude Code reads `CLAUDE.md`, `.claude/skills` and `.claude/rules`, and the repo has
+  (Claude Code reads `CLAUDE.md`, `.claude/skills`, and `.claude/rules`, and the repo has
   `AGENTS.md`, `.agents/skills`, `.agents/rules` with no link), `unlinked-copy` (both exist as
   separate real files or directories: drift) or `points-elsewhere`, and a `fix` text naming the
   link. `inventory --json` gains `reason`, `reads`, `fix`; `inventory.gaps()` takes the repo as
@@ -142,7 +142,7 @@ use; each entry that does says what breaks.
   idempotent `.gitignore` section. `--dry-run` writes nothing. The maintainer half is
   now a command group -- `polymorph manage generate|check|validate|conformance|adopt`
   (the old top-level names are gone); `equip`, `inventory`, `env`, `adapter`,
-  `discover` and `capture` stay top-level.
+  `discover`, and `capture` stay top-level.
 - **Decision ids gain the event dimension (breaking):** a decision id is now
   `<hook-script>:<event>:<kind>` and the decisions file schema is 2. Schema 1 ids had no
   event, so one script registered under two events fired the same mismatch id twice and a
@@ -176,7 +176,7 @@ use; each entry that does says what breaks.
   error and passed validation silently, the same fail-open shape issue #35 closed for a
   missing entry. `validate` now requires the explicit `exit = 2`, so the adapter (which
   re-validates at load) refuses such a mapping with a visible NOT-checked fault instead.
-  `allow`, `warn` and `remind` entries are unconstrained.
+  `allow`, `warn`, and `remind` entries are unconstrained.
 - **Provenance values match as a whole string (found in review):** a trailing newline
   slipped past the `--plugin-version`/`--location` safe-value pattern (a `$` anchor also
   matches before one); the check now uses `fullmatch`, and such a value records as
@@ -253,9 +253,9 @@ First state of the project. Python 3.11+, standard library only.
 - **`generate`:** writes JSON hook configs using the `claude-settings` and `claude-like`
   templates, with `--check` for drift. Lookup of mappings from the repo's
   `.polymorph/basecamp/mappings/` overrides the built-in ones with a warning.
-- **`check`:** static analysis with stable finding codes; text, JSON and SARIF 2.1.0 output;
+- **`check`:** static analysis with stable finding codes; text, JSON, and SARIF 2.1.0 output;
   `--strict`.
-- **Decisions:** a hook that needs an event, tool class or payload field the target lacks is
+- **Decisions:** a hook that needs an event, tool class, or payload field the target lacks is
   an undecided item until `.polymorph/basecamp/decisions/NAME.toml` answers it. `generate`
   writes nothing for that target and exits 3 (it used to skip and report, exit 0); `check`
   gains `decision-undecided`, `decision-weakens-guard`, `decision-stale`, `decision-invalid`
@@ -271,11 +271,11 @@ First state of the project. Python 3.11+, standard library only.
 - **`capture`:** `polymorph capture --harness NAME` runs the discovery procedure itself:
   scratch directory, logger installed by a shipped driver (`opencode`; `claude`, blocked until confirmed live),
   fixed steps through the harness's headless mode, then `summary.txt`, `draft.toml`,
-  `report.md` and `log.jsonl`, and cleanup. It spends tokens, so nothing runs without a typed
+  `report.md`, and `log.jsonl`, and cleanup. It spends tokens, so nothing runs without a typed
   `yes` after a cost warning (`--yes` still prints a notice; a non-interactive stdin without it
-  refuses). The harness runs with `PATH`, `HOME` and `XDG_*` only. Acceptance for issue 16, as
+  refuses). The harness runs with `PATH`, `HOME`, and `XDG_*` only. Acceptance for issue 16, as
   met so far: the stub-harness tests cover confirmation, cancel, cleanup, timeouts, Ctrl-C,
-  scratch-only writes and the environment; it has not been run against a real harness.
+  scratch-only writes, and the environment; it has not been run against a real harness.
   `--print-prompts` prints the manual prompt kit. README gains "Cost and responsibility".
 - **`capture` and signals:** SIGTERM and SIGHUP now run the same cleanup as Ctrl-C (kill the
   harness's process group, remove the scratch directory) and exit 143 and 129; the previous
@@ -297,11 +297,11 @@ First state of the project. Python 3.11+, standard library only.
   example in `docs/examples/` gains the matching `POLYMORPH_ENV` constant. The JavaScript was
   not run (no node in the tests); the tests read the rendered text.
 - **`ship-land` refusals:** before merging it now refuses a PR whose head is in another
-  repository, whose head branch equals the base or is `main`, `master`, `experimental` or the
+  repository, whose head branch equals the base or is `main`, `master`, `experimental`, or the
   repo's default branch, or whose base is not the default branch (`--allow-base BRANCH` for a
   stacked PR). The local branch is deleted with `-d`, or `-D` only when it is exactly the
   verified head; the remote branch is kept while another open PR is based on it.
-- **`discover` event names:** names may contain `.`, `-` and `:` (OpenCode sends
+- **`discover` event names:** names may contain `.`, `-`, and `:` (OpenCode sends
   `execute.before`, `execute.after`, `session.created`); the draft guesses `pre_tool` and
   `post_tool` from a trailing `before` / `after`, marked `guessed from name`, lists other
   observed names in a comment under `[events]`, and `summary` shows the real names. Mapping
@@ -314,9 +314,9 @@ First state of the project. Python 3.11+, standard library only.
   log lines carry `schema: 1` (older lines still read). Call and message ids that look like
   ids are now logged verbatim so pairing works.
 - **Docs:** `docs/observed-opencode.md` (what a live OpenCode v2.0.32 capture showed, with
-  documented, binary-only and untested claims kept apart) and an example discovery plugin.
+  documented, binary-only, and untested claims kept apart) and an example discovery plugin.
 - **Report path:** a `report-harness` agent skill and a Harness report issue form.
-- **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI and
+- **Docs:** getting started, concepts, writing a mapping, CLI reference, discovery, CI, and
   limits.
 - Packaging: a Nix flake and `pyproject.toml`. Built-in mappings and fixtures are package
   data under `src/polymorph/`, so a plain `pip install .` works.

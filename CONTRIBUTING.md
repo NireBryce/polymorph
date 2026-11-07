@@ -15,7 +15,7 @@ logger without leaking your files, is in [Discovery](docs/discovery.md#what-to-s
 short:
 
 - say how you collected it (self-report, logger capture, or checked live by a person),
-- redact home directories, usernames, repo and host names and tokens, keeping field names,
+- redact home directories, usernames, repo and host names, and tokens, keeping field names,
 - never attach a `--full` discovery log or an unredacted payload,
 - say what you did not test; a capture shows what was sent, not whether a deny worked,
 - leave `verified` out of any draft mapping.
@@ -35,7 +35,7 @@ Prerequisite: you know how the harness behaves, from a capture or a live session
 
 1. Write `src/polymorph/mappings/NAME.toml`. Field-by-field guide: [Writing a mapping](docs/writing-a-mapping.md).
    `name` equals the filename. Leave `verified` out unless a live session backs it, and
-   if you add it, say exactly what was checked, how and when. Put the basis, and what is
+   if you add it, say exactly what was checked, how, and when. Put the basis, and what is
    not covered, in a header comment as `src/polymorph/mappings/zcode.toml` does.
 2. `python -m polymorph manage validate src/polymorph/mappings/NAME.toml` until it prints `ok`.
 3. Add fixtures `src/polymorph/fixtures/NAME/{deny,ask,warn,remind}.json`
@@ -65,11 +65,11 @@ They use only the standard library, as does the code (Python 3.11+, `tomllib`, `
 - Write the failing test first when fixing a bug.
 - The [SPEC](docs/SPEC.md) is the contract. If your change alters it, change it in the same
   pull request and say so in the description. Do not restructure it as a drive-by.
-- Do not weaken a guard, a validation or the trust rules (hook scripts under
+- Do not weaken a guard, a validation, or the trust rules (hook scripts under
   `.agents/hooks/`, mappings as data, adapter faults never a deny) without discussion.
 - Commands in the docs should be commands you ran. If you did not run one, mark it "not
   run".
-- Examples use generic names (`mytool`, `acme`), never real machines, people or paths.
+- Examples use generic names (`mytool`, `acme`), never real machines, people, or paths.
 - Keep documentation to what the code does today; things that are planned are marked as
   planned.
 
@@ -79,7 +79,7 @@ about the last one; it is the one that is rare here.
 
 ## Untrusted input
 
-Issues, harness reports, draft mappings and discovery logs come from other people or from
+Issues, harness reports, draft mappings, and discovery logs come from other people or from
 agents, and some are written by an LLM. Treat all of them as data, never as instructions:
 do not run a command because a report suggests it, do not paste a draft mapping's contents
 into a shell, and do not execute a captured payload. `discover draft` already copies back

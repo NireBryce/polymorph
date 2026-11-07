@@ -1,7 +1,7 @@
 ---
 name: name-a-thing
-description: How to name a new concept, command or file in this repo so the name says what it means.
-when_to_use: Naming a feature, subcommand, document or directory here, or when a name starts feeling wrong.
+description: How to name a new concept, command, or file in this repo so the name says what it means.
+when_to_use: Naming a feature, subcommand, document, or directory here, or when a name starts feeling wrong.
 ---
 
 # Naming a thing

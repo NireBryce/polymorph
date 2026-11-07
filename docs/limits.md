@@ -1,6 +1,6 @@
 # Limits
 
-polymorph is experimental, unvetted and sits on a safety path. This page lists what is not
+polymorph is experimental, unvetted, and sits on a safety path. This page lists what is not
 established, in plain terms, so you can decide how much to lean on it. Read it before you
 trust a generated hook config.
 
@@ -9,7 +9,7 @@ trust a generated hook config.
 ## What `check` does and does not tell you
 
 A clean `polymorph manage check` means: the hook scripts named in your settings exist, are
-executable and live under `.agents/hooks/`; each mapping is valid; the generated files on
+executable, and live under `.agents/hooks/`; each mapping is valid; the generated files on
 disk match what `generate` would write; the shipped fixtures replay.
 
 It does **not** mean:
@@ -64,7 +64,7 @@ covered.
 - The adapter has run in unit tests and a hand-fed run, never as the command of a real
   harness. Discovery has not been run against a live harness by this repository's tests.
 - **The adapter fails open, visibly.** A malformed payload, a hook that crashes or prints
-  non-JSON, a 60 second timeout or an internal fault lets the tool call proceed and prints
+  non-JSON, a 60 second timeout, or an internal fault lets the tool call proceed and prints
   `polymorph adapter: this tool call was NOT checked by the guard hook (...)`. That is
   deliberate (never invent a deny), but it means a broken or missing polymorph install
   silently removes the guard from the model's point of view unless the harness surfaces the
@@ -73,8 +73,8 @@ covered.
   non-blocking.
 - The adapter reads the mapping as raw TOML without validating it. `check` and `validate`
   do; run them.
-- `permissions` allow/deny rules, `attribution`, other top-level settings and hook events
-  other than SessionStart, PreToolUse and PostToolUse (such as `Stop`) are reported as
+- `permissions` allow/deny rules, `attribution`, other top-level settings, and hook events
+  other than SessionStart, PreToolUse, and PostToolUse (such as `Stop`) are reported as
   unmapped and not carried over. Another harness will not inherit your deny list.
 - `mcp` and `other` tool classes: no shipped mapping names tools for them. A hook scoped
   only to them is skipped for those targets and reported as a gap.
@@ -91,7 +91,7 @@ polymorph's output — and the loadouts the [loadout pivot plan](plan-loadout-pi
 proposes: sets of initial conditions meant to be loaded at every agent launch — is
 as-yet untested on agents whose harness has a built-in memory that persists across
 launches, and it probably never will be tested. Loading the same conditions at every
-launch can make such a memory accumulate, duplicate or contradict them, so the
+launch can make such a memory accumulate, duplicate, or contradict them, so the
 combination may cause adverse effects.
 
 **Not built**
@@ -113,5 +113,5 @@ combination may cause adverse effects.
 
 [SPEC.md](SPEC.md) is the contract. Where the code does something it does not say:
 
-- The spec says fixtures cover deny, ask, warn and remind "for each mapping"; `gemini` has
+- The spec says fixtures cover deny, ask, warn, and remind "for each mapping"; `gemini` has
   none.

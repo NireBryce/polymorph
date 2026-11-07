@@ -81,7 +81,7 @@ Notes:
   errors; the last step is what fails the job.
 - Uploading SARIF needs `security-events: write` and, for private repositories, GitHub
   code scanning to be available for the repo.
-- SARIF levels are `error`, `warning` and `note`, with `ruleId` set to the finding code
+- SARIF levels are `error`, `warning`, and `note`, with `ruleId` set to the finding code
   (`generated-drift` and so on). A finding that has a file gets a location; findings about
   a target as a whole have none.
 - `--format json` gives `{findings: [...], summary: {error, warning, note}}` if you want to

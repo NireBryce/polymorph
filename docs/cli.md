@@ -11,7 +11,7 @@ in [the usage reference](usage.md); the same is `man/polymorph.1` (`man -l man/p
 
 The maintainer half: commands that write the basecamp and generate the harness
 configs it issues -- `manage generate`, `manage check`, `manage validate`,
-`manage conformance` and `manage adopt`, each documented below. The contributor half is
+`manage conformance`, and `manage adopt`, each documented below. The contributor half is
 `equip`; `adapter` and `env` are launch-time; `discover` and `capture` serve harness
 mappers.
 
@@ -64,18 +64,18 @@ file is an error.
 polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
 ```
 
-Static analysis. Runs no hook, harness or network, writes no file. Exit 0 when there are
+Static analysis. Runs no hook, harness, or network, writes no file. Exit 0 when there are
 no errors (with `--strict`, no warnings either), 1 when findings fail, 2 on usage or
 internal errors.
 
 | Flag | Meaning |
 |---|---|
 | `--repo`, `--harness` | As for `manage generate`. No targets gives the `no-targets` error. |
-| `--format` | `text` (default), `json` or `sarif` (SARIF 2.1.0, one result per finding, a location when the finding has a file). |
+| `--format` | `text` (default), `json`, or `sarif` (SARIF 2.1.0, one result per finding, a location when the finding has a file). |
 | `--strict` | Warnings fail the run too. |
 
 Each finding has a severity (`error`, `warning`, `note`), a code, a target (or none), a
-message and sometimes a file. Text output is `severity code target: message (file)`
+message, and sometimes a file. Text output is `severity code target: message (file)`
 grouped by target, then a summary line.
 
 | Code | Severity | Means |
@@ -89,7 +89,7 @@ grouped by target, then a summary line.
 | `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
-| `decision-undecided` | error | The target lacks an event, tool class or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
+| `decision-undecided` | error | The target lacks an event, tool class, or field a hook needs and no decision answers it (the same item `generate` asks about, exit 3). |
 | `decision-weakens-guard` | warning | An applied decision is `run-empty`, or a `substitute` onto a different event. |
 | `decision-stale` | warning | A decision's id matches nothing now. |
 | `decision-invalid` | error | The decision file or one entry fails validation. |
@@ -172,7 +172,7 @@ them resolves to it, directly or through a symlink; otherwise it is a gap with a
 | reason | Meaning |
 |---|---|
 | `unsupported` | the table has no path for this kind: the harness ignores it |
-| `no-link` | the harness reads a path that does not exist (Claude Code reads `CLAUDE.md`, `.claude/skills`, `.claude/rules`; the repo has `AGENTS.md`, `.agents/skills`, `.agents/rules` and no link) |
+| `no-link` | the harness reads a path that does not exist (Claude Code reads `CLAUDE.md`, `.claude/skills`, `.claude/rules`; the repo has `AGENTS.md`, `.agents/skills`, `.agents/rules`, and no link) |
 | `unlinked-copy` | the harness reads a real file or directory that is a second copy of the provided one: the usual source of drift |
 | `points-elsewhere` | the harness reads a symlink that leads somewhere else |
 
@@ -230,7 +230,7 @@ polymorph env [--repo .] [--harness NAME] [--exec CMD]
 
 Emits the **env contract** — shell exports a harness session should run under — from the
 host facts in `.polymorph/basecamp/env.toml`, or runs CMD under it. **Emit-only**: the
-agent key is referenced by path and its contents are never read, printed or moved;
+agent key is referenced by path and its contents are never read, printed, or moved;
 nothing is written anywhere; there is no daemon. The output is valid shell, safe to
 `eval`.
 
@@ -278,7 +278,7 @@ repo's `.agents/hooks/`; the repo is the nearest ancestor of the working directo
 `.agents/` folder), and writes the harness-shaped answer to stdout/stderr and exits with
 its exit code. `--timeout S` kills the hook after S seconds (default 60); a killed or mis-used adapter
 lands in the same NOT-checked path as every other fault -- a usage error, an invalid
-mapping or a timeout is never a deny and never exit 2. The `--` is required. Details and failure behaviour:
+mapping, or a timeout is never a deny and never exit 2. The `--` is required. Details and failure behaviour:
 [Concepts](concepts.md#delivery-direct-and-adapter). Any fault prints
 `polymorph adapter: this tool call was NOT checked by the guard hook (...)` and does not
 deny.
@@ -319,7 +319,7 @@ It makes a scratch directory as `<system temp>/polymorph-capture-NAME-XXXXXXXX` 
 discovery logger there through a driver, runs each step as a headless harness invocation with
 that directory as the working directory, then removes the logger and (unless `--keep`) the
 directory, also on an exception, a timeout, Ctrl-C (exit 130), SIGTERM (143) or SIGHUP (129), including one that arrives during that cleanup. Drivers are code shipped with
-polymorph and chosen by name; an unknown name exits 2, lists the known drivers and points at
+polymorph and chosen by name; an unknown name exits 2, lists the known drivers, and points at
 `--print-prompts`.
 
 | Driver | Command per step | Status |
@@ -329,8 +329,8 @@ polymorph and chosen by name; an unknown name exits 2, lists the known drivers a
 | `zcode` | `ELECTRON_RUN_AS_NODE=1 <package>/lib/ZCode/zcode <package>/lib/ZCode/resources/glm/zcode.cjs --prompt PROMPT --mode yolo` (paths derived from the `zcode` wrapper on PATH; the wrapper itself boots the GUI), hooks in `.zcode/config.json` | **Blocked**: `capture --harness zcode` refuses to run (exit 2). The invocation comes from the 2026-11-05 headless probe (the desktop's own agent spawn), but no headless session in it made a tool call -- all died at model authentication -- so whether workspace hooks fire headlessly is unconfirmed and a run could spend tokens and log nothing. Finishing the probe (a working provider for the standalone CLI, one session reaching a tool call; see [the observed zcode session](observed-zcode-session.md)) is the unblock; then remove `blocked` in `capture_drivers.py`. |
 
 Steps (fixed constants, in this order; `--steps` selects a subset): `shell` (`echo hello`),
-`file` (write, read and delete `scratch.txt`), `search`, `background` (`sleep 2; echo done`).
-Nothing read from a log, a mapping or a harness reply is used as a prompt or a command.
+`file` (write, read, and delete `scratch.txt`), `search`, `background` (`sleep 2; echo done`).
+Nothing read from a log, a mapping, or a harness reply is used as a prompt or a command.
 
 | Flag | Meaning |
 |---|---|
@@ -350,14 +350,14 @@ that tool calls are auto-approved in the scratch directory. It shows the step co
 timeouts, not a price. The question is `Continue? Type "yes" to run, anything else cancels [no]:`;
 only `yes` (any case) proceeds, anything else exits 0 with a note that nothing ran.
 
-The harness runs with `PATH`, `HOME` and `XDG_*` only; the environment is never logged and the
+The harness runs with `PATH`, `HOME`, and `XDG_*` only; the environment is never logged and the
 harness's authentication configuration is never read. Its stdout and stderr are discarded.
 
 Output in the results directory: `summary.txt` (`discover summary`), `draft.toml`
 (`discover draft`, unverified), `report.md` (polymorph version, `<harness> --version`, a row per
 step with its exit status and log lines, the tool calls from the log with counts and input key
 names, and the steps that produced no log line) and `log.jsonl`. Exit 0 if every step exited 0,
-1 if one failed, timed out or was skipped, 2 for a usage error. An interrupted run (Ctrl-C,
+1 if one failed, timed out, or was skipped, 2 for a usage error. An interrupted run (Ctrl-C,
 SIGTERM, SIGHUP) still writes these files from what the log holds, marks the step it cut as
 `interrupted` and the rest as `not run`, says the results are partial, and exits with the
 signal's status.
@@ -390,7 +390,7 @@ any hooks already there. Prints `wrote P`.
 | `--i-really-want-this-in-the-repo-raw` | Also spelled `--i-really-want-this-in-the-repo`. Required with `--full`, wherever `--log-dir` points. It is not enough alone: you are then asked to type `yes` (no terminal: refused). |
 | `--env-be-very-careful` | Log environment variable names. See below. |
 
-If `P` exists it must be a JSON object; every other key, event and matcher group is kept
+If `P` exists it must be a JSON object; every other key, event, and matcher group is kept
 (for `claude-like`, other keys under `hooks` too, though `hooks.enabled` is set true so the
 logger runs). Running `init` again with the same harness and log directory replaces its own
 logger entry (recognised by its `--out` log path) instead of adding a second. If `hooks`, or
@@ -405,7 +405,7 @@ polymorph discover log [--full] [--env-be-very-careful] [--plugin-version V] [--
 ```
 
 The logger hook itself: reads one payload on stdin and appends one JSON line to FILE. It
-**always exits 0 and prints nothing**, even on a bad command line, unwritable log or
+**always exits 0 and prints nothing**, even on a bad command line, unwritable log, or
 non-JSON input, so it can never block the harness. Failures go to `NAME.errors.jsonl`
 beside the log when that folder is writable.
 
@@ -426,7 +426,7 @@ Prints payload count, non-object lines and session count, the log-line schema ma
 plugin-version and location marks, then per-event top-level keys and per-tool `tool_input`
 keys, each with counts. Names and counts only. When the log holds more than one session,
 a `per session:` block sits between the pairing line and the tables: payloads, per-event
-counts and pairing per session, so sessions sharing one log read separately in one
+counts, and pairing per session, so sessions sharing one log read separately in one
 command (issue #57).
 
 By default only **tool events** (lines with a tool name) are used, so a flood of session
@@ -436,9 +436,9 @@ printed on a `hidden:` line. `--include EVENT` (repeatable) adds an event to the
 sorted by `ts` before counting, because each hook event is logged by its own process and
 lines can land out of order. When lines carry a call id and a message id (`tool_use_id` or
 `toolCallId` / `id` / `call_id`, and `messageID` / `message_id`), `before` and `after` lines
-are paired by them and the `pairing` line reports paired, out-of-order, unpaired and
+are paired by them and the `pairing` line reports paired, out-of-order, unpaired, and
 id-less counts. When paired lines carry timestamps, a `slowest pre->post deltas` block
-follows the pairing line -- up to five, largest first, each with the delta, the tool name
+follows the pairing line -- up to five, largest first, each with the delta, the tool name,
 and the call id -- so fail-open hook latency is one command to see instead of a hand join:
 a hook awaited out to its timeout kill shows as a delta near that timeout. A delta is the
 gap between the two logger lines' write times (one process per hook event, each writing at
@@ -456,7 +456,7 @@ Prints a schema 1 mapping to stdout (redirect it to a file). It has no `verified
 all capabilities `false`, no `payload_out.deny`, and comments with evidence counts. So it
 fails `validate` until someone has seen how the harness blocks and says so (a capability or a
 `deny` entry; see [Writing a mapping](writing-a-mapping.md#worked-example-zcode)). `--include` and `--event`
-select lines as for `summary` (tool events by default). Event names may contain `.`, `-` and
+select lines as for `summary` (tool events by default). Event names may contain `.`, `-`, and
 `:`; a name ending in `before` or `after` is guessed as `pre_tool` or `post_tool` and marked
 `guessed from name`, and every other observed event name is listed in a comment under
 `[events]`. Boolean `tool_input` keys (for example a shell `background` flag) and the key
@@ -515,8 +515,8 @@ a wired hook that never fires may be pending trust, not a broken mapping), 2 on 
 | `--full` | Log raw payloads. Needs `--keep` (exit 2 without it): the raw log must survive the run. |
 | `--step-timeout S` / `--total-timeout S` | Per run (default 120) and overall (default 300) limits; the guard hook itself is capped at 10 s and fails open, bounded. |
 
-Confirmation, scratch-directory handling, minimal environment and signal cleanup are the
-same as [capture](#capture). Nothing from a mapping, a log or a harness reply becomes code
+Confirmation, scratch-directory handling, minimal environment, and signal cleanup are the
+same as [capture](#capture). Nothing from a mapping, a log, or a harness reply becomes code
 or a command: the guard is shipped template code with constants written in, and the
 prompts are constants with the token formatted in. A probe never sets `verified`.
 
@@ -528,24 +528,24 @@ survive verbatim: event name, tool name, session and tool-use ids, permission mo
 `transcript_path`, prompts) becomes `{"type": ..., "length": N}` with no hash.
 
 Two kinds of value are kept for structure. Call and message ids (`id`, `tool_use_id`,
-`call_id`, `messageID` and similar) stay verbatim, but only when they look like ids
+`call_id`, `messageID`, and similar) stay verbatim, but only when they look like ids
 (letters, digits, `_ . : -`, at most 128 characters); anything else under those names is
 reduced like any other value -- and so is a value that matches the id shape but looks like
-a credential (GitHub, OpenAI, AWS, Slack and GitLab token formats; JWTs). Output-like
+a credential (GitHub, OpenAI, AWS, Slack, and GitLab token formats; JWTs). Output-like
 objects (`tool_response`, `output`, `result`)
 keep their nested key names to three levels and the key count is capped, with each leaf
 reduced to `{type, length}`; a key name that is not a plain identifier is replaced by
 `<invalid key>`. Each log line also carries `schema: 1`; older lines without it still read.
 
 `--full` (on `init`, which bakes it into the hook command, or on `log`) records raw
-payloads, including commands, file paths and file contents, in plain text. Nothing encrypts or
+payloads, including commands, file paths, and file contents, in plain text. Nothing encrypts or
 hides the log, so a secret scanner would see a leak, which is intended. `init --full` (and
 `capture --full`) therefore asks for an explicit log directory, the long
 `--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. A `--full` log must not be
-shared, attached to an issue or committed.
+shared, attached to an issue, or committed.
 
 `--env-be-very-careful` makes the logger look at its process environment and record the
-**names, never the values,** of variables whose names contain `PROJECT`, `WORKSPACE` or
+**names, never the values,** of variables whose names contain `PROJECT`, `WORKSPACE`, or
 `HARNESS` (case-insensitive), in the line's `env_keys`. Without the flag the environment
 is not read at all. The flag is spelled out because even names can say more than you
 intend (a variable called `HARNESS_ACME_CUSTOMER` tells the reader something), and because
