@@ -1,7 +1,7 @@
 # Code style
 
-How code in this repo is written so someone skimming a diff reads it at
-speed. Rules only; each why is one line. Adapted from nixos-configs'
+How code and prose in this repo are written so someone skimming a diff
+reads it at speed. Rules only; each why is one line. Adapted from nixos-configs'
 `wiki/conventions.md` and `wiki/module-style-guide.md` — ported at the
 mechanism level, nouns rewritten (skill `port-agent-tooling`). The rules
 general enough to live inline are also in [AGENTS.md](../AGENTS.md); this
@@ -40,6 +40,14 @@ page is the full guide, and both get edited in the same change.
   English articles in comments and messages. Grep the rename's diff for
   the new name touching quotes, `!`, backslashes and dashes, and read
   every changed line that is not code, before trusting the pass.
+
+## Prose
+
+Applies to docs, comments, messages, commit messages, and PR bodies.
+
+- **A list of three or more takes the Oxford comma**: "share it, attach it
+  to an issue, or commit it". Without it the last two items can read as one
+  pair, and a reader skimming a rule has to stop and parse it.
 
 ## Scripts and templates
 

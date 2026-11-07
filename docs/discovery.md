@@ -93,8 +93,10 @@ per tool: tool_input keys
 Names and counts only. By default only tool events are counted: a harness with a
 server-wide event bus can log thousands of session events per tool call, and the
 `hidden:` line says what was left out (`--include EVENT` adds it back, `--event EVENT`
-selects exactly one). Lines are sorted by `ts` first, and `before` / `after` lines are
-paired by call id and message id when the payloads have them (see
+selects exactly one). Lines are sorted by `ts` first: the time `discover log` wrote the
+line, in Unix seconds. Each hook event is logged by its own process, so lines can land in
+the file out of order. Then `before` / `after` lines are paired by call id and message id
+when the payloads have them (see
 [CLI reference](cli.md#discover-summary)). If a count is `0 payloads`, the hook did not fire: check the file
 location, the event name, and whether the harness reads hook config at all.
 
@@ -186,7 +188,7 @@ Rules:
 
 - Leave `--full` off unless you need to see raw values to figure something out. A
   `--full` log contains commands, paths and file contents. Never share it, attach it to an
-  issue or commit it.
+  issue, or commit it.
 - Leave `--env-be-very-careful` off unless you need to find out which variables the
   harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE` or
   `HARNESS`. See [CLI reference](cli.md#the-redaction-default-and---env-be-very-careful).
