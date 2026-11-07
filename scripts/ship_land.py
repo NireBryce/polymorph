@@ -16,7 +16,11 @@ the PR's branch; delete the local branch (`-d`; `-D` only when it is exactly the
 was checked) and the remote branch (not while another open PR is based on it). A
 remote branch that is already gone counts as done. Prints each step it took.
 
-Closes no issues. The caller closes them by hand and says so.
+Closes the issues the PR body names with a closing keyword (`Closes #N`, `Fixes #N`,
+`Resolves #N`, any case, an optional colon), once the merge is confirmed, with a comment
+naming the PR and the merge. GitHub acts on those keywords only for a PR into the default
+branch; work here lands on `experimental`, so the script does it (issue 99). `Refs #N`
+closes nothing. An issue already closed is left as it is.
 
 Run it from a checkout that is not the worktree being removed.
 """
@@ -25,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -69,6 +74,46 @@ def inside(path: str, cwd: str) -> bool:
 
 
 PROTECTED = ("main", "master", "experimental")
+# GitHub's closing keywords, same-repository `#N` only: `owner/repo#N` is another project's
+# issue, and a keyword inside a longer word ("prefixes #3") is not a keyword
+CLOSING_KEYWORD_RE = re.compile(r"(?<![\w/])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)\b", re.IGNORECASE)
+
+
+def closing_issue_numbers(body: str) -> list[str]:
+    """The issue numbers a PR body closes, in order of first mention."""
+    return list(dict.fromkeys(CLOSING_KEYWORD_RE.findall(body or "")))
+
+
+def close_resolved_issues(pr: str, base: str, sha: str, say) -> int:
+    """Close each issue the merged PR's body names with a closing keyword; 1 if any could not be."""
+    try:
+        body = ci_wait.gh_json("pr", "view", pr, "--json", "body").get("body") or ""
+    except ci_wait.GhError as error:
+        say(f"could not read the PR body, closed no issues; close any it resolves by hand: {error}")
+        return 1
+    issue_numbers = closing_issue_numbers(body)
+    if not issue_numbers:
+        say("closed no issues: the PR body has no closing keyword (Closes/Fixes/Resolves #N)")
+        return 0
+    rc = 0
+    for number in issue_numbers:
+        try:
+            state = ci_wait.gh_json("issue", "view", number, "--json", "state").get("state")
+        except ci_wait.GhError as error:
+            say(f"issue #{number} NOT closed: {error}")
+            rc = 1
+            continue
+        if state == "CLOSED":
+            say(f"issue #{number} already closed")
+            continue
+        close_proc = run("gh", "issue", "close", number, "--reason", "completed",
+                         "--comment", f"Resolved by #{pr}, merged into `{base}` at {sha[:7]}.")
+        if close_proc.returncode == 0:
+            say(f"closed issue #{number}")
+        else:
+            say(f"issue #{number} NOT closed: {close_proc.stderr.strip() or close_proc.stdout.strip()}")
+            rc = 1
+    return rc
 
 
 def refusal(result, default: str, allow_base: str | None) -> str | None:
@@ -116,8 +161,9 @@ def land(pr: str, timeout: float, interval: float, say=print, allow_base: str | 
     if state != "MERGED":
         say(f"ship-land: gh reported success but the PR is {state}; nothing deleted")
         return 1
-    rc = 0
-    # 3. sync the base branch, fast-forward only
+    # 3. close what the PR resolves: the merge is the fact the closure records
+    rc = close_resolved_issues(result.pr, result.base_branch, result.sha, say)
+    # 4. sync the base branch, fast-forward only
     base_worktree = worktree_for(base, trees)
     fetch_proc = run("git", "fetch", "origin", base)
     if fetch_proc.returncode == 0:
@@ -131,7 +177,7 @@ def land(pr: str, timeout: float, interval: float, say=print, allow_base: str | 
         ok, detail = False, fetch_proc.stderr.strip()
     say(f"synced {base} (--ff-only)" if ok else f"sync of {base} FAILED: {detail}")
     rc |= 0 if ok else 1
-    # 4. worktree, then local branch (the branch is checked out there until it goes)
+    # 5. worktree, then local branch (the branch is checked out there until it goes)
     if branch_worktree:
         remove_proc = run("git", "worktree", "remove", branch_worktree)
         say(f"removed worktree {branch_worktree}" if remove_proc.returncode == 0
@@ -172,7 +218,6 @@ def land(pr: str, timeout: float, interval: float, say=print, allow_base: str | 
         else:
             say(f"remote branch delete FAILED: {push_del_proc.stderr.strip()}")
             rc |= 1
-    say("closed no issues: close any the PR resolves by hand, and say so")
     return rc
 
 
