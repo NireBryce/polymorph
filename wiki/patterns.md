@@ -3,7 +3,7 @@
 Adapted from nixos-configs issue #618, which planned this for that repo
 before polymorph's pivot took over the role. This page is the index over the
 repo's agent-assisted development patterns: each row names the skill, check,
-hook or page that carries it, and does not restate it. When you notice a new
+hook, or page that carries it, and does not restate it. When you notice a new
 one, skill `note-a-pattern` proposes it in one line. Mistakes are not
 patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
 
@@ -14,7 +14,7 @@ patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
 | Lessons have a Home | a recorded mistake's rule lands where it is enforced, or it reaches nobody | [agents-lessons-learned.md](agents-lessons-learned.md), skill `record-a-lesson` |
 | One worktree per task | branching work never happens in the shared checkout | skill [use-a-worktree](../.polymorph/basecamp/skills/use-a-worktree/SKILL.md) |
 | One confirmation to land | CI is waited on, then a single yes covers merge and branch deletion | skill [ship](../.polymorph/basecamp/skills/ship/SKILL.md), `just ci-wait`, `just ship-land` |
-| Docs are checked mechanically, synced in the same change | `just docs` verifies skills, links, CLI coverage, banner and home paths; a change that stales a doc fixes it | `just docs`, skill [docs-sync](../.polymorph/basecamp/skills/docs-sync/SKILL.md) |
+| Docs are checked mechanically, synced in the same change | `just docs` verifies skills, links, CLI coverage, banner, and home paths; a change that stales a doc fixes it | `just docs`, skill [docs-sync](../.polymorph/basecamp/skills/docs-sync/SKILL.md) |
 | Vocabulary is fixed and recorded | the pivot's words have one-job definitions; rejected names are recorded with their reasons | [docs/vocabulary.md](../docs/vocabulary.md), skill [name-a-thing](../.polymorph/basecamp/skills/name-a-thing/SKILL.md) |
 | The basecamp is a store | canonical copies live in `.polymorph/basecamp/` and the agent-facing paths are symlinks into it | [.polymorph/basecamp/README.md](../.polymorph/basecamp/README.md) |
 | Mappings are data | nothing in a mapping is executed; hook scripts live under `.agents/hooks/` | [SPEC](../docs/SPEC.md) trust model |

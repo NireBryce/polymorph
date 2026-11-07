@@ -1,7 +1,7 @@
 ---
 name: ship
 description: How to land work through a branch, a PR, one confirmation, the merge, and deleting the branch.
-when_to_use: A bare "push", "ship it", "land this" or "merge this" -- any ask to get changes onto experimental or main.
+when_to_use: A bare "push", "ship it", "land this", or "merge this" -- any ask to get changes onto experimental or main.
 ---
 
 # Landing work
@@ -66,7 +66,7 @@ git push -u origin feat/<thing>
 gh pr create --base experimental --title "<subject>" --body-file <file>
 ```
 
-- The branch name starts `feat/`, `fix/`, `docs/` or `chore/`; the commit
+- The branch name starts `feat/`, `fix/`, `docs/`, or `chore/`; the commit
   subject starts `feat:`, `fix:`, `docs:` or `chore:`.
 - The message says what this commit contains. Use a quoted heredoc or a
   file so backticks are not executed.
@@ -93,7 +93,7 @@ It prints `<sha7> <status> <conclusion>` and the PR's mergeStateStatus, and
 exits 0 only when the run on the PR's current head succeeded and the PR is
 `CLEAN`. Read the exit status before going on. A red check: `gh run view
 <run> --log-failed`, fix, push, wait again. When it exits 0, show the title,
-URL, commit list and diff stat, and ask the one combined question. If it
+URL, commit list, and diff stat, and ask the one combined question. If it
 does not, leave the PR open, say so, and stop.
 
 ## 3. Merge, then delete -- on yes only
@@ -117,7 +117,7 @@ prints each step. A failed merge deletes nothing; report it. Afterwards,
 `git status -sb` before the next commit: the checkout may now sit on the
 landing branch, and the next change gets a new branch first.
 
-After the merge it closes each issue the PR body names with `Closes`, `Fixes`
+After the merge it closes each issue the PR body names with `Closes`, `Fixes`,
 or `Resolves #N`, with a comment naming the PR and the merge commit, and
 leaves one already closed alone; `Refs #N` closes nothing. GitHub acts on
 those keywords only for a PR into the default branch (`main`), so for work

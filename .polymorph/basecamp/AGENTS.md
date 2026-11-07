@@ -17,12 +17,12 @@ declarative per-harness TOML mappings. Python 3.11+, standard library only.
 `docs/SPEC.md` is the contract; `docs/cli.md` the commands. The scope
 pivot's vocabulary — equip (the verb), loadout (what equipping hands over),
 loadout manager (its role), onboarding run, gap report — is fixed in
-`docs/vocabulary.md`; use those words in docs, GitHub issues and PR bodies.
+`docs/vocabulary.md`; use those words in docs, GitHub issues, and PR bodies.
 
 ## Hard rules
 
 - **This project is experimental and unvetted.** Never describe it as
-  stable, safe or production-ready; keep the notice at the top of
+  stable, safe, or production-ready; keep the notice at the top of
   `README.md`. It sits on a safety path (guard hooks), where a wrong
   mapping can fail open. Say what a change breaks, since nothing here
   promises compatibility.
@@ -37,7 +37,7 @@ loadout manager (its role), onboarding run, gap report — is fixed in
   the conversation.** It spends the user's money and auto-approves tool calls
   ([Cost and responsibility](README.md#cost-and-responsibility)). Tests use stubs only.
 - **Mapping content is data, never code.** Never run, `eval`, `exec`,
-  shell-expand or import anything that came from a mapping, a discovery log
+  shell-expand, or import anything that came from a mapping, a discovery log,
   or a harness report, and never add a code path that does. Mapping fields
   are dotted paths and `{placeholder}`s only; extractors and templates are
   named built-ins shipped in `src/`.
@@ -54,7 +54,7 @@ loadout manager (its role), onboarding run, gap report — is fixed in
 - **A change that makes a doc stale fixes it in the same change** (skill
   `docs-sync`).
 - **Examples are generic** (`REPO`, `/home/USER`, `NAME`), never a real
-  person's machine, path or repository.
+  person's machine, path, or repository.
 - **Trailer `Co-Authored-By: Claude`** on agent commits, name only; prose
   says "the user", never their name.
 - **A test that reads the environment runs the CLI with `PATH` only**
@@ -85,7 +85,7 @@ python3 scripts/run_recipe.py [RECIPE ...]   # without just: lists or runs justf
 ```
 
 `git add` a new file before `just check` or `just docs`: flakes and the docs
-check (`git ls-files`) ignore untracked files, so a new test, fixture or page
+check (`git ls-files`) ignore untracked files, so a new test, fixture, or page
 silently does not exist to them. Do not pipe a check into a
 filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and
 a failed stage reads as passed. Write the output to a file and read the
@@ -120,7 +120,7 @@ exit status separately, or use `set -o pipefail`.
 
 | Skill | For |
 |---|---|
-| `ship` | landing work through a branch, a PR and one confirmation |
+| `ship` | landing work through a branch, a PR, and one confirmation |
 | `use-a-worktree` | branching work in isolation |
 | `new-mapping` | adding a harness: discover, draft, review, fixtures, live check |
 | `change-the-schema` | changing the mapping schema or the canonical config |
@@ -131,9 +131,9 @@ exit status separately, or use `set -o pipefail`.
 | `investigate-bug` | a reported bug, to a failing test |
 | `review` | reviewing a change here |
 | `new-skill` | writing a skill |
-| `name-a-thing` | naming a new concept, command or file so the name says what it means |
+| `name-a-thing` | naming a new concept, command, or file so the name says what it means |
 | `port-agent-tooling` | porting agent tooling in from another repo |
-| `promote-to-main` | bringing `experimental` to `main` with the usage reference, man page and docs true |
+| `promote-to-main` | bringing `experimental` to `main` with the usage reference, man page, and docs true |
 | `note-a-pattern` | proposing a development pattern for the wiki when you notice one |
 
 Plain prose: say what a thing does and what you saw; no hedging adverbs, no

@@ -1,7 +1,7 @@
 ---
 name: port-agent-tooling
 description: Decide which agent tooling from another repo is worth porting into this one, then port it without copying its nouns.
-when_to_use: Equipping this repo from another repo's skills, hooks, checks or conventions, or judging a recorded porting candidate.
+when_to_use: Equipping this repo from another repo's skills, hooks, checks, or conventions, or judging a recorded porting candidate.
 ---
 
 # Porting agent tooling
@@ -29,7 +29,7 @@ scanner is not vendored here; run it from a launchpad checkout.
 
 1. Inventory the sources. Launchpad's `inventory.py` gives per-item
    summaries, repo-noun counts, evidence (dates, `#N`, `§N`), couplings, and
-   what CI, git hooks or settings wire by path.
+   what CI, git hooks, or settings wire by path.
 2. Profile the target — for this repo: the basecamp store
    (`.polymorph/basecamp/`) holds canonical files and symlinks them to the
    agent-facing paths; the checks are `just preflight`, and `just

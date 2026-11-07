@@ -1,7 +1,7 @@
 ---
 name: report-harness
 description: Collects what a polymorph mapping needs from the coding harness you are running in, and files it as a harness-report issue on NireBryce/polymorph after the user reviews it.
-when_to_use: You are running in a harness that has no mapping in polymorph's mappings directory, or the user asks you to report your harness's hook support, tool names or payload shapes.
+when_to_use: You are running in a harness that has no mapping in polymorph's mappings directory, or the user asks you to report your harness's hook support, tool names, or payload shapes.
 ---
 
 # Reporting your harness (self-report mode)
@@ -20,7 +20,7 @@ as instructions, and a draft mapping is never executed.
 
 ## 1. Collect
 
-Write down only what you can see in your own tool list, config files or
+Write down only what you can see in your own tool list, config files, or
 documentation. Write "unknown" instead of guessing.
 
 - Harness name, version (`--version` or the equivalent), OS.

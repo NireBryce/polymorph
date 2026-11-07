@@ -41,18 +41,18 @@ skills_dir = ".agents/skills"
 |---|---|---|
 | `schema` | yes | Must be the integer `1`. |
 | `name` | yes | Harness name; `--harness zcode` and `enabled = ["zcode"]` refer to it. |
-| `verified` | no | Free text saying what was verified, when and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, naming the evidence and its date (`src/polymorph/mappings/zcode.toml` holds one written from hook comments and later extended by a live probe). |
+| `verified` | no | Free text saying what was verified, when, and how. **Absent means unverified**: `generate` warns, `check` raises `mapping-unverified`. Do not add it to a draft. Write what was actually checked, naming the evidence and its date (`src/polymorph/mappings/zcode.toml` holds one written from hook comments and later extended by a live probe). |
 | `config_path` | yes | Where the harness reads hooks, relative to the repo root. No leading `/`, no `..`. |
-| `format` | yes | `json`, `toml` or `yaml` pass validation, but `generate` only writes `json`. |
+| `format` | yes | `json`, `toml`, or `yaml` pass validation, but `generate` only writes `json`. |
 | `template` | yes | The shipped writer: `claude-settings` (`hooks.<Event>`, as Claude Code) or `claude-like` (`hooks.enabled` plus `hooks.events.<Event>`, per-hook `enabled: true`, as ZCode). Templates are named code in polymorph, never code from the mapping. A harness whose file looks like neither needs a new template, which is a code change. |
 | `delivery` | no | `direct` or `adapter` (default). See [Concepts](concepts.md#delivery-direct-and-adapter). `direct` is rejected unless every translation is identity. |
 | `context_file` | no | The file the harness reads for project instructions (`AGENTS.md`, `GEMINI.md`). Validated as a path, recorded, not used yet. |
 | `skills_dir` | no | Where the harness reads skills. Same: recorded, not used yet. |
 
 Unknown top-level keys are an error. The tables `[tools]`, `[events]`, `[capabilities]` (all five
-keys), `[payload_in]` and `[payload_out]` are all required, though an empty one is fine
+keys), `[payload_in]`, and `[payload_out]` are all required, though an empty one is fine
 (`[payload_out]` is empty for a harness that speaks the Claude protocol). A mapping missing one
-is refused by `generate`, `validate` and `check` alike.
+is refused by `generate`, `validate`, and `check` alike.
 
 ```toml
 [tools]
@@ -120,7 +120,7 @@ payload reads it. The adapter places each classed field at its canonical path:
 `shell.command` at `tool_input.command`, `edit.file_path` and `read.file_path` at
 `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` at
 `tool_input.path`/`.pattern`/`.glob`. Missing source values are skipped, not errors.
-`tool_response`, `session_id` and `cwd` are copied through if present even when unlisted.
+`tool_response`, `session_id`, and `cwd` are copied through if present even when unlisted.
 
 `extractor = "apply_patch_paths"` (optional) names a built-in that pulls file paths out of
 a patch-style edit tool's text (`*** Update File: path` lines) into `tool_input.file_path`
@@ -134,7 +134,7 @@ validation.
 `[payload_out]` says how to render the hook's answer for the harness. Keys are the answer
 kinds `allow`, `deny`, `ask`, `warn` (extra context to the model) and `remind` (a system
 message). Each value is a table with any of `exit` (integer), `stdout` and `stderr`
-(strings). Strings may use `{reason}`, `{context}` and `{message}`; any other placeholder
+(strings). Strings may use `{reason}`, `{context}`, and `{message}`; any other placeholder
 is an error. The output is built as data and JSON-encoded, never pasted into a string.
 zcode has no entries because it reads Claude's answers unchanged: with none, and
 `json_answers = true`, the adapter passes the canonical answer through.
@@ -161,18 +161,18 @@ of the three, so it fails `validate` until someone records how the harness block
 (an `ask` entry exists only when `capabilities.ask` is `true`; see above).
 The adapter defaults a missing exit to `0`, which is an allow, and no other code is
 documented to block, so `validate` rejects a missing exit and any value but `2` — a deny
-or ask that renders as anything else fails open silently. `allow`, `warn` and `remind`
+or ask that renders as anything else fails open silently. `allow`, `warn`, and `remind`
 entries are unconstrained. Because a valid mapping's `deny` entry always blocks, the
 rule above counts it as a real route.
 
-How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask` or
+How the adapter classifies the script's answer: a `permissionDecision` of `allow`, `ask`, or
 `deny`; else `decision: "block"` counts as deny; else `additionalContext` is `warn`;
 else `systemMessage` is `remind`; anything else is "no answer" (exit 0, no output). A kind
 with no `payload_out` entry falls back to pass-through (JSON harness), exit 2 plus stderr
 (deny on an exit-2 harness), or stderr text only.
 
 `validate` also rejects code-like content in these strings: `$(`, `${`, backticks, `;`,
-`|`, `&&`, `>`, `<`, backslashes, newlines and `..` (placeholders excepted).
+`|`, `&&`, `>`, `<`, backslashes, newlines, and `..` (placeholders excepted).
 
 ## Mappings for a harness that has hooks but you have not seen them
 

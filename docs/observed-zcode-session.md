@@ -66,7 +66,7 @@ from `CLAUDE.md`; it loads nothing under `.agents/`, and reads `AGENTS.md` itsel
 v2.1.277 and only when no `CLAUDE.md` exists in or above the working directory. ZCode's
 repository documents `.agents/skills` and `.zcode/skills` as its skill roots, `AGENTS.md` as
 its instruction file, and `.claude/skills` as not part of discovery. Derived: Claude Code is
-the harness that needs `CLAUDE.md`, `.claude/skills` and `.claude/rules` links to what the
+the harness that needs `CLAUDE.md`, `.claude/skills`, and `.claude/rules` links to what the
 repo keeps under `AGENTS.md` and `.agents/`; ZCode needs none. A third-party review that has
 ZCode reading `.claude/skills` disagrees with ZCode's own documentation. This page's session
 observation of `.agents/skills` agrees with the documentation.
@@ -80,7 +80,7 @@ block, an ask-answer probe did not prompt, the log file was never created. Obser
 harness: each pending hook's enable toggle in Settings → Hooks forced off and disabled, a
 per-hook Trust button disabled with the tooltip "This connection cannot trust this Hook.",
 and a chat-side "Workspace hooks pending review" popover whose Review button navigated to the
-Hooks pane without starting a review. Neither path produced an error, a toast or a log line.
+Hooks pane without starting a review. Neither path produced an error, a toast, or a log line.
 
 Derived: ZCode gates workspace hooks per workspace behind a trust store
 (`~/.zcode/security/workspace-hook-trust-v1.json` on this machine), keyed by a sha256 digest
@@ -178,10 +178,10 @@ one of several ways:
   quoting its own marker denies its installer. Worked around by writing placeholders and
   materializing the markers with `sed` built from parts.
 - Payloads carry every field twice, camelCase and snake_case (`toolName`/`tool_name`,
-  `toolCallId`/`tool_use_id`), plus `traceId`, `turnId`, `mode`, `permission_mode` and
+  `toolCallId`/`tool_use_id`), plus `traceId`, `turnId`, `mode`, `permission_mode`, and
   `transcriptPath`/`transcript_path`; `PreToolUse` adds `riskLevel` and `sideEffectScope`;
   `PostToolUse` adds `toolResponse`, `toolResultPreview`, `tool_response`. `tool_input`
-  shapes for Bash, Read, Write and Edit matched Claude Code's (`command` + `description`,
+  shapes for Bash, Read, Write, and Edit matched Claude Code's (`command` + `description`,
   `file_path` with optional `limit`, `content`, `old_string`/`new_string`/`replace_all`),
   and a `timeout` set on a Bash call passed through.
 
@@ -192,7 +192,7 @@ nothing in this harness can assume fail-closed behavior from a broken hook.
 ## The other hook events, wiring freeze, and timeouts (3.17.2, second probe round)
 
 Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
-`SessionStart`, `UserPromptSubmit`, `PermissionRequest` and `Stop` (behavior chosen by
+`SessionStart`, `UserPromptSubmit`, `PermissionRequest`, and `Stop` (behavior chosen by
 `ZCODE_PROBE_MODE` in the hook's command) alongside the first probe:
 
 - Allow + `updatedInput` on `PreToolUse` (a rewritten command handed back to the harness):
@@ -223,7 +223,7 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
   earlier read taken before those replies had ended saw zero, which calls this event dead
   when it is not — check reply boundaries, not just the log, before concluding.) Each
   payload carries `stopHookActive`, `responseText`, `responsePreview`,
-  `last_assistant_message` and `toolCallCount`. Its action is not honored: an `exit 2`
+  `last_assistant_message`, and `toolCallCount`. Its action is not honored: an `exit 2`
   asking for one continuation produced no continuation across all four fires, and the
   second Stop hook's side effect — consuming the marker file armed at `SessionStart` —
   never appeared in any of them, while the first hook logged every dispatch.

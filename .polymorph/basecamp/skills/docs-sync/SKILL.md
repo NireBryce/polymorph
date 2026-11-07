@@ -1,7 +1,7 @@
 ---
 name: docs-sync
 description: How to check that a change did not leave a doc stale, and fix it in the same change.
-when_to_use: At the end of any change to behaviour, the schema, the CLI, a mapping or the layout.
+when_to_use: At the end of any change to behaviour, the schema, the CLI, a mapping, or the layout.
 ---
 
 # Keeping docs true
@@ -26,9 +26,9 @@ change, not later.
 
 1. `git diff --stat`; for each changed area, open its owner above and read
    the claims it makes.
-2. `grep -rn` the old name, flag, key or path across `*.md`, `*.toml`,
+2. `grep -rn` the old name, flag, key, or path across `*.md`, `*.toml`,
    `.github/`.
-3. Do not copy counts, versions or `verified` dates into prose; name the
+3. Do not copy counts, versions, or `verified` dates into prose; name the
    file or command instead. A copy drifts silently.
 4. `just docs` for the mechanical part (links, skills listed, every CLI
    subcommand documented, banner).

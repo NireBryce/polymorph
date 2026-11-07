@@ -18,11 +18,11 @@ below by itself in a scratch directory it creates and deletes:
 python -m polymorph capture --harness opencode
 ```
 
-It shows the harness, the steps, the scratch directory and a cost warning, and runs nothing
+It shows the harness, the steps, the scratch directory, and a cost warning, and runs nothing
 unless you type `yes` (`--yes` skips the question and still prints a notice; a
 non-interactive stdin without `--yes` refuses). It then runs the fixed steps (a trivial
-command; write, read and delete a file; a search; a background `sleep 2; echo done`) through
-the harness's headless mode, and writes `summary.txt`, `draft.toml`, `report.md` and
+command; write, read, and delete a file; a search; a background `sleep 2; echo done`) through
+the harness's headless mode, and writes `summary.txt`, `draft.toml`, `report.md`, and
 `log.jsonl` to `polymorph-capture-NAME/`. `report.md` lists the tool calls taken from the
 redacted log, and the steps that produced no log line; it never contains the agent's own
 account. The draft is unverified: review it by hand ([new-mapping skill](../.polymorph/basecamp/skills/new-mapping/SKILL.md)).
@@ -154,7 +154,7 @@ How to read it:
   and a `hook_event_name`). Otherwise they are placeholders marked `unknown`.
 - Counts are `present/observed`. `1/1 write_file` means one of the one `write_file` payloads
   had that field.
-- Event names may contain `.`, `-` and `:` (OpenCode sends `execute.before`,
+- Event names may contain `.`, `-`, and `:` (OpenCode sends `execute.before`,
   `execute.after`). A name ending in `before` or `after` is guessed as `pre_tool` or
   `post_tool` and marked `guessed from name`; other observed names are listed in a comment
   under `[events]`, not dropped.
@@ -173,24 +173,24 @@ How to read it:
 - No `verified` field. Keep it that way until someone has run the mapping in a live
   harness, and then write what they checked.
 
-The draft never contains command text, file paths or anything else from the payload
+The draft never contains command text, file paths, or anything else from the payload
 values: only key names and tool/event names that match strict name patterns. The log is
 treated as untrusted data; nothing in it is evaluated.
 
 ## Privacy
 
 Default logs are redacted: values become `{"type": "string", "length": 17}`, with no hash,
-so a payload with a command or a path shows only its size. Event names, tool names, ids
-and a few structural fields stay. The `cwd`, `transcript_path` and every prompt, command
+so a payload with a command or a path shows only its size. Event names, tool names, ids,
+and a few structural fields stay. The `cwd`, `transcript_path`, and every prompt, command,
 and file content are reduced to type and length.
 
 Rules:
 
 - Leave `--full` off unless you need to see raw values to figure something out. A
-  `--full` log contains commands, paths and file contents. Never share it, attach it to an
+  `--full` log contains commands, paths, and file contents. Never share it, attach it to an
   issue, or commit it.
 - Leave `--env-be-very-careful` off unless you need to find out which variables the
-  harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE` or
+  harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE`, or
   `HARNESS`. See [CLI reference](cli.md#the-redaction-default-and---env-be-very-careful).
 - `--full` needs an explicit `--log-dir` (or `--out`), the long
   `--i-really-want-this-in-the-repo-raw` flag, and a typed `yes`. The log is plain text, so a
@@ -198,7 +198,7 @@ Rules:
   (`$XDG_RUNTIME_DIR`), and delete it when you are done.
 - Add `.polymorph/discovery/` to your `.gitignore`. polymorph does not do that for you.
   Check `git status` before `git add -A`.
-- "Redacted" is not "anonymous". Tool names, key names and lengths can still identify what
+- "Redacted" is not "anonymous". Tool names, key names, and lengths can still identify what
   you were doing. Look at the log before sharing it.
 - Delete the log when you are done.
 
@@ -252,7 +252,7 @@ Guard rails, whoever does it:
   delete the directory and the logger afterwards.
 - The logger is read by a person before it runs. Prompt 2 never runs it.
 - The log stays redacted (no `--full`). Nothing from the log or from the harness's own
-  account is pasted back into a prompt, a command or a mapping; the draft is hand-reviewed
+  account is pasted back into a prompt, a command, or a mapping; the draft is hand-reviewed
   against prompt 1's quotations ([the new-mapping skill](../.polymorph/basecamp/skills/new-mapping/SKILL.md)).
 - The harness's reply is a lead, not evidence. The log is.
 - Do not print or open the harness's authentication configuration.
@@ -265,7 +265,7 @@ The prompts above wire a logger and capture payload shapes. Answer semantics nee
 second pass: one probe script, one marker command per decision route, run in a live
 session started **after** the probe wiring exists (a running session's wiring is frozen
 at its start, so config edits land only in sessions begun afterwards), with each result
-recorded observed, derived or untested — see the capability-probe pattern in
+recorded observed, derived, or untested — see the capability-probe pattern in
 [the observed zcode session](observed-zcode-session.md).
 
 The log cannot tell you which payload carried which marker: values are redacted to
@@ -284,7 +284,7 @@ straight across, and Pre→Post deltas in the log then measure what the harness 
 the answer (a 2 s kill under an explicit `timeout`, a 60 s kill under the default)
 without guessing from gaps between rows.
 
-- The side file carries marker names, ids and the probe's own chosen answers — never
+- The side file carries marker names, ids, and the probe's own chosen answers — never
   payload values. The hook reads the payload before redaction and writes only what you
   choose; the redaction allowlist is not bypassed.
 - The side-file write happens inside the hook, not through a tool call, so a
@@ -310,10 +310,10 @@ click New issue on the polymorph repository). It asks for:
 
 - how the report was collected (agent self-report, discovery logger capture, or checked by
   a person live),
-- harness name, version and OS,
+- harness name, version, and OS,
 - hooks: whether they exist, event names, config file location and format, a link to the
   harness's hooks documentation,
-- tool names for shell, edit and read, and whether background-command tools exist and fire
+- tool names for shell, edit, and read, and whether background-command tools exist and fire
   hooks,
 - one sample payload and answer, ideally for a denied command,
 - block semantics: does exit 2 block, what is the JSON decision field, is `ask` enforced,

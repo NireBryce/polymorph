@@ -1,7 +1,7 @@
 ---
 name: promote-to-main
-description: How to bring experimental to main so the usage reference, the man page and the docs match what the program does.
-when_to_use: Before opening or merging the PR from experimental to main, or when asked to stabilize, release or bump main.
+description: How to bring experimental to main so the usage reference, the man page, and the docs match what the program does.
+when_to_use: Before opening or merging the PR from experimental to main, or when asked to stabilize, release, or bump main.
 ---
 
 # Promoting experimental to main
@@ -29,7 +29,7 @@ stale in the repo until someone regenerates them, and the hand-written prose aro
    changed subcommand in `git log main..experimental`, run it on `tests/fixture_repo` (or a
    scratch copy) and compare its output with the section in `docs/cli.md`. Fix the doc, or
    the program, and say which.
-5. Read `docs/cli.md`, `docs/SPEC.md` and the README commands list against
+5. Read `docs/cli.md`, `docs/SPEC.md`, and the README commands list against
    `docs/usage.md`: every flag in the usage reference is explained, no flag is described
    that the usage reference does not have (skill `docs-sync`).
 6. `CHANGELOG.md`: every user-visible change since `main` has a line; breaking changes say
@@ -38,7 +38,7 @@ stale in the repo until someone regenerates them, and the hand-written prose aro
    this PR's body needs no `Closes` lines. An issue still open that a promoted PR
    resolved is closed by hand, and named in the PR body.
 8. The README notice ("Experimental and unvetted") stays. Do not describe the project as
-   stable, safe or production-ready in the PR body either.
+   stable, safe, or production-ready in the PR body either.
 9. The PR body's `## Risk and impact` (`wiki/risk-and-impact.md`) rates the promotion as a
    whole: the riskiest promoted change sets the risk, and the blurb names it.
 10. Say which rung you reached (unit tests, ran the CLI, ran in a live harness) for each

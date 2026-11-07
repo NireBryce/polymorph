@@ -68,7 +68,7 @@ session restart. A hook-added field does not reach calls already in flight.
 
 ## Blocking a tool call
 
-None of this was tested; polymorph's `exit_2_blocks`, `ask` and `rewrites_input` flags
+None of this was tested; polymorph's `exit_2_blocks`, `ask`, and `rewrites_input` flags
 stay `false` for OpenCode.
 
 - **Documented**: the permission layer. `ctx.permission.hook("evaluate", fn)` receives the
@@ -93,7 +93,7 @@ projects.
 - Each event is logged by its own process, so lines land out of order: a background call's
   `after` line had an earlier `ts` than its `before` line by a few milliseconds.
 
-`discover summary` and `draft` now default to tool events, sort by `ts` and pair by call id
+`discover summary` and `draft` now default to tool events, sort by `ts`, and pair by call id
 and message id for this reason ([CLI reference](cli.md#discover-summary)).
 
 ## What the first draft got wrong
@@ -101,14 +101,14 @@ and message id for this reason ([CLI reference](cli.md#discover-summary)).
 The draft run on this capture (before those changes) grouped every event under `<invalid>`
 (dots were rejected in event names), left `[events]` empty, left `[payload_out]` empty
 (output values were reduced to a bare type and length) and put `grep` under `read`. It
-also guessed `shell`, `edit` and `read` classes from the names, which matched.
+also guessed `shell`, `edit`, and `read` classes from the names, which matched.
 
 ## Not tested
 
 - Blocking by any route above, `ask` prompts, input rewriting, and what the model sees
   when a hook throws.
 - Pairing by `id` and `messageID` on a live run.
-- MCP tools, `subagent`, `webfetch` and `websearch` hooks (only the five tools above ran).
+- MCP tools, `subagent`, `webfetch`, and `websearch` hooks (only the five tools above ran).
 - Other OpenCode versions, other platforms, and a restart of the server while a session
   is running.
 - Whether a hook fires for a tool call made inside a subagent session (the bus is global,

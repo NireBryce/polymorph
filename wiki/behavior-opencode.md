@@ -9,7 +9,7 @@ Every fact carries its source, because the sources disagree:
 - **v1 docs**: OpenCode's public docs, read from the source repo
   (`sst/opencode`, `packages/web/src/content/docs/`, commit `2fdc064`,
   2026-11-06). The pages are `plugins.mdx`, `rules.mdx` (the "instructions"
-  page), `skills.mdx`, `config.mdx`, `permissions.mdx`, `tools.mdx` and
+  page), `skills.mdx`, `config.mdx`, `permissions.mdx`, `tools.mdx`, and
   `cli.mdx`. The skills page calls itself "OpenCode 1".
 - **v2 source**: the same commit's `packages/plugin/src` (the V2 plugin API
   types and README) and `specs/v2/` (design notes; `claude-agent-provider.md`
@@ -87,7 +87,7 @@ call) and `session.hook("experimental.idle")`.
 The hooks and the event bus belong to the **server**, not to one session
 (observed). The observed log mixed lines from every session and project on
 that server, and `session.created` fired far more often than tool events,
-because of internal child sessions for titles, compaction and subagents.
+because of internal child sessions for titles, compaction, and subagents.
 Generated hooks must filter by working directory or project, or a guard
 written for one repo runs against another.
 
@@ -104,7 +104,7 @@ probe pattern in [patterns.md](patterns.md)).
   binary but untested: a throw from `execute.before` aborts the call. The
   documented v2 route is the permission layer: `ctx.permission.hook("evaluate",
   fn)` receives `{ sessionID, agent?, action, resources, metadata?, source? }`
-  and may set `effect` (`allow`, `ask` or `deny`) and `message`. A configured
+  and may set `effect` (`allow`, `ask`, or `deny`) and `message`. A configured
   `deny` rule is final and skips the hook (the v2 docs, as recorded in
   [observed-opencode.md](../docs/observed-opencode.md); not tested).
 - **Ask**: v1 has `"ask"` as a permission value and `permission.asked` /
@@ -136,7 +136,7 @@ Tool names differ between versions, so the mapping's `[tools]` table and
 - A v1 `apply_patch` call carries `output.args.patchText`, with paths in
   marker lines (`*** Add File:`, `*** Update File:`, `*** Move to:`,
   `*** Delete File:`) relative to the project root. polymorph's
-  `apply_patch_paths` extractor reads `input`, `patch`, `command` and `cmd`,
+  `apply_patch_paths` extractor reads `input`, `patch`, `command`, and `cmd`,
   not `patchText`. Supporting it is an extractor change (skill
   `change-the-schema`).
 - v2 has no separate background-command tool; `background` is a boolean on
@@ -169,12 +169,12 @@ layout) needs no link for OpenCode. A coverage table would record
 
 From v1 docs (`skills.mdx`):
 
-- Paths: `.opencode/skills/<name>/SKILL.md`, `.claude/skills/<name>/SKILL.md`
+- Paths: `.opencode/skills/<name>/SKILL.md`, `.claude/skills/<name>/SKILL.md`,
   and `.agents/skills/<name>/SKILL.md` in the project, plus the same three
-  under `~/.config/opencode/`, `~/.claude/` and `~/.agents/`. Project paths are
+  under `~/.config/opencode/`, `~/.claude/`, and `~/.agents/`. Project paths are
   searched walking up from the current directory to the git worktree root.
 - Frontmatter: `name` and `description` are required, and unknown fields are
-  ignored. `name` must match `^[a-z0-9]+(-[a-z0-9]+)*$`, be 1–64 characters
+  ignored. `name` must match `^[a-z0-9]+(-[a-z0-9]+)*$`, be 1–64 characters,
   and equal the directory name. `description` is 1–1024 characters.
 - The model sees names and descriptions in the `skill` tool's description,
   and loads a skill with `skill({ name })`.
@@ -208,10 +208,10 @@ For polymorph:
   `plugins/`, `skills/`, `tools/`, `themes/`); singular names are accepted for
   backwards compatibility (v1 docs). Observed v2.0.32 did not read singular
   `plugin/`.
-- `permission`: `allow`, `ask` or `deny`, per key or `"*"`. Keys are `read`,
+- `permission`: `allow`, `ask`, or `deny`, per key or `"*"`. Keys are `read`,
   `edit` (covers `edit`, `write`, `apply_patch`), `glob`, `grep`, `bash`,
   `task`, `skill`, `webfetch`, `websearch`, `question`, `lsp`, `todowrite`,
-  `external_directory` and `doom_loop`. Object syntax matches the tool input
+  `external_directory`, and `doom_loop`. Object syntax matches the tool input
   (`"bash": { "rm *": "deny" }`) with `*` and `?` wildcards, and the **last
   matching rule wins**.
 - `OPENCODE_PERMISSION` inlines permissions as JSON. The legacy `tools`
@@ -226,7 +226,7 @@ recorded here.
 
 - v1 docs: `opencode run [message..]` takes `--auto`, `--model provider/model`,
   `--agent`, `--format json`, `--dir`, `--attach URL`, `--continue`,
-  `--session` and `--port`.
+  `--session`, and `--port`.
 - polymorph's `opencode` capture driver runs `opencode run --standalone --auto
   PROMPT`, from `opencode run --help` on v2.0.32. The v1 docs list no
   `--standalone`. The driver has not been run against OpenCode.

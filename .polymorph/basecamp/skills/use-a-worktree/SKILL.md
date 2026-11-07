@@ -1,7 +1,7 @@
 ---
 name: use-a-worktree
 description: How to work in an isolated git worktree instead of a checkout another session may share.
-when_to_use: Before the first git command that branches, commits, merges or checks out -- not for read-only work.
+when_to_use: Before the first git command that branches, commits, merges, or checks out -- not for read-only work.
 ---
 
 # Working in your own worktree
