@@ -2,7 +2,7 @@
 
 Every PR body, and every issue that proposes a change, ends with two
 ratings out of 10 and a one-line reason for each, so a reader can triage
-without reading the diff. The PR template, skill `ship` and skill
+without reading the diff. The PR template, skill `ship`, and skill
 `propose-issue` point here; this page owns the scale.
 
 ```

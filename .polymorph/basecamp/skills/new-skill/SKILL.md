@@ -18,7 +18,7 @@ symlink into the store) or editing a skill's `description` or `when_to_use`.
 |---|---|
 | `description` | One sentence: what the skill does. No paths, no triggers. |
 | `when_to_use` | Short trigger phrases, one line. |
-| `## Applies to` (right after the H1) | The full trigger list, non-triggers and exceptions. Nothing lives only in `when_to_use`: other harnesses ignore it. |
+| `## Applies to` (right after the H1) | The full trigger list, non-triggers, and exceptions. Nothing lives only in `when_to_use`: other harnesses ignore it. |
 
 - Only the keys `name`, `description`, `when_to_use`; a misspelt key is
   silently ignored. `name` equals the directory name.

@@ -1,7 +1,7 @@
 ---
 name: investigate-bug
 description: How to take a reported bug to a failing test before changing code.
-when_to_use: Someone reports wrong output, a crash or a mapping that misbehaves, before diagnosing it.
+when_to_use: Someone reports wrong output, a crash, or a mapping that misbehaves, before diagnosing it.
 ---
 
 # Investigating a bug

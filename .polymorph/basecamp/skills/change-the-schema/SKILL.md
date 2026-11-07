@@ -1,7 +1,7 @@
 ---
 name: change-the-schema
 description: How to change the mapping schema or the canonical config so every place that depends on it changes together.
-when_to_use: Adding, renaming or removing a mapping key, a capability, a template, an extractor, a canonical event or a check code.
+when_to_use: Adding, renaming, or removing a mapping key, a capability, a template, an extractor, a canonical event, or a check code.
 ---
 
 # Changing the schema
@@ -40,8 +40,8 @@ Then `README.md` and `docs/cli.md` if a command or example changed, and the
   an allow). Write the missing-field case next to the bad-value case.
 - Bump `schema` and refuse the old value only for a breaking change;
   adding an optional key is not breaking. Say what a break costs users.
-- Anything a mapping can name stays data: dotted paths, `{placeholder}`s and
+- Anything a mapping can name stays data: dotted paths, `{placeholder}`s, and
   names of built-ins. Never add a field whose value is evaluated, executed,
-  imported or shell-expanded.
+  imported, or shell-expanded.
 - Run `polymorph manage validate` and `polymorph manage conformance` over every shipped
   mapping, then `just preflight`.

@@ -37,7 +37,7 @@ Claude reader: matcher regex `Bash`->shell, `Edit|Write|MultiEdit`->edit,
 are reported in `unmapped`, never dropped silently. A script outside `.agents/hooks/`
 (after `realpath`) is refused with an error. The resolved script path is embedded in
 generated command lines, so it may contain only plain path characters; quotes, whitespace,
-`$`, backticks or other shell metacharacters are refused with an error.
+`$`, backticks, or other shell metacharacters are refused with an error.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -85,7 +85,7 @@ deny = { exit = 2, stderr = "{reason}" }
 `"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the
 canonical protocol. It is only valid for an identity translation: `payload_out` empty and every
 `payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`,
-`shell.command` and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
+`shell.command`, and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
 `read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
 `tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
 a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph manage check`
@@ -94,9 +94,9 @@ evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edi
 `MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match.
 `other` is unconstrained.
 
-Required: `schema`, `name`, `config_path`, `format`, `template` and the tables `[tools]`,
+Required: `schema`, `name`, `config_path`, `format`, `template`, and the tables `[tools]`,
 `[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
-is valid. `generate`, `validate` and `check` apply the same rule (loading a mapping runs
+is valid. `generate`, `validate`, and `check` apply the same rule (loading a mapping runs
 `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
 `context_file`, `skills_dir`, `delivery`.
 
@@ -107,7 +107,7 @@ top-level dotted path nothing in the canonical payload reads.
 
 A `payload_out.deny` or `payload_out.ask` entry must set `exit = 2`, the canonical block
 exit: the adapter defaults a missing exit to 0, which renders the answer as an allow, and
-no other code is documented to block. `allow`, `warn` and `remind` entries are unconstrained
+no other code is documented to block. `allow`, `warn`, and `remind` entries are unconstrained
 (they are not block claims).
 
 Expressions are dotted paths and `{placeholder}` substitution only; output is
@@ -158,7 +158,7 @@ symlink targets only; file contents are never opened, and every found path is re
 nothing is dropped for lacking a `SKILL.md` or any other marker. What a harness honours of
 those kinds is data, not code: `coverage/NAME.toml`, schema 1, closed-world (an unknown key
 or kind is an error), with `load_mapping`'s lookup rules (the repo-local file overrides the
-built-in with a warning; an explicit dir must be the repo's, the built-in's or trusted). A
+built-in with a warning; an explicit dir must be the repo's, the built-in's, or trusted). A
 harness with no coverage table means nothing is known about it: the gap report claims
 nothing rather than claiming a gap. The gap report lists each provided path the table gives
 no way of honouring. A symlink whose resolved target is already honoured content is a
@@ -170,7 +170,7 @@ memory file; a real second copy stays `unlinked-copy`, and a symlink to anything
 a gap. Owner: `inventory.py`.
 
 `adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
-`CLAUDE.md`, `.agents/skills/`, `.claude/rules/` and `.agents/rules/` into the basecamp
+`CLAUDE.md`, `.agents/skills/`, `.claude/rules/`, and `.agents/rules/` into the basecamp
 store and replaces each original path with a relative symlink into it. It refuses a path
 that is already a symlink (reporting where it points), a path with uncommitted changes or ignored by git
 (`git status --porcelain --ignored`; a directory that is not a git worktree refuses everything), and
@@ -199,7 +199,7 @@ told from one the user made. `--no-links` on both commands skips this.
 (`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1,
 closed-world like everything else. The key path is embedded in `GIT_SSH_COMMAND`, which
 git runs through a shell, so it may contain only plain path characters; exports are
-NAME=value with a plain variable name, and loader, interpreter and shell variables
+NAME=value with a plain variable name, and loader, interpreter, and shell variables
 (`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `GIT_SSH_COMMAND`, ...)
 are refused. `polymorph env` emits the contract as shell exports
 (a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's
@@ -207,7 +207,7 @@ exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the cont
 applied and exits with its status. A `--harness` name must appear in the host facts or
 resolve to a mapping.
 
-Emit-only: the key is referenced by path and its contents are never read, printed or
+Emit-only: the key is referenced by path and its contents are never read, printed, or
 moved; no file is written; there is no daemon. A missing harness section that a mapping
 backs is valid but emits no markers. Owner: `env.py`.
 
@@ -287,8 +287,8 @@ note = "optional free text"
 
 Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool` or
-`post_tool`), a colon and the kind. One decision covers every hook of that script on that
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, or
+`post_tool`), a colon, and the kind. One decision covers every hook of that script on that
 event that has that mismatch in that target. (Schema 1 ids had no event: one script
 registered under several events produced the same id for each, and one decision answered
 every event it was registered under, with `generate` recording only the first
@@ -298,7 +298,7 @@ To migrate a schema 1 file by hand: set `schema = 2`, then for each old `<script
 entry, find the events `.agents/settings.json` registers `<script>` under (the event keys
 whose matcher groups carry its command), map `SessionStart`/`PreToolUse`/`PostToolUse` to
 `session_start`/`pre_tool`/`post_tool`, and write one `[decisions."<script>:<event>:<kind>"]`
-per event with the same `choice`, `date` and `note`. A script registered under both tool
+per event with the same `choice`, `date`, and `note`. A script registered under both tool
 events becomes two entries, which is the point: they can now be decided separately. An id
 for an event the script is not registered under simply matches no mismatch and reads as
 `decision-stale`, not an error.
@@ -311,7 +311,7 @@ for an event the script is not registered under simply matches no mismatch and r
 
 Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads
 `shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of
-`read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other` and a hook with no
+`read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other`, and a hook with no
 class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose
 hooks get the Claude payload unchanged.
 
@@ -357,7 +357,7 @@ real ones. Invented fixtures would only restate the guess.
 ## polymorph manage check
 
 `polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
-(`check.py`). Static: never executes a hook script, a harness or the network; writes nothing.
+(`check.py`). Static: never executes a hook script, a harness, or the network; writes nothing.
 Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
 
 | Code | Severity | Fires when |
@@ -371,7 +371,7 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |
-| `decision-undecided` | error | a hook needs an event, tool class or field the target lacks and no decision answers it |
+| `decision-undecided` | error | a hook needs an event, tool class, or field the target lacks and no decision answers it |
 | `decision-weakens-guard` | warning | an applied decision is `run-empty`, or a `substitute` whose event is not the hook's own |
 | `decision-stale` | warning | a decision id matches no mismatch now |
 | `decision-invalid` | error | the decision file or an entry fails validation |

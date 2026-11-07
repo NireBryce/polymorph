@@ -38,7 +38,7 @@ page is the full guide, and both get edited in the same change.
   rename reaches f-string prefixes (`f"..."` becomes the new name), `!r`
   conversions, escape sequences (`"\n"`), short flag strings (`"-d"`) and
   English articles in comments and messages. Grep the rename's diff for
-  the new name touching quotes, `!`, backslashes and dashes, and read
+  the new name touching quotes, `!`, backslashes, and dashes, and read
   every changed line that is not code, before trusting the pass.
 
 ## Prose
@@ -53,7 +53,7 @@ Applies to docs, comments, messages, commit messages, and PR bodies.
 
 - **Real logic is a real Python file shipped in `src/`; a template is
   constants and control flow only.** Logic buried in a shell one-liner, a
-  TOML string or a rendered template cannot be unit-tested and drifts from
+  TOML string, or a rendered template cannot be unit-tested and drifts from
   the code beside it. This is mappings-are-data from the other side:
   `data/probe-guard-hook.py` is the worked example — a shipped template
   with constants rendered in — not a bash string inside `probe.py`.
@@ -64,5 +64,5 @@ Applies to docs, comments, messages, commit messages, and PR bodies.
   thing lives, with the reason** — so nobody re-litigates it six months
   later. Names work the same way: [docs/vocabulary.md](../docs/vocabulary.md)
   records rejected names with their reasons; a declined upgrade to a
-  template, a check or a CLI shape says so in a comment at the thing
+  template, a check, or a CLI shape says so in a comment at the thing
   itself.

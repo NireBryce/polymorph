@@ -4,7 +4,7 @@ _Status: proposal, 2026-10-31. Baseline: the README's [scope baseline](../README
 
 ## The pivot in one paragraph
 
-polymorph v0 reads a repo's Claude Code agent config and transliterates it into per-harness hook files. The next scope makes it the repo's basecamp for agent configuration — a loadout manager: skills, rules, hooks and memory directives accumulate and are managed there, and an arriving contributor's harness is equipped with its loadout on demand, translating what the repo provides into versions its agent and harness understand and naming what cannot be covered. A loadout is a set of initial conditions meant to be loaded at every agent launch; equipping also hands over an environment contract (agent identity, vault detachment) instead of improvised per-contributor setup. The transliteration core is unchanged; it becomes one slice of loadout management. Untested on harnesses with built-in memory, and likely to stay so; see [Limits](limits.md).
+polymorph v0 reads a repo's Claude Code agent config and transliterates it into per-harness hook files. The next scope makes it the repo's basecamp for agent configuration — a loadout manager: skills, rules, hooks, and memory directives accumulate and are managed there, and an arriving contributor's harness is equipped with its loadout on demand, translating what the repo provides into versions its agent and harness understand and naming what cannot be covered. A loadout is a set of initial conditions meant to be loaded at every agent launch; equipping also hands over an environment contract (agent identity, vault detachment) instead of improvised per-contributor setup. The transliteration core is unchanged; it becomes one slice of loadout management. Untested on harnesses with built-in memory, and likely to stay so; see [Limits](limits.md).
 
 ## Guiding constraints
 
@@ -56,7 +56,7 @@ subcommands:
 
 - **`polymorph manage ...`** — the maintainer half, deployed in the repo: its config
   lives under the basecamp directory, its output is committed, its checks run in CI.
-  `generate`, `check`, `validate` and `conformance` move under it when slice 3 lands,
+  `generate`, `check`, `validate`, and `conformance` move under it when slice 3 lands,
   and basecamp-keeping work accumulates here: inventory kinds, coverage tables,
   staleness, upstream review, `adopt`.
 - **`polymorph equip --harness NAME`** — the contributor half, run on a repo: it reads
