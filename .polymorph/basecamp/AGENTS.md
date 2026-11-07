@@ -137,7 +137,8 @@ exit status separately, or use `set -o pipefail`.
 | `note-a-pattern` | proposing a development pattern for the wiki when you notice one |
 
 Plain prose: say what a thing does and what you saw; no hedging adverbs, no
-"robust", "seamless" or "comprehensive".
+"robust", "seamless", or "comprehensive". A list of three or more takes the
+Oxford comma: "skills, rules, and hooks".
 
 Names read at skimming speed. A function's name is its behavior, a variable's
 name is its content: someone skimming a diff should never need to open a

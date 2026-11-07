@@ -188,7 +188,7 @@ Rules:
 
 - Leave `--full` off unless you need to see raw values to figure something out. A
   `--full` log contains commands, paths and file contents. Never share it, attach it to an
-  issue or commit it.
+  issue, or commit it.
 - Leave `--env-be-very-careful` off unless you need to find out which variables the
   harness sets. It records names only, for variables containing `PROJECT`, `WORKSPACE` or
   `HARNESS`. See [CLI reference](cli.md#the-redaction-default-and---env-be-very-careful).
