@@ -8,6 +8,17 @@ changed and, from the first release that has users, how it breaks them.
 Changes since 0.0.1.dev0, including fixes from a review of it. Several break existing
 use; each entry that does says what breaks.
 
+- **`ship-land` closes the issues a PR resolves (issue 99):** after a confirmed merge,
+  `scripts/ship_land.py` closes each issue the PR body names with `Closes`, `Fixes` or
+  `Resolves #N` (same repository only; an issue already closed is left alone) and comments
+  the PR and merge commit on it. GitHub acts on those keywords only for PRs into the default
+  branch, and work lands on `experimental`. Breaks: a PR body that used a closing keyword
+  for an issue it did not resolve now closes that issue at `ship-land`; use `Refs #N`.
+- **`scripts/run_recipe.py` runs justfile recipes without `just` (issue 98):**
+  `python3 scripts/run_recipe.py preflight` runs what CI runs. It reads the justfile and
+  refuses syntax beyond the subset the file uses; `self-check`'s inline script moved to
+  `scripts/self_check.py` so every recipe is in that subset.
+
 - **Maintainer commands moved under `manage` (breaking):** `polymorph generate`, `check`,
   `validate` and `conformance` are now `polymorph manage generate`, `manage check`, `manage
   validate` and `manage conformance` (the new `adopt` lives there too); the old top-level

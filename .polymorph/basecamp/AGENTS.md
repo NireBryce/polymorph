@@ -80,7 +80,8 @@ just preflight       # test + docs + lint + check + self-check: what CI runs
 just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
 just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)
-just ship-land PR    # merge pinned to the head, sync the base branch --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
+just ship-land PR    # merge pinned to the head, sync the base branch --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes the issues the PR body names with Closes/Fixes/Resolves #N
+python3 scripts/run_recipe.py [RECIPE ...]   # without just: lists or runs justfile recipes (same file, same order); `preflight` is what CI runs
 ```
 
 `git add` a new file before `just check` or `just docs`: flakes and the docs
@@ -108,7 +109,7 @@ exit status separately, or use `set -o pipefail`.
 | `discover.py` | log a live harness's payloads (redacted by default) and draft a mapping |
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
 | `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
-| `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`) |
+| `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`); `self_check.py`: `just self-check`; `run_recipe.py`: runs justfile recipes where `just` is not installed (refuses syntax beyond the subset the justfile uses, so recipe logic lives here) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
 | `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, and `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written) |

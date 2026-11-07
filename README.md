@@ -179,6 +179,7 @@ Every flag is in [CLI reference](docs/cli.md).
 ```sh
 just test         # PYTHONPATH=src python3 -m unittest discover -s tests
 just preflight    # what CI runs: tests, doc checks, lint, nix flake check, self-check
+python3 scripts/run_recipe.py preflight   # the same, without just installed
 ```
 
 Tests use stub harnesses only; none of them runs a real model.

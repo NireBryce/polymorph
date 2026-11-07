@@ -123,8 +123,11 @@ class CiWaitTests(unittest.TestCase):
 
 def land_scenario(merge_out=None, trees="", merge_state="CLEAN", commits=2, delete=None, final="MERGED",
                   branch="feat/x", base="main", cross=False, default="main", branch_d=None,
-                  local_sha=SHA, other_prs=()):
+                  local_sha=SHA, other_prs=(), body="", issue_states=("OPEN",), close_out=None):
     return [
+        {"match": ["gh", "pr", "view", "7", "--json", "body"], "outputs": [js({"body": body})]},
+        {"match": ["gh", "issue", "view"], "outputs": [js({"state": state}) for state in issue_states]},
+        {"match": ["gh", "issue", "close"], "outputs": [close_out or out()]},
         {"match": ["gh", "pr", "view", "7", "--json", "commits"],
          "outputs": [js({"commits": [{}] * commits})]},
         {"match": ["gh", "pr", "view", "7", "--json", "state"], "outputs": [js({"state": final})]},
@@ -168,6 +171,7 @@ class ShipLandTests(unittest.TestCase):
         self.assertIn(["git", "push", "origin", "--delete", "feat/x"], calls)
         self.assertNotIn("--delete-branch", [a for c in calls for a in c])
         self.assertIn("closed no issues", r.stdout)
+        self.assertEqual([c for c in calls if c[:2] == ["gh", "issue"]], [])
 
     def test_single_commit_uses_rebase(self):
         r, calls = self.land(land_scenario(commits=1))
@@ -263,6 +267,53 @@ class ShipLandTests(unittest.TestCase):
         self.assertIn(["gh", "pr", "list", "--base", "feat/x", "--state", "open", "--json", "number"], calls)
         self.assertNotIn(["git", "push", "origin", "--delete", "feat/x"], calls)
         self.assertIn("open PR", r.stdout)
+
+
+    # -- closing the issues the PR resolves (issue 99) --------------------------------------
+    def issue_calls(self, calls, verb):
+        return [c[3] for c in calls if c[:3] == ["gh", "issue", verb]]
+
+    def test_closing_keywords_close_their_issues_after_the_merge(self):
+        body = "Closes #12\nRefs #13\nfixes: #14 and RESOLVED #12 again"
+        r, calls = self.land(land_scenario(body=body))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.issue_calls(calls, "close"), ["12", "14"])
+        merge_index = calls.index(self.gh_merge(calls)[0])
+        first_close = next(i for i, c in enumerate(calls) if c[:3] == ["gh", "issue", "close"])
+        self.assertLess(merge_index, first_close)
+        close_call = next(c for c in calls if c[:3] == ["gh", "issue", "close"])
+        self.assertEqual(close_call[4:7], ["--reason", "completed", "--comment"])
+        self.assertIn("#7", close_call[7])
+        self.assertIn("abcdef0", close_call[7])
+        self.assertIn("closed issue #12", r.stdout)
+        self.assertIn("closed issue #14", r.stdout)
+
+    def test_what_is_not_a_closing_keyword_closes_nothing(self):
+        body = "Refs #3. See other/repo#4. Closes other/repo#5. prefixes #6. closes#7 fixed it"
+        r, calls = self.land(land_scenario(body=body))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.issue_calls(calls, "close"), [])
+        self.assertIn("closed no issues", r.stdout)
+
+    def test_an_issue_already_closed_is_left_alone(self):
+        r, calls = self.land(land_scenario(body="Closes #12", issue_states=("CLOSED",)))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.issue_calls(calls, "close"), [])
+        self.assertIn("issue #12 already closed", r.stdout)
+
+    def test_a_failed_close_is_reported_and_fails_the_run(self):
+        r, calls = self.land(land_scenario(body="Fixes #12", close_out=out(1, err="permission denied")))
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("issue #12 NOT closed: permission denied", r.stdout)
+        self.assertIn(["git", "push", "origin", "--delete", "feat/x"], calls)
+
+    def test_a_refused_or_failed_merge_closes_nothing(self):
+        for scenario in (land_scenario(body="Closes #12", merge_state="BEHIND"),
+                         land_scenario(body="Closes #12", merge_out=out(1, err="conflict")),
+                         land_scenario(body="Closes #12", final="OPEN")):
+            with self.subTest():
+                _, calls = self.land(scenario)
+                self.assertEqual([c for c in calls if c[:2] == ["gh", "issue"]], [])
 
 
 if __name__ == "__main__":
