@@ -17,6 +17,10 @@ tests/test_docs.py runs every check on a bad tree to show it can fail.
 - cost:    README.md has the "Cost and responsibility" heading and docs/cli.md and
            docs/discovery.md link to it.
 - paths:   no text file holds a real home directory path.
+- yaml:    in .github/**/*.yml and SKILL.md frontmatter, no unquoted value holds `: `
+           (YAML reads it as a nested mapping; an issue form that fails to parse is not
+           offered at all); in frontmatter, none holds ` #` either (read as a comment,
+           which .github files use on purpose, as for pinned action versions).
 - generated: docs/usage.md and man/polymorph.1 equal what scripts/gen_reference.py writes
            from the real argparse parser (a flag added without `just reference` fails here).
 """
@@ -198,7 +202,49 @@ def check_generated(root):
             for rel_path in gen_reference.stale(root)]
 
 
-CHECKS = [check_skills, check_links, check_cli, check_banner, check_cost, check_paths, check_generated]
+# `key: value` or `- key: value`, value unquoted and not a block, flow or anchor
+PLAIN_SCALAR_RE = re.compile(r'^\s*(?:- )?[A-Za-z_][\w-]*: (?P<value>[^\'"|>\[{&*!\s].*)$')
+
+
+def plain_scalar_problems(text, comments_allowed=True):
+    """(line number, reason) for each unquoted value YAML would misread."""
+    problems = []
+    in_block_indent = None
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        indent = len(line) - len(line.lstrip())
+        if in_block_indent is not None and (not line.strip() or indent > in_block_indent):
+            continue   # inside a `|` or `>` block: any text is fine
+        in_block_indent = None
+        if re.match(r'^\s*(?:- )?[A-Za-z_][\w-]*: [|>][+-]?\s*$', line):
+            in_block_indent = indent
+            continue
+        match = PLAIN_SCALAR_RE.match(line)
+        if not match:
+            continue
+        value = match['value']
+        if ': ' in value or value.endswith(':'):
+            problems.append((line_number, 'unquoted value holds ": "; quote it'))
+        elif ' #' in value and not comments_allowed:
+            problems.append((line_number, 'unquoted value holds " #", read as a comment; quote it'))
+    return problems
+
+
+def check_yaml(root):
+    problems = []
+    for path in files(root):
+        relative = rel(root, path)
+        if relative.startswith('.github/') and path.suffix in ('.yml', '.yaml'):
+            found = plain_scalar_problems(text_of(path) or '')
+        elif path.name == 'SKILL.md':
+            text = text_of(path) or ''
+            found = plain_scalar_problems(text.split('\n---', 1)[0], comments_allowed=False) if text.startswith('---\n') else []
+        else:
+            continue
+        problems += [f'{relative}:{line_number}: {reason}' for line_number, reason in found]
+    return problems
+
+
+CHECKS = [check_skills, check_links, check_cli, check_banner, check_cost, check_paths, check_yaml, check_generated]
 
 
 def main():

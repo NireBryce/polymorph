@@ -34,9 +34,14 @@ stale in the repo until someone regenerates them, and the hand-written prose aro
    that the usage reference does not have (skill `docs-sync`).
 6. `CHANGELOG.md`: every user-visible change since `main` has a line; breaking changes say
    what breaks.
-7. The README notice ("Experimental and unvetted") stays. Do not describe the project as
+7. Issues: each per-task PR closed its own at `ship-land` (skill `ship`, step 3), so
+   this PR's body needs no `Closes` lines. An issue still open that a promoted PR
+   resolved is closed by hand, and named in the PR body.
+8. The README notice ("Experimental and unvetted") stays. Do not describe the project as
    stable, safe or production-ready in the PR body either.
-8. Say which rung you reached (unit tests, ran the CLI, ran in a live harness) for each
+9. The PR body's `## Risk and impact` (`wiki/risk-and-impact.md`) rates the promotion as a
+   whole: the riskiest promoted change sets the risk, and the blurb names it.
+10. Say which rung you reached (unit tests, ran the CLI, ran in a live harness) for each
    claim in the PR body. Merge with `gh pr merge` after `just ci-wait`; one confirmation
    covers the merge.
 

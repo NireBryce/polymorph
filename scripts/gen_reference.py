@@ -32,9 +32,9 @@ DESCRIPTION = ("polymorph reads a repository's Claude Code agent config (.agents
                "rules, memory files) that a harness will not read, and can run a hook script behind a "
                "mapping at hook time.")
 FILES = (
-    (".agents/settings.json", "The Claude Code settings read by generate and check."),
+    (".agents/settings.json", "The Claude Code settings read by manage generate and manage check."),
     (".agents/hooks/", "Hook scripts. A hook must resolve under this directory."),
-    (".polymorph/basecamp/config.toml", "The harnesses generate writes for."),
+    (".polymorph/basecamp/config.toml", "The harnesses manage generate writes for."),
     (".polymorph/basecamp/mappings/", "Repo-local mappings; they override the built-in ones with a warning."),
     (".polymorph/basecamp/decisions/NAME.toml", "Recorded answers to generation-time mismatches."),
     (".polymorph/basecamp/coverage/NAME.toml", "What a harness reads of skills, rules and memory files."),
@@ -44,10 +44,11 @@ FILES = (
 )
 EXIT_STATUS = (
     ("0", "Success."),
-    ("1", "Findings or drift (check, generate --check), a refusal (adopt), a failed conformance run."),
+    ("1", "Findings or drift (manage check, manage generate --check), a refusal (manage adopt), "
+          "a failed manage conformance run."),
     ("2", "A usage error or an error in the input. The adapter never exits 2: its faults are "
           "reported as NOT checked."),
-    ("3", "generate has undecided items and wrote nothing for those targets."),
+    ("3", "manage generate has undecided items and wrote nothing for those targets."),
 )
 
 

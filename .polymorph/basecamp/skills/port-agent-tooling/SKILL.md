@@ -13,7 +13,7 @@ path-scoped rules, harness hooks and settings, git hooks, agent scripts, doc
 conventions, lessons logs, instruction-file sections — and judging a candidate
 already recorded for porting. Not for: transliterating this repo's own config
 for another harness (that is the tool's own job, `src/polymorph/`); reshaping
-this repo into store-and-symlink form (the `adopt` work, issue #24); writing a
+this repo into store-and-symlink form (`polymorph manage adopt`); writing a
 new skill from scratch (`new-skill`).
 
 ## Lineage
@@ -32,8 +32,11 @@ scanner is not vendored here; run it from a launchpad checkout.
    what CI, git hooks or settings wire by path.
 2. Profile the target — for this repo: the basecamp store
    (`.polymorph/basecamp/`) holds canonical files and symlinks them to the
-   agent-facing paths; the checks are `just preflight`; its agents run in
-   Claude Code and ZCode, with hooks running through polymorph itself.
+   agent-facing paths; the checks are `just preflight`, and `just
+   self-check` fails on a new gap in this repo's own agent layout. Its agents
+   run in Claude Code and ZCode, which read `AGENTS.md` and the skills
+   through those symlinks. It has no hook scripts of its own yet (no
+   `.agents/settings.json`).
 3. Judge each candidate at the mechanism level — launchpad's generality test:
    restate the thing's purpose with every repo noun removed; what survives is
    the portable kernel. Group candidates by coupling (a skill and the check

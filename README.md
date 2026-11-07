@@ -198,8 +198,8 @@ Every flag is in the [CLI reference](docs/cli.md).
 | Command | What it does |
 |---|---|
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
-| `discover probe` | Drive a scripted session through a harness to observe its `[capabilities]` flags. Runs a real harness: see [Cost and responsibility](#cost-and-responsibility). |
-| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
+| `discover probe` | Drive a scripted session through one marker command per decision route and print the `[capabilities]` block with how each flag was observed. `zcode` is the only adapter. Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
+| `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Drivers: `opencode` runs; `claude` and `zcode` refuse to run and say why (neither has been seen working headless). Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
 
 ## Contributing
 
@@ -228,6 +228,7 @@ Where the code lives:
 | `src/polymorph/resources.py` | locate the shipped data directories |
 | `src/polymorph/mappings/`, `fixtures/`, `coverage/`, `data/` | shipped per-harness data, and templates used by `capture` and `probe` |
 | `tests/` | unit tests (`fixture_repo/` is a sample agent config) |
+| `scripts/` | the `ci-wait`, `ship-land` and reference-generation recipes; `run_recipe.py` runs any recipe without `just` |
 | `docs/` | [SPEC](docs/SPEC.md) is the contract; the rest explains it |
 
 Run the checks before sending a change. Do not add dependencies.
@@ -238,8 +239,9 @@ just preflight       # what CI runs: test, docs, lint, nix flake check, self-che
 just install-hooks   # optional: a pre-commit hook that runs docs and lint
 ```
 
-`just` lists every recipe. `just check` and `just preflight` need Nix. Without `just`,
-the unit-test command above works with Python alone.
+`just` lists every recipe. Without `just` installed, `python3 scripts/run_recipe.py
+RECIPE` runs a recipe from the justfile. `check`, and so `preflight`, need Nix. The tests
+use stub harnesses only; none of them runs a real model.
 
 Before running `polymorph capture`, `discover probe` or a real harness, read
 [Cost and responsibility](#cost-and-responsibility).

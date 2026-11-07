@@ -40,6 +40,12 @@ saying "done".
 - **A log or fixture holding real commands, paths or tokens.**
 - **Public text** that narrates what could slip past a guard instead of
   stating what it enforces.
+- **A guard tested only with values that pass it**: each guard needs a value
+  that must fail it, and a specific check goes before a broad allowlist, or
+  the allowlist pre-empts it and the guard is dead code.
+- **An emitted file never parsed back**: a test reads every artifact the
+  change writes through the real parser (`tomllib`, `json`), on a second run
+  too, since a first run can write what the second cannot read.
 
 ## Whole-repo sweeps
 

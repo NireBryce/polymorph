@@ -120,6 +120,42 @@ A headless probe of the CLI (driven from a live session; report in a scratch dir
   the trust store, or a real gate discrepancy -- one session that reaches a tool call
   settles it.
 
+The trust digest formula, reproduced 26/26 against existing records (kept here because
+it took a headless session's runtime to confirm it): the store's digest is
+`sha256(JSON.stringify(["workspace-hook-declaration", 1, sourceRelativePath,
+sourceDiscoveryOrder, event, matcher, matcherIndex, hookIndex,
+["command", command, asyncIsTrue, shellPart], resolvedTimeoutMs, resolvedMaxOutputBytes]))`
+with `shellPart` one of `["unset"] | ["true"] | ["string", s]`, `resolvedTimeoutMs =
+hook.timeoutMs ?? (hook.timeout ? hook.timeout * 1000 : 60000)` clamped with
+`Math.max(1, Math.round(...))`, default `maxOutputBytes` 32768, and an appended
+`["onError", "deny"]` entry when the hook sets `onError: "deny"`. `hooks trust status
+--json` prints the same digests, and `hooks trust grant --workspace DIR --hook-digest ...`
+(`--all-current --bundle-digest <sha>` for the batch form) grants from them headlessly.
+
+Outcome (probe closed 2026-11-06, still one tool call short of the proof): with browser
+login done and a provider rule enabled, a headless session selected a model and reached
+Z.ai's API -- which answered `429`, code `1305` ("service may be temporarily overloaded")
+on both the coding and general endpoints, directly with curl as well as through the CLI.
+Auth passes; the model turn does not. Two debugging findings along the way, for whoever
+picks this up:
+
+- After a `login`, the shared credential store makes headless provider selection prefer
+  the zai account provider, whose project-token resolve fails headless. Pointing
+  `ZCODE_DATA_BASE_DIR` at an empty scratch directory gives the run its own credential
+  store and restores provider-config selection; the desktop's credentials are untouched.
+- The `login`-written provider rule is the coding-plan template (`zhipu-coding-plan-api-key`);
+  the same key under the standard template (`zai-standard-api`, plain api-key,
+  `https://api.z.ai/api/paas/v4` or the coding endpoint) authenticates but still 1305s.
+  Whether plan keys are served to plain API calls at all is a Z.ai plan question, not a
+  tooling one.
+
+Proven headless so far: invocation, wiring read by sessions, persistent trust grant,
+provider selection, API reach. Still unproven: hooks firing around a completed model
+turn -- which is exactly what the zcode capture driver stays blocked on. Polymorph's
+zcode tooling has only ever been exercised through stub binaries (the capture and probe
+tests); no real zcode session has ever run under it, and the driver's `blocked` flag
+comes off only when a live headless session fires one hook.
+
 ## Hook answers and failure behavior (3.17.2)
 
 Observed on 2026-11-04 in **ZCode 3.17.2**, with a probe hook wired on `PreToolUse` and

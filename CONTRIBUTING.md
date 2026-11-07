@@ -53,9 +53,11 @@ open an issue to discuss it first.
 Run the tests before you send anything:
 
 ```sh
-PYTHONPATH=src python3 -m unittest discover -s tests    # or: just test
-just preflight                                          # what CI runs; needs Nix
+PYTHONPATH=src python3 -m unittest discover -s tests
 ```
+
+Everything CI runs is `just preflight`; without `just`, `python3 scripts/run_recipe.py
+preflight` runs the same recipe from the justfile.
 
 They use only the standard library, as does the code (Python 3.11+, `tomllib`, `json`,
 `argparse`); please do not add a dependency.

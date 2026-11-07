@@ -175,8 +175,9 @@ class ZCodeDriver(Driver):
     binary = "zcode"
     summary = ("ZCode: hooks in .zcode/config.json (claude-like), headless CLI via "
                "ELECTRON_RUN_AS_NODE; hooks firing headless unproven (BLOCKED)")
-    untested = ("never run against a real zcode session; the argv is from the CLI's own help and "
-                "the desktop's spawn code, read in the 2026-11-05 headless probe")
+    untested = ("never run against a real zcode session -- its tests exercise it through stub "
+                "binaries only; the argv is from the CLI's own help and the desktop's spawn code, "
+                "read in the 2026-11-05 headless probe")
     blocked = ("no headless zcode session has been seen to make a tool call: the probe's sessions "
                "all died at model authentication, so whether workspace hooks fire headlessly is "
                "unconfirmed and a run could spend tokens and log nothing. Finishing the probe -- a "

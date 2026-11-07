@@ -6,8 +6,10 @@
 
 Prints `<sha7> <status> <conclusion>` for the workflow runs on the head commit,
 then the PR's mergeStateStatus. Exit 0 only when every run on that commit
-succeeded and the PR is CLEAN; 1 for a failed run or a PR that is not CLEAN;
-2 on timeout or when gh cannot answer. The head commit is read again on every
+succeeded and the PR is CLEAN; 1 for a failed run, a PR that is not OPEN, or a
+settled merge state other than CLEAN (DIRTY, BEHIND, ...); 2 on timeout or when
+gh cannot answer. UNKNOWN, UNSTABLE and BLOCKED are polled until the timeout,
+since each can still turn CLEAN. The head commit is read again on every
 poll, so a push during the wait is followed, not ignored.
 
 Needs `gh` on PATH, run inside the repository (or a worktree of it).
