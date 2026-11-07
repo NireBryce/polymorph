@@ -170,6 +170,8 @@ Every flag is in the [CLI reference](docs/cli.md).
 | `manage generate` | Write each enabled harness's config from `.agents/settings.json`. `--check` writes nothing and exits 1 on drift. |
 | `manage check` | Static analysis for CI: scripts exist and are executable, mappings valid, generated files current, fixtures replay. Text, JSON or SARIF. |
 | `manage adopt` | Move agent files at rest into the basecamp store and symlink them back. |
+| `manage validate` | Check one mapping file against schema 1. |
+| `manage conformance` | Replay the shipped fixtures through the adapter. |
 
 **Equipping a harness that arrives in the repo**
 
@@ -189,9 +191,8 @@ Every flag is in the [CLI reference](docs/cli.md).
 
 | Command | What it does |
 |---|---|
-| `validate` | Check one mapping file against schema 1. |
-| `conformance` | Replay the shipped fixtures through the adapter. |
 | `discover init` / `log` / `summary` / `draft` / `reload-check` | Record what an unmapped harness sends to hooks and draft a mapping from it. |
+| `discover probe` | Drive a scripted session through a harness to observe its `[capabilities]` flags. Runs a real harness: see [Cost and responsibility](#cost-and-responsibility). |
 | `capture` | Run a real harness headless through fixed steps in a scratch directory and write a summary, a draft mapping and a report. Spends tokens: see [Cost and responsibility](#cost-and-responsibility). |
 
 ## Contributing
@@ -205,22 +206,33 @@ Where the code lives:
 | Path | Role |
 |---|---|
 | `src/polymorph/cli.py` | argparse front end; one function per subcommand |
-| `src/polymorph/reader_claude.py`, `canon.py` | read `.agents/settings.json` into the canonical config |
+| `src/polymorph/reader_claude.py`, `canon.py` | read `.agents/settings.json` into the canonical config (`Hook`, `Canon`) |
+| `src/polymorph/canonical.py` | the canonical payload keys and where each sits in a Claude payload |
 | `src/polymorph/mapping.py`, `validate.py` | load a mapping and validate it against schema 1 |
 | `src/polymorph/generate.py`, `decisions.py` | canonical config + mapping -> harness config; recorded decisions for mismatches |
-| `src/polymorph/adapter.py` | the runtime shim |
+| `src/polymorph/adapter.py`, `exprs.py`, `extractors.py` | the runtime shim, its dotted-path expressions and its named built-in extractors |
+| `src/polymorph/conformance.py` | replay fixtures through a mapping |
 | `src/polymorph/check.py` | static analysis behind `manage check` |
-| `src/polymorph/inventory.py`, `equip.py`, `adopt.py`, `env.py` | gap report, onboarding run, basecamp move, env contract |
-| `src/polymorph/discover.py`, `capture.py` | record and draft from a live harness |
-| `src/polymorph/mappings/`, `fixtures/`, `coverage/` | shipped per-harness data |
+| `src/polymorph/inventory.py`, `equip.py`, `links.py` | gap report, onboarding run, the symlinks `equip` makes for `no-link` gaps |
+| `src/polymorph/adopt.py`, `env.py` | the move into the basecamp store; the env contract |
+| `src/polymorph/discover.py` | log a live harness's payloads and draft a mapping |
+| `src/polymorph/capture.py`, `capture_drivers.py` | `capture`: the fixed steps and the per-harness drivers |
+| `src/polymorph/probe.py` | `discover probe`: observe capability flags in a live run |
+| `src/polymorph/resources.py` | locate the shipped data directories |
+| `src/polymorph/mappings/`, `fixtures/`, `coverage/`, `data/` | shipped per-harness data, and templates used by `capture` and `probe` |
 | `tests/` | unit tests (`fixture_repo/` is a sample agent config) |
 | `docs/` | [SPEC](docs/SPEC.md) is the contract; the rest explains it |
 
-Run the tests before sending a change. Do not add dependencies.
+Run the checks before sending a change. Do not add dependencies.
 
 ```sh
-PYTHONPATH=src python3 -m unittest discover -s tests
+just test            # unit tests: PYTHONPATH=src python3 -m unittest discover -s tests
+just preflight       # what CI runs: test, docs, lint, nix flake check, self-check
+just install-hooks   # optional: a pre-commit hook that runs docs and lint
 ```
+
+`just` lists every recipe. `just check` and `just preflight` need Nix. Without `just`,
+the unit-test command above works with Python alone.
 
 Rules for changes: mapping content is data and never executed; hook scripts resolve
 under `.agents/hooks/`; a mapping without `verified` stays without it until a live session
