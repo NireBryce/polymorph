@@ -17,7 +17,7 @@ live in several files and drift apart silently.
 
 | Change | Files |
 |---|---|
-| a mapping key or capability | `src/polymorph/mapping.py` (parse), `validate.py` (unknown keys are errors, so the key must be added), `generate.py`/`adapter.py` (use it), `docs/SPEC.md` "Mapping file", every `src/polymorph/mappings/*.toml` that needs it; for a capability also `probe.py` (`CASES`: which probe route settles it) |
+| a mapping key or capability | `src/polymorph/mapping.py` (`parse_mapping`), `validate.py` (unknown keys are errors, so the key must be added), `generate.py`/`adapter.py` (use it), `docs/SPEC.md` "Mapping file", every `src/polymorph/mappings/*.toml` that needs it; for a capability also `probe.py` (`CASES`: which probe route settles it) |
 | a canonical payload key | `canonical.py` (`CANON_PATHS`: the adapter places values with it, and `validate.py`'s direct-delivery rule compares against it), SPEC "Mapping file", the fixtures that carry it |
 | a canonical event or class | `canon.py`, `reader_claude.py`, `mapping.py` events/tools, SPEC "Canonical config", mappings |
 | an extractor or template | `extractors.py` / `generate.py` by name (never from mapping text), `validate.py`'s allowed names, SPEC |
