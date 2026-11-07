@@ -22,7 +22,8 @@ symlink into the store) or editing a skill's `description` or `when_to_use`.
 
 - Only the keys `name`, `description`, `when_to_use`; a misspelt key is
   silently ignored. `name` equals the directory name.
-- Plain YAML scalars: never open with a quote, no `: ` or ` #` inside.
+- Plain YAML scalars: never open with a quote, no `: ` or ` #` inside
+  (`just docs` flags both, as `[yaml]`).
 - Body: `## Applies to`, then the procedure. Use real paths and commands
   from this repo; point to the file that owns a fact instead of restating
   it (skill `docs-sync`).

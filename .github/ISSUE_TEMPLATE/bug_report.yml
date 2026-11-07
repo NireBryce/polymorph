@@ -22,7 +22,7 @@ body:
     id: rung
     attributes:
       label: How far did you see it?
-      description: The repo's rungs, from weakest to strongest evidence: unit tests, a polymorph command whose output you read, a live harness session. "Docs are wrong" covers a report where nothing was run.
+      description: 'The repo''s rungs, from weakest to strongest evidence: unit tests, a polymorph command whose output you read, a live harness session. "Docs are wrong" covers a report where nothing was run.'
       options:
         - unit test or fixture replay
         - ran a polymorph command and read the output
@@ -43,3 +43,11 @@ body:
       label: Command output
       description: The full output of the command that shows it, plus a minimal `.agents/settings.json` and mapping that reproduce it. Redact anything secret-shaped.
       render: shell
+  - type: textarea
+    id: risk-impact
+    attributes:
+      label: Risk and impact (optional)
+      description: "How risky the fix looks and how much it matters, each out of 10 with one line of reason, on the scale in wiki/risk-and-impact.md. Leave it empty if unsure: a maintainer fills it in."
+      value: |
+        - **Risk: N/10** --
+        - **Impact: N/10** --

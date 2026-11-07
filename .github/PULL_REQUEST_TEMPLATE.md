@@ -25,3 +25,10 @@ harness. CI runs `just preflight`; say here what CI cannot see. -->
 ## Deliberately left alone
 
 <!-- Anything that looked related but wasn't touched on purpose, and why. -->
+
+## Risk and impact
+
+<!-- Scale and examples: wiki/risk-and-impact.md. One line of reason each. -->
+
+- **Risk: N/10** --
+- **Impact: N/10** --

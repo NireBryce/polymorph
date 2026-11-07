@@ -103,6 +103,34 @@ class DocsChecks(unittest.TestCase):
         write(self.root, 'docs/discovery.md', '[x](../README.md#something-else)\n')
         self.assertEqual(len(docs.check_cost(self.root)), 3)
 
+    def test_yaml_value_with_colon_space(self):
+        bad = ('body:\n  - type: dropdown\n    attributes:\n'
+               '      description: The rungs, weakest first: unit tests\n'
+               '      uses: actions/checkout@abc # v7, a comment on purpose\n')
+        write(self.root, '.github/ISSUE_TEMPLATE/bug.yml', bad)
+        found = docs.check_yaml(self.root)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('bug.yml:4', found[0])
+
+    def test_yaml_quoted_and_block_values_pass(self):
+        good = ('body:\n  - type: textarea\n    attributes:\n'
+                "      description: 'Quoted: fine'\n"
+                '      label: "also: fine # here"\n'
+                '      value: |\n        - **Risk: N/10** --\n        a: b # c\n'
+                '    id: plain-value\n')
+        write(self.root, '.github/ISSUE_TEMPLATE/ok.yml', good)
+        self.assertEqual(docs.check_yaml(self.root), [])
+
+    def test_yaml_check_reads_skill_frontmatter_only(self):
+        write(self.root, '.agents/skills/x/SKILL.md',
+              '---\nname: x\ndescription: Does x: badly\nwhen_to_use: C#sharp\n---\n\n'
+              'body: text with a: colon is fine\n')
+        found = docs.check_yaml(self.root)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('SKILL.md:3', found[0])
+        write(self.root, '.agents/skills/x/SKILL.md', '---\nname: x\nwhen_to_use: Now # really\n---\n')
+        self.assertIn('SKILL.md:3', docs.check_yaml(self.root)[0])
+
     def test_home_path(self):
         bad = '/ho' + 'me/realperson'  # built in pieces so this file passes its own check
         write(self.root, 'docs/c.md', f'see {bad}/project and /home/USER/ok\n')
