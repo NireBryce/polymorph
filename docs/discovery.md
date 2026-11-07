@@ -93,8 +93,10 @@ per tool: tool_input keys
 Names and counts only. By default only tool events are counted: a harness with a
 server-wide event bus can log thousands of session events per tool call, and the
 `hidden:` line says what was left out (`--include EVENT` adds it back, `--event EVENT`
-selects exactly one). Lines are sorted by `ts` first, and `before` / `after` lines are
-paired by call id and message id when the payloads have them (see
+selects exactly one). Lines are sorted by `ts` first: the time `discover log` wrote the
+line, in Unix seconds. Each hook event is logged by its own process, so lines can land in
+the file out of order. Then `before` / `after` lines are paired by call id and message id
+when the payloads have them (see
 [CLI reference](cli.md#discover-summary)). If a count is `0 payloads`, the hook did not fire: check the file
 location, the event name, and whether the harness reads hook config at all.
 
