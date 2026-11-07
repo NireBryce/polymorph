@@ -8,9 +8,7 @@ when_to_use: Creating a skill in the basecamp store, or editing a skill's descri
 
 ## Applies to
 
-Creating `.polymorph/basecamp/skills/<name>/SKILL.md` (`.agents/skills` is a
-symlink into the store) or editing a skill's `description` or `when_to_use`.
-`tests/docs.py` checks the frontmatter and that `AGENTS.md` lists the skill.
+Creating `.polymorph/basecamp/skills/<name>/SKILL.md` (`.agents/skills` is a symlink into the store) or editing a skill's `description` or `when_to_use`. `tests/docs.py` checks the frontmatter and that `AGENTS.md` lists the skill.
 
 ## The rule
 
@@ -20,11 +18,7 @@ symlink into the store) or editing a skill's `description` or `when_to_use`.
 | `when_to_use` | Short trigger phrases, one line. |
 | `## Applies to` (right after the H1) | The full trigger list, non-triggers, and exceptions. Nothing lives only in `when_to_use`: other harnesses ignore it. |
 
-- Only the keys `name`, `description`, `when_to_use`; a misspelt key is
-  silently ignored. `name` equals the directory name.
-- Plain YAML scalars: never open with a quote, no `: ` or ` #` inside
-  (`just docs` flags both, as `[yaml]`).
-- Body: `## Applies to`, then the procedure. Use real paths and commands
-  from this repo; point to the file that owns a fact instead of restating
-  it (skill `docs-sync`).
+- Only the keys `name`, `description`, `when_to_use`; a misspelt key is silently ignored. `name` equals the directory name.
+- Plain YAML scalars: never open with a quote, no `: ` or ` #` inside (`just docs` flags both, as `[yaml]`).
+- Body: `## Applies to`, then the procedure. Use real paths and commands from this repo; point to the file that owns a fact instead of restating it (skill `docs-sync`).
 - Add a row to `AGENTS.md`'s skill table, then run `just docs`.

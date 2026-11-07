@@ -1,8 +1,6 @@
 # Getting started
 
-This walks through a repo that has a Claude Code style agent config and one hook, and
-wires the same hook into ZCode. Every command below was run against a scratch repo with
-this exact content unless marked "not run".
+This walks through a repo that has a Claude Code style agent config and one hook, and wires the same hook into ZCode. Every command below was run against a scratch repo with this exact content unless marked "not run".
 
 **Cost:** this runs a real AI model on your account and spends tokens (money or plan usage). Read [Cost and responsibility](../README.md#cost-and-responsibility) before running it. Nothing on this page runs a model.
 
@@ -12,8 +10,7 @@ this exact content unless marked "not run".
 - A clone of polymorph, installed (`pip install .`, or `-e` to work on it), or Nix.
 - A repo with `.agents/settings.json` and hook scripts under `.agents/hooks/`.
 
-In the examples `python -m polymorph` is shorthand for however you run it. From a clone
-without installing, use `PYTHONPATH=/path/to/polymorph/src python3 -m polymorph`.
+In the examples `python -m polymorph` is shorthand for however you run it. From a clone without installing, use `PYTHONPATH=/path/to/polymorph/src python3 -m polymorph`.
 
 ## 1. A repo to work with
 
@@ -39,8 +36,7 @@ without installing, use `PYTHONPATH=/path/to/polymorph/src python3 -m polymorph`
 }
 ```
 
-`.agents/hooks/block-rm.sh` (the hook reads the canonical payload on stdin and prints a
-Claude-style answer to refuse):
+`.agents/hooks/block-rm.sh` (the hook reads the canonical payload on stdin and prints a Claude-style answer to refuse):
 
 ```sh
 #!/bin/sh
@@ -49,9 +45,7 @@ if grep -q 'rm -rf /' ; then
 fi
 ```
 
-Two rules about hook commands: each must be a bare path to one script (no arguments, no
-`python script.py`), and the script must resolve under `.agents/hooks/`. Anything else is
-an error, because arguments and interpreters do not carry across harnesses.
+Two rules about hook commands: each must be a bare path to one script (no arguments, no `python script.py`), and the script must resolve under `.agents/hooks/`. Anything else is an error, because arguments and interpreters do not carry across harnesses.
 
 ## 2. Choose targets
 
@@ -60,10 +54,7 @@ mkdir -p .polymorph/basecamp
 printf 'enabled = ["zcode"]\n' > .polymorph/basecamp/config.toml
 ```
 
-`enabled` is the list of harnesses `generate` and `check` act on when you do not pass
-`--harness`. Each name must have a mapping: the shipped ones are `claude`, `zcode`, and
-`gemini` (claude has no `verified` field and gemini is an unverified draft, see
-[Limits](limits.md)).
+`enabled` is the list of harnesses `generate` and `check` act on when you do not pass `--harness`. Each name must have a mapping: the shipped ones are `claude`, `zcode`, and `gemini` (claude has no `verified` field and gemini is an unverified draft, see [Limits](limits.md)).
 
 ## 3. Preview, then generate
 
@@ -85,8 +76,7 @@ python -m polymorph manage generate
   unmapped setting: permissions.allow (1 entries)
 ```
 
-The warning is printed whenever `generate` writes hooks: a session that is already running
-read its hook wiring at start and will not pick up the new file.
+The warning is printed whenever `generate` writes hooks: a session that is already running read its hook wiring at start and will not pick up the new file.
 
 The result, `.zcode/config.json`:
 
@@ -107,13 +97,9 @@ The result, `.zcode/config.json`:
 }
 ```
 
-(Reformatted for width; the real file is `json.dumps(indent=2)`.) ZCode speaks the
-canonical protocol, so the hook is called directly. A harness that does not gets a command
-that goes through polymorph's adapter instead; see
-[delivery](concepts.md#delivery-direct-and-adapter).
+(Reformatted for width; the real file is `json.dumps(indent=2)`.) ZCode speaks the canonical protocol, so the hook is called directly. A harness that does not gets a command that goes through polymorph's adapter instead; see [delivery](concepts.md#delivery-direct-and-adapter).
 
-`generate` keeps other top-level keys already in the file and rewrites the whole `hooks`
-key. Hand-written hooks in the generated file are replaced.
+`generate` keeps other top-level keys already in the file and rewrites the whole `hooks` key. Hand-written hooks in the generated file are replaced.
 
 ## 4. Check
 
@@ -128,23 +114,13 @@ python -m polymorph manage check
 0 error(s), 1 warning(s), 2 note(s)
 ```
 
-Exit 0. Before `generate` ran, the same command exits 1 with
-`error generated-drift ... .zcode/config.json missing`. Edit `.agents/settings.json` later
-and `check` reports drift again until you re-run `generate`.
+Exit 0. Before `generate` ran, the same command exits 1 with `error generated-drift ... .zcode/config.json missing`. Edit `.agents/settings.json` later and `check` reports drift again until you re-run `generate`.
 
-The two notes are permanent. `mapping-untested-live` is polymorph reminding you that
-nobody has proved ZCode enforces a deny from this file; `setting-unmapped` lists what was
-not translated. The warning is about the shipped `zcode` mapping itself: it runs hooks
-directly, so a hook cannot tell that ZCode treats `ask` as allow unless it was written to
-detect ZCode. `check --strict` makes warnings fail too, so with the shipped `zcode` mapping
-it exits 1.
+The two notes are permanent. `mapping-untested-live` is polymorph reminding you that nobody has proved ZCode enforces a deny from this file; `setting-unmapped` lists what was not translated. The warning is about the shipped `zcode` mapping itself: it runs hooks directly, so a hook cannot tell that ZCode treats `ask` as allow unless it was written to detect ZCode. `check --strict` makes warnings fail too, so with the shipped `zcode` mapping it exits 1.
 
 ## 5. Try the adapter by hand
 
-For a harness with `delivery = "adapter"` (the default) the generated command is
-`python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed
-it a payload yourself. Using the unverified `gemini` mapping, whose shell tool is called
-`run_shell_command`:
+For a harness with `delivery = "adapter"` (the default) the generated command is `python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. You can feed it a payload yourself. Using the unverified `gemini` mapping, whose shell tool is called `run_shell_command`:
 
 ```sh
 echo '{"tool_name":"run_shell_command","tool_input":{"command":"rm -rf /"}}' \
@@ -156,13 +132,10 @@ refusing rm -rf /
 2
 ```
 
-The adapter turned the native payload into the canonical one, ran your script, and mapped
-the deny to this harness's form (exit 2 with the reason on stderr). That is a hand-fed run,
-not evidence that Gemini CLI behaves this way.
+The adapter turned the native payload into the canonical one, ran your script, and mapped the deny to this harness's form (exit 2 with the reason on stderr). That is a hand-fed run, not evidence that Gemini CLI behaves this way.
 
 ## Next
 
 - [Concepts](concepts.md) for what the pieces are.
 - [CI](ci.md) to keep generated files from drifting.
-- [Writing a mapping](writing-a-mapping.md) or [Discovery](discovery.md) for a harness
-  polymorph does not know.
+- [Writing a mapping](writing-a-mapping.md) or [Discovery](discovery.md) for a harness polymorph does not know.

@@ -1,11 +1,6 @@
 # Patterns: how this repo is developed with agents
 
-Adapted from nixos-configs issue #618, which planned this for that repo
-before polymorph's pivot took over the role. This page is the index over the
-repo's agent-assisted development patterns: each row names the skill, check,
-hook, or page that carries it, and does not restate it. When you notice a new
-one, skill `note-a-pattern` proposes it in one line. Mistakes are not
-patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
+Adapted from nixos-configs issue #618, which planned this for that repo before polymorph's pivot took over the role. This page is the index over the repo's agent-assisted development patterns: each row names the skill, check, hook, or page that carries it, and does not restate it. When you notice a new one, skill `note-a-pattern` proposes it in one line. Mistakes are not patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
 
 | Pattern | What it is | Lives in |
 |---|---|---|
@@ -26,7 +21,4 @@ patterns — they go to [agents-lessons-learned.md](agents-lessons-learned.md).
 | Rate risk and impact | every PR and change-proposing issue ends with a risk and an impact out of 10 and a one-line reason each, so triage does not need the diff | [risk-and-impact.md](risk-and-impact.md), skills [ship](../.polymorph/basecamp/skills/ship/SKILL.md) and [propose-issue](../.polymorph/basecamp/skills/propose-issue/SKILL.md), the PR template |
 | The banner stays honest | the project is experimental and unvetted; cost is stated, not implied | [README](../README.md) notice and [cost and responsibility](../README.md#cost-and-responsibility) |
 
-The meta-pattern: when something you did worked and looks likely to recur,
-skill [note-a-pattern](../.polymorph/basecamp/skills/note-a-pattern/SKILL.md)
-proposes it for this page in one line — the page grows by proposal, not by
-unasked writing.
+The meta-pattern: when something you did worked and looks likely to recur, skill [note-a-pattern](../.polymorph/basecamp/skills/note-a-pattern/SKILL.md) proposes it for this page in one line — the page grows by proposal, not by unasked writing.

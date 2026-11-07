@@ -714,10 +714,11 @@ class Drivers(unittest.TestCase):
         self.assertFalse((scratch / ".zcode").exists())
 
     def test_prompt_kit_in_docs_matches_the_code(self):
-        docs = (ROOT / "docs/discovery.md").read_text()
+        # Compared with whitespace collapsed: the docs are soft-wrapped markdown, so each
+        # prompt is one blockquote line there, while the code wraps it for the terminal.
+        docs = " ".join((ROOT / "docs/discovery.md").read_text().split())
         for title, text in capture.PROMPT_KIT:
-            for line in text.splitlines():
-                self.assertIn("> " + line, docs)
+            self.assertIn("> " + " ".join(text.split()), docs)
 
 
 if __name__ == "__main__":

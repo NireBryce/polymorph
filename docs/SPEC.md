@@ -1,9 +1,6 @@
 # polymorph spec (schema 1)
 
-Origin: NireBryce/nixos-configs issue 597. polymorph reads a repo's Claude Code agent
-config (`.agents/settings.json`, `.agents/hooks/`) and produces hook configs for other
-coding harnesses, driven by declarative per-harness TOML mappings. Readers in, mappings
-out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, `argparse`).
+Origin: NireBryce/nixos-configs issue 597. polymorph reads a repo's Claude Code agent config (`.agents/settings.json`, `.agents/hooks/`) and produces hook configs for other coding harnesses, driven by declarative per-harness TOML mappings. Readers in, mappings out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, `argparse`).
 
 ## Module ownership (parallel work; do not edit another's files)
 
@@ -32,12 +29,7 @@ class Canon:
     unmapped: tuple[str, ...]   # human-readable settings keys with no cross-harness meaning
 ```
 
-Claude reader: matcher regex `Bash`->shell, `Edit|Write|MultiEdit`->edit,
-`Read|Grep|Glob`->read, `mcp__*`->mcp, else other. `permissions.*` and `attribution`
-are reported in `unmapped`, never dropped silently. A script outside `.agents/hooks/`
-(after `realpath`) is refused with an error. The resolved script path is embedded in
-generated command lines, so it may contain only plain path characters; quotes, whitespace,
-`$`, backticks, or other shell metacharacters are refused with an error.
+Claude reader: matcher regex `Bash`->shell, `Edit|Write|MultiEdit`->edit, `Read|Grep|Glob`->read, `mcp__*`->mcp, else other. `permissions.*` and `attribution` are reported in `unmapped`, never dropped silently. A script outside `.agents/hooks/` (after `realpath`) is refused with an error. The resolved script path is embedded in generated command lines, so it may contain only plain path characters; quotes, whitespace, `$`, backticks, or other shell metacharacters are refused with an error.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -80,55 +72,21 @@ cwd = "cwd"
 deny = { exit = 2, stderr = "{reason}" }
 ```
 
-`delivery` (optional, default `"adapter"`): how `generate` writes the hook command.
-`"adapter"` emits `python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`.
-`"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the
-canonical protocol. It is only valid for an identity translation: `payload_out` empty and every
-`payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`,
-`shell.command`, and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`,
-`read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` ->
-`tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or
-a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph manage check`
-reports `mapping-invalid`). A direct mapping's `[tools]` names are matchers the harness
-evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edit`, `Write`,
-`MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match.
-`other` is unconstrained.
+`delivery` (optional, default `"adapter"`): how `generate` writes the hook command. `"adapter"` emits `python3 -m polymorph adapter --harness NAME -- "$CLAUDE_PROJECT_DIR/<script>"`. `"direct"` emits just `"$CLAUDE_PROJECT_DIR/<script>"`, for a harness that already speaks the canonical protocol. It is only valid for an identity translation: `payload_out` empty and every `payload_in` value equal to the canonical Claude path (`tool_name`, `cwd`, `session_id`, `shell.command`, and `edit.file_path` -> `tool_input.command`/`tool_input.file_path`, `read.file_path` -> `tool_input.file_path`, `read.path`/`read.pattern`/`read.glob` -> `tool_input.path`/`.pattern`/`.glob`). Any other `payload_in` key (including `extractor`) or a non-empty `payload_out` makes `delivery = "direct"` a validation error (`polymorph manage check` reports `mapping-invalid`). A direct mapping's `[tools]` names are matchers the harness evaluates itself, so the classed kinds must be the canonical names (`Bash`; `Edit`, `Write`, `MultiEdit`; `Read`, `Grep`, `Glob`; `mcp__*`) -- a renamed tool would silently never match. `other` is unconstrained.
 
-Required: `schema`, `name`, `config_path`, `format`, `template`, and the tables `[tools]`,
-`[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table
-is valid. `generate`, `validate`, and `check` apply the same rule (loading a mapping runs
-`validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`,
-`context_file`, `skills_dir`, `delivery`.
+Required: `schema`, `name`, `config_path`, `format`, `template`, and the tables `[tools]`, `[events]`, `[capabilities]` (all five keys), `[payload_in]`, `[payload_out]`; an empty table is valid. `generate`, `validate`, and `check` apply the same rule (loading a mapping runs `validate_mapping`), so a mapping missing one is refused by all three. Optional: `verified`, `context_file`, `skills_dir`, `delivery`.
 
-A classed `payload_in` key must be one of the canonical fields (`shell.command`,
-`edit.file_path`, `read.file_path`, `read.path`, `read.pattern`, `read.glob`); any other
-`CLASS.field` key is a validation error, because the adapter would place its value at a
-top-level dotted path nothing in the canonical payload reads.
+A classed `payload_in` key must be one of the canonical fields (`shell.command`, `edit.file_path`, `read.file_path`, `read.path`, `read.pattern`, `read.glob`); any other `CLASS.field` key is a validation error, because the adapter would place its value at a top-level dotted path nothing in the canonical payload reads.
 
-A `payload_out.deny` or `payload_out.ask` entry must set `exit = 2`, the canonical block
-exit: the adapter defaults a missing exit to 0, which renders the answer as an allow, and
-no other code is documented to block. `allow`, `warn`, and `remind` entries are unconstrained
-(they are not block claims).
+A `payload_out.deny` or `payload_out.ask` entry must set `exit = 2`, the canonical block exit: the adapter defaults a missing exit to 0, which renders the answer as an allow, and no other code is documented to block. `allow`, `warn`, and `remind` entries are unconstrained (they are not block claims).
 
-Expressions are dotted paths and `{placeholder}` substitution only; output is
-JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is
-ever executed, shell-expanded, or loaded as code.
+Expressions are dotted paths and `{placeholder}` substitution only; output is JSON-encoded, never string-pasted. Unknown keys are a validation error. No field is ever executed, shell-expanded, or loaded as code.
 
 ## Wire protocol
 
-Canonical = Claude Code hook protocol: stdin JSON with `tool_name`, `tool_input`,
-`tool_response`, `cwd`, `session_id`; answers via `hookSpecificOutput.permissionDecision`
-(`allow|ask|deny`) + `permissionDecisionReason`, `additionalContext`, `systemMessage`,
-post-call `decision:"block"`, or exit 2 with stderr.
+Canonical = Claude Code hook protocol: stdin JSON with `tool_name`, `tool_input`, `tool_response`, `cwd`, `session_id`; answers via `hookSpecificOutput.permissionDecision` (`allow|ask|deny`) + `permissionDecisionReason`, `additionalContext`, `systemMessage`, post-call `decision:"block"`, or exit 2 with stderr.
 
-Adapter invocation: `python3 -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
-Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the
-answer to native form. Translation failure => visible message (stderr + exit code the
-harness shows to the model) and NEVER a deny; never fail open silently. A hook answer
-polymorph cannot translate (an unknown decision shape) is such a failure too: visible,
-never a deny and never a silent allow. `ask` on a harness
-with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
-the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping.
+Adapter invocation: `python3 -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`. Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the answer to native form. Translation failure => visible message (stderr + exit code the harness shows to the model) and NEVER a deny; never fail open silently. A hook answer polymorph cannot translate (an unknown decision shape) is such a failure too: visible, never a deny and never a silent allow. `ask` on a harness with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping.
 
 ## Repo layout (everything polymorph stores in a repo)
 
@@ -142,82 +100,25 @@ the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping
   generated/NAME/        # generated shims and plugin files (planned)
 ```
 
-Generated harness configs stay where the harness reads them (the mapping's `config_path`).
-Discovery logs go to `.polymorph/discovery/` (by default under the current directory, or
-`--log-dir`). polymorph edits `.gitignore` only when `equip --gitignore` appends the issued
-artifact path; add `.polymorph/discovery/` yourself so a
-raw log is not one `git add` away from being committed. `--full` (on `discover init` and
-`capture`) is refused without an explicit `--log-dir` / `--out`, and without
-`--i-really-want-this-in-the-repo-raw`; with both it still asks for a typed `yes`. The log is
-plain text: nothing encrypts or hides it.
+Generated harness configs stay where the harness reads them (the mapping's `config_path`). Discovery logs go to `.polymorph/discovery/` (by default under the current directory, or `--log-dir`). polymorph edits `.gitignore` only when `equip --gitignore` appends the issued artifact path; add `.polymorph/discovery/` yourself so a raw log is not one `git add` away from being committed. `--full` (on `discover init` and `capture`) is refused without an explicit `--log-dir` / `--out`, and without `--i-really-want-this-in-the-repo-raw`; with both it still asks for a typed `yes`. The log is plain text: nothing encrypts or hides it.
 
 ## Inventory and coverage tables
 
-The discover-and-report kinds (skills, rules, memory, `.claude/`) are read as paths and
-symlink targets only; file contents are never opened, and every found path is reported --
-nothing is dropped for lacking a `SKILL.md` or any other marker. What a harness honours of
-those kinds is data, not code: `coverage/NAME.toml`, schema 1, closed-world (an unknown key
-or kind is an error), with `load_mapping`'s lookup rules (the repo-local file overrides the
-built-in with a warning; an explicit dir must be the repo's, the built-in's, or trusted). A
-harness with no coverage table means nothing is known about it: the gap report claims
-nothing rather than claiming a gap. The gap report lists each provided path the table gives
-no way of honouring. A symlink whose resolved target is already honoured content is a
-pointer, not a gap (issue #31): a memory file the table names, or a path inside (or equal
-to) a directory the table honours for some kind -- `.claude/skills` -> `.agents/skills`
-when the table honours skills at `.agents/skills` -- is read by the harness through that
-other path, so it is not reported. A memory item is honoured only by resolving to a named
-memory file; a real second copy stays `unlinked-copy`, and a symlink to anything else stays
-a gap. Owner: `inventory.py`.
+The discover-and-report kinds (skills, rules, memory, `.claude/`) are read as paths and symlink targets only; file contents are never opened, and every found path is reported -- nothing is dropped for lacking a `SKILL.md` or any other marker. What a harness honours of those kinds is data, not code: `coverage/NAME.toml`, schema 1, closed-world (an unknown key or kind is an error), with `load_mapping`'s lookup rules (the repo-local file overrides the built-in with a warning; an explicit dir must be the repo's, the built-in's, or trusted). A harness with no coverage table means nothing is known about it: the gap report claims nothing rather than claiming a gap. The gap report lists each provided path the table gives no way of honouring. A symlink whose resolved target is already honoured content is a pointer, not a gap (issue #31): a memory file the table names, or a path inside (or equal to) a directory the table honours for some kind -- `.claude/skills` -> `.agents/skills` when the table honours skills at `.agents/skills` -- is read by the harness through that other path, so it is not reported. A memory item is honoured only by resolving to a named memory file; a real second copy stays `unlinked-copy`, and a symlink to anything else stays a gap. Owner: `inventory.py`.
 
-`adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`,
-`CLAUDE.md`, `.agents/skills/`, `.claude/rules/`, and `.agents/rules/` into the basecamp
-store and replaces each original path with a relative symlink into it. It refuses a path
-that is already a symlink (reporting where it points), a path with uncommitted changes or ignored by git
-(`git status --porcelain --ignored`; a directory that is not a git worktree refuses everything), and
-a store copy that already exists beside the file at rest. A second run is a no-op.
-Hook scripts and `.agents/settings.json` are never moved: they stay where the harness
-reads them. adopt never edits a file through a symlink -- the store copy is the only one
-written -- and writes nothing outside the repository. Owner: `adopt.py`.
+`adopt` converts a repo at rest into store-and-symlink form: it moves `AGENTS.md`, `CLAUDE.md`, `.agents/skills/`, `.claude/rules/`, and `.agents/rules/` into the basecamp store and replaces each original path with a relative symlink into it. It refuses a path that is already a symlink (reporting where it points), a path with uncommitted changes or ignored by git (`git status --porcelain --ignored`; a directory that is not a git worktree refuses everything), and a store copy that already exists beside the file at rest. A second run is a no-op. Hook scripts and `.agents/settings.json` are never moved: they stay where the harness reads them. adopt never edits a file through a symlink -- the store copy is the only one written -- and writes nothing outside the repository. Owner: `adopt.py`.
 
-Links (`links.py`, issue #39). `equip` (for its harness) and `adopt` (for every harness with a
-coverage table) create the symlink that closes each `no-link` gap: the path the harness reads
-is made a relative link to the provided file or directory (`CLAUDE.md -> AGENTS.md`,
-`.claude/skills -> ../.agents/skills`, `.claude/rules -> ../.agents/rules`). Only `no-link`
-is acted on. A real file or directory at the read path (`unlinked-copy`) and a symlink to
-somewhere else (`points-elsewhere`) are never replaced or rewritten; the gap report names
-them. Links are made only from built-in coverage tables: a repo-local table is data the
-repository ships, and it does not get to choose where polymorph creates a symlink. A link
-path under `.git` or `.polymorph`, or below a symlink that leaves the repository, is refused,
-and so is a path two harnesses want linked to different targets. Each link made is recorded
-in `loadout.toml` as `[links.NAME]` `"PATH" = {target, kind}`, so a link polymorph made can be
-told from one the user made. `--no-links` on both commands skips this.
+Links (`links.py`, issue #39). `equip` (for its harness) and `adopt` (for every harness with a coverage table) create the symlink that closes each `no-link` gap: the path the harness reads is made a relative link to the provided file or directory (`CLAUDE.md -> AGENTS.md`, `.claude/skills -> ../.agents/skills`, `.claude/rules -> ../.agents/rules`). Only `no-link` is acted on. A real file or directory at the read path (`unlinked-copy`) and a symlink to somewhere else (`points-elsewhere`) are never replaced or rewritten; the gap report names them. Links are made only from built-in coverage tables: a repo-local table is data the repository ships, and it does not get to choose where polymorph creates a symlink. A link path under `.git` or `.polymorph`, or below a symlink that leaves the repository, is refused, and so is a path two harnesses want linked to different targets. Each link made is recorded in `loadout.toml` as `[links.NAME]` `"PATH" = {target, kind}`, so a link polymorph made can be told from one the user made. `--no-links` on both commands skips this.
 
 ## The env contract
 
-`.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path
-(and optional scope), the environment variable names a harness session must not inherit
-(`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1,
-closed-world like everything else. The key path is embedded in `GIT_SSH_COMMAND`, which
-git runs through a shell, so it may contain only plain path characters; exports are
-NAME=value with a plain variable name, and loader, interpreter, and shell variables
-(`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `GIT_SSH_COMMAND`, ...)
-are refused. `polymorph env` emits the contract as shell exports
-(a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's
-exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the contract
-applied and exits with its status. A `--harness` name must appear in the host facts or
-resolve to a mapping.
+`.polymorph/basecamp/env.toml` holds host facts: the machine agent key's rendered path (and optional scope), the environment variable names a harness session must not inherit (`[vault] unset`), and per-harness session markers (`[harness.NAME] exports`). Schema 1, closed-world like everything else. The key path is embedded in `GIT_SSH_COMMAND`, which git runs through a shell, so it may contain only plain path characters; exports are NAME=value with a plain variable name, and loader, interpreter, and shell variables (`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `GIT_SSH_COMMAND`, ...) are refused. `polymorph env` emits the contract as shell exports (a comment header, the key info line, the unsets, `GIT_SSH_COMMAND`, the harness's exports, values shell-quoted); `--exec CMD` runs CMD under `sh -c` with the contract applied and exits with its status. A `--harness` name must appear in the host facts or resolve to a mapping.
 
-Emit-only: the key is referenced by path and its contents are never read, printed, or
-moved; no file is written; there is no daemon. A missing harness section that a mapping
-backs is valid but emits no markers. Owner: `env.py`.
+Emit-only: the key is referenced by path and its contents are never read, printed, or moved; no file is written; there is no daemon. A missing harness section that a mapping backs is valid but emits no markers. Owner: `env.py`.
 
 ## Trust
 
-Hook scripts must resolve under `<repo>/.agents/hooks/`. A mapping's `config_path` must
-resolve inside the repository: a symlinked component that leaves it is refused, for the
-generated-config read and the write alike. Extractors and templates are
-looked up by name in code shipped with polymorph. `--trust-dir` is required to load
-mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in `src/polymorph/mappings/`.
+Hook scripts must resolve under `<repo>/.agents/hooks/`. A mapping's `config_path` must resolve inside the repository: a symlinked component that leaves it is refused, for the generated-config read and the write alike. Extractors and templates are looked up by name in code shipped with polymorph. `--trust-dir` is required to load mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in `src/polymorph/mappings/`.
 
 ## CLI
 
@@ -250,31 +151,13 @@ polymorph capture --harness NAME [--yes] [--keep] [--steps STEP ...] [--step-tim
 polymorph capture --print-prompts        # prints the manual prompt kit, runs nothing
 ```
 
-Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw
-(parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent.
-`plugin_version` and `location` (issue #23) appear only when the calling plugin passed
-`--plugin-version`/`--location`: a value is kept verbatim when short and free of shell
-characters, becomes `<invalid>` when it is not, and a missing key reads as unmarked in the
-summary, which marks both the way it marks the schema.
-By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value.
-Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout).
-The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared.
-The log is untrusted data: draft copies back only values matching strict name patterns,
-never command text or paths, and omits what it did not observe. Comments carry evidence
-counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.
+Discovery log line: `{schema (1; older lines lack it and still read), ts, event, tool_name, session_id, env_keys (empty unless `--env-be-very-careful`; then PROJECT/WORKSPACE/HARNESS-like names only), redacted, raw (parsed JSON or text), keys, tool_input_keys}`; event/tool_name/session_id are null when absent. `plugin_version` and `location` (issue #23) appear only when the calling plugin passed `--plugin-version`/`--location`: a value is kept verbatim when short and free of shell characters, becomes `<invalid>` when it is not, and a missing key reads as unmarked in the summary, which marks both the way it marks the schema. By default every value in `raw` except structural ones (event, tool name, ids that look like ids, permission mode) becomes `{type, length}`; output-like objects (`tool_response`, `output`, `result`) keep nested key names to three levels with `{type, length}` leaves; `--full` logs raw payloads. A value under an id-named key that looks like a credential (GitHub, OpenAI, AWS, Slack, GitLab tokens; JWTs) does not look like an id: it is reduced like any other value. Logger failures go to `<name>.errors.jsonl` beside the log (best effort; exit 0, no stdout). The default log is redacted as above; a `--full` log holds full commands and file contents and must not be shared. The log is untrusted data: draft copies back only values matching strict name patterns, never command text or paths, and omits what it did not observe. Comments carry evidence counts, `guessed from name` marks, unclassified tools, and inferred config_path/template. Owner: `discover.py`.
 
-Generate output lists, per target: unmapped settings, the questions for undecided mismatches,
-applied decisions (`weakened:` for the weakening ones), stale decisions, notes, and a warning
-that sessions already running will not load the new hooks (equip prints the same warning; not
-on `--check` or a dry run, which write nothing). Exit codes of
-`generate`: 0 ok, 1 `--check` found drift, 2 usage or internal error (including an invalid
-decision file), 3 undecided mismatches.
+Generate output lists, per target: unmapped settings, the questions for undecided mismatches, applied decisions (`weakened:` for the weakening ones), stale decisions, notes, and a warning that sessions already running will not load the new hooks (equip prints the same warning; not on `--check` or a dry run, which write nothing). Exit codes of `generate`: 0 ok, 1 `--check` found drift, 2 usage or internal error (including an invalid decision file), 3 undecided mismatches.
 
 ## Decisions
 
-When a target harness has more or fewer fields or events than a hook needs, `generate` does
-not guess and does not drop the hook silently. Each mismatch is *undecided* until
-`.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
+When a target harness has more or fewer fields or events than a hook needs, `generate` does not guess and does not drop the hook silently. Each mismatch is *undecided* until `.polymorph/basecamp/decisions/NAME.toml` answers it. The file is data: validated, never executed.
 
 ```toml
 schema = 2
@@ -285,23 +168,9 @@ date = "2026-10-30"
 note = "optional free text"
 ```
 
-Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
-`choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, or
-`post_tool`), a colon, and the kind. One decision covers every hook of that script on that
-event that has that mismatch in that target. (Schema 1 ids had no event: one script
-registered under several events produced the same id for each, and one decision answered
-every event it was registered under, with `generate` recording only the first
-application's weakening. The event dimension is the schema 2 break.)
+Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, or `post_tool`), a colon, and the kind. One decision covers every hook of that script on that event that has that mismatch in that target. (Schema 1 ids had no event: one script registered under several events produced the same id for each, and one decision answered every event it was registered under, with `generate` recording only the first application's weakening. The event dimension is the schema 2 break.)
 
-To migrate a schema 1 file by hand: set `schema = 2`, then for each old `<script>:<kind>`
-entry, find the events `.agents/settings.json` registers `<script>` under (the event keys
-whose matcher groups carry its command), map `SessionStart`/`PreToolUse`/`PostToolUse` to
-`session_start`/`pre_tool`/`post_tool`, and write one `[decisions."<script>:<event>:<kind>"]`
-per event with the same `choice`, `date`, and `note`. A script registered under both tool
-events becomes two entries, which is the point: they can now be decided separately. An id
-for an event the script is not registered under simply matches no mismatch and reads as
-`decision-stale`, not an error.
+To migrate a schema 1 file by hand: set `schema = 2`, then for each old `<script>:<kind>` entry, find the events `.agents/settings.json` registers `<script>` under (the event keys whose matcher groups carry its command), map `SessionStart`/`PreToolUse`/`PostToolUse` to `session_start`/`pre_tool`/`post_tool`, and write one `[decisions."<script>:<event>:<kind>"]` per event with the same `choice`, `date`, and `note`. A script registered under both tool events becomes two entries, which is the point: they can now be decided separately. An id for an event the script is not registered under simply matches no mismatch and reads as `decision-stale`, not an error.
 
 | Kind | Fires when | Choices |
 |---|---|---|
@@ -309,11 +178,7 @@ for an event the script is not registered under simply matches no mismatch and r
 | `no-tool-class` | a class the hook is scoped to has no entry in `[tools]` | `skip` (hook is registered for the remaining classes; not at all if none remain) |
 | `missing-field` | the hook is scoped to a class whose payload field the mapping's `[payload_in]` does not map | `skip` (hook not generated); `run-empty` (generated; the hook sees the field empty) |
 
-Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads
-`shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of
-`read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other`, and a hook with no
-class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose
-hooks get the Claude payload unchanged.
+Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads `shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of `read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other`, and a hook with no class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose hooks get the Claude payload unchanged.
 
 Undecided means: `generate` writes nothing for that target, prints each item as a block
 
@@ -326,39 +191,23 @@ Undecided means: `generate` writes nothing for that target, prints each item as 
     answer:  in .polymorph/basecamp/decisions/NAME.toml add [decisions."<id>"] with choice = ..., date = ...
 ```
 
-and exits 3. Other targets are still written. polymorph never prompts; an agent relays the
-questions to its user and writes the answers. With `--check`, undecided items also exit 3.
+and exits 3. Other targets are still written. polymorph never prompts; an agent relays the questions to its user and writes the answers. With `--check`, undecided items also exit 3.
 
-Once decided, `generate` applies the choice and prints `decided:` or, for a weakening one,
-`weakened:` per id. Weakening means `run-empty`, or a `substitute` whose native event belongs to
-a different canonical event than the hook's own (always so, since the hook's event is the one
-that is missing). `check` reports it as `decision-weakens-guard`. A decision whose id matches
-nothing now is `decision-stale`. An invalid entry is `decision-invalid` and makes `generate` exit
-2 before writing.
+Once decided, `generate` applies the choice and prints `decided:` or, for a weakening one, `weakened:` per id. Weakening means `run-empty`, or a `substitute` whose native event belongs to a different canonical event than the hook's own (always so, since the hook's event is the one that is missing). `check` reports it as `decision-weakens-guard`. A decision whose id matches nothing now is `decision-stale`. An invalid entry is `decision-invalid` and makes `generate` exit 2 before writing.
 
-The decision is recorded in the decision file and in the `generate` output only. It is not
-written into the generated harness config: that format is JSON, which has no comments, and a
-`_polymorph` key in a harness's settings file is not known to be tolerated by any shipped
-target (none is verified for unknown top-level keys), so none is added.
+The decision is recorded in the decision file and in the `generate` output only. It is not written into the generated harness config: that format is JSON, which has no comments, and a `_polymorph` key in a harness's settings file is not known to be tolerated by any shipped target (none is verified for unknown top-level keys), so none is added.
 
-Extra payload fields a mapping maps that no hook reads are printed once per target as
-`note:`, never as a question.
+Extra payload fields a mapping maps that no hook reads are printed once per target as `note:`, never as a question.
 
 ## Fixtures
 
-`src/polymorph/fixtures/<harness>/<case>.json`:
-`{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}`
-covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
+`src/polymorph/fixtures/<harness>/<case>.json`: `{"native_in": {...}, "canonical_in": {...}, "hook_answer": {...}|null, "native_out": {"stdout": ..., "exit": N}}` covering deny, ask, warn(additionalContext), remind(systemMessage) for each mapping.
 
-The `gemini` mapping is an unverified draft written from a sketch, not from a captured session,
-so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies
-real ones. Invented fixtures would only restate the guess.
+The `gemini` mapping is an unverified draft written from a sketch, not from a captured session, so it has no fixtures; `check` reports `fixtures-missing` for it until a harness report supplies real ones. Invented fixtures would only restate the guess.
 
 ## polymorph manage check
 
-`polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]`
-(`check.py`). Static: never executes a hook script, a harness, or the network; writes nothing.
-Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
+`polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]` (`check.py`). Static: never executes a hook script, a harness, or the network; writes nothing. Finding: `{severity: error|warning|note, code, target|null, message, file|null}`.
 
 | Code | Severity | Fires when |
 |---|---|---|
@@ -383,16 +232,8 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `fixtures-skipped` | note | repo-local mapping: fixtures not checked |
 | `fixture-failed` | error | a fixture does not replay (via `polymorph.conformance`) |
 
-Exit: 0 no errors (and, with `--strict`, no warnings); 1 findings fail; 2 usage or internal
-error. `text`: grouped by target, `severity code target: message`, then a summary line.
-`json`: `{findings, summary: {error, warning, note}}`. `sarif`: SARIF 2.1.0, driver `polymorph`,
-rules from the codes seen, `artifactLocation.uri` when `file` is known. Hook-script and
-drift checks need a readable settings file; if a hook command is rejected, canon-derived
-checks (decisions, unmapped, drift) are skipped for that run.
+Exit: 0 no errors (and, with `--strict`, no warnings); 1 findings fail; 2 usage or internal error. `text`: grouped by target, `severity code target: message`, then a summary line. `json`: `{findings, summary: {error, warning, note}}`. `sarif`: SARIF 2.1.0, driver `polymorph`, rules from the codes seen, `artifactLocation.uri` when `file` is known. Hook-script and drift checks need a readable settings file; if a hook command is rejected, canon-derived checks (decisions, unmapped, drift) are skipped for that run.
 
 ## Phase scope
 
-Built now: phases 0-3 (schema, canon + Claude reader, `zcode` and `claude` mappings,
-capability env, adapter, conformance), plus the report-harness skill (self-report mode).
-Not built: discovery mode capture beyond the logger generator, code-generating targets,
-plugin packaging, edits to nixos-configs hooks (the capability swap is a separate PR there).
+Built now: phases 0-3 (schema, canon + Claude reader, `zcode` and `claude` mappings, capability env, adapter, conformance), plus the report-harness skill (self-report mode). Not built: discovery mode capture beyond the logger generator, code-generating targets, plugin packaging, edits to nixos-configs hooks (the capability swap is a separate PR there).

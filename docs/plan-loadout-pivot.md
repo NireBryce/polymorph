@@ -51,26 +51,13 @@ Phase 2 verification: emit-shape tests against host-facts fixtures (exact export
 
 ## CLI shape: two halves
 
-The behaviour splits by audience, not by packaging — one tool, two halves, as
-subcommands:
+The behaviour splits by audience, not by packaging — one tool, two halves, as subcommands:
 
-- **`polymorph manage ...`** — the maintainer half, deployed in the repo: its config
-  lives under the basecamp directory, its output is committed, its checks run in CI.
-  `generate`, `check`, `validate`, and `conformance` move under it when slice 3 lands,
-  and basecamp-keeping work accumulates here: inventory kinds, coverage tables,
-  staleness, upstream review, `adopt`.
-- **`polymorph equip --harness NAME`** — the contributor half, run on a repo: it reads
-  the basecamp and writes equipped artifacts. One command, not a group — the contributor
-  does one thing — and contributor work grows inside it (the gitignore flow, provenance)
-  rather than beside it.
-- Outside the halves: `adapter` and `env` are launch-time (the per-launch part of the
-  loadout definition), and `discover`/`capture` serve a third audience, the harness
-  mapper.
+- **`polymorph manage ...`** — the maintainer half, deployed in the repo: its config lives under the basecamp directory, its output is committed, its checks run in CI. `generate`, `check`, `validate`, and `conformance` move under it when slice 3 lands, and basecamp-keeping work accumulates here: inventory kinds, coverage tables, staleness, upstream review, `adopt`.
+- **`polymorph equip --harness NAME`** — the contributor half, run on a repo: it reads the basecamp and writes equipped artifacts. One command, not a group — the contributor does one thing — and contributor work grows inside it (the gitignore flow, provenance) rather than beside it.
+- Outside the halves: `adapter` and `env` are launch-time (the per-launch part of the loadout definition), and `discover`/`capture` serve a third audience, the harness mapper.
 
-The rule that sorts any future command: commands that write the basecamp are maintainer
-commands; commands that read the basecamp and write equipped artifacts are contributor
-commands; everything else is launch-time or mapping work. The command moves happen with
-slice 3, not before — one coherent change, no half-migrated default command.
+The rule that sorts any future command: commands that write the basecamp are maintainer commands; commands that read the basecamp and write equipped artifacts are contributor commands; everything else is launch-time or mapping work. The command moves happen with slice 3, not before — one coherent change, no half-migrated default command.
 
 ## Phase order
 
@@ -78,26 +65,12 @@ slice 3, not before — one coherent change, no half-migrated default command.
 
 ## Working across repos: two postures
 
-- **Maintainer posture** — the basecamp is committed: equipped artifacts for the enabled
-  harnesses are committed with it, and `check --strict` in CI guards drift. This is the
-  README's existing model, extended from hook configs to every equipped artifact.
-- **Contributor posture** — equipping someone else's repo: everything equip writes is
-  derived and regenerable, so it is gitignored and stays local. Equip detects the posture
-  (a committed basecamp with the check in CI) and offers a marked, idempotent
-  `.gitignore` section otherwise.
+- **Maintainer posture** — the basecamp is committed: equipped artifacts for the enabled harnesses are committed with it, and `check --strict` in CI guards drift. This is the README's existing model, extended from hook configs to every equipped artifact.
+- **Contributor posture** — equipping someone else's repo: everything equip writes is derived and regenerable, so it is gitignored and stays local. Equip detects the posture (a committed basecamp with the check in CI) and offers a marked, idempotent `.gitignore` section otherwise.
 
-What upstream accepts from a contributor splits by artifact type. A PR adding
-transliterated hook configs on a **verified** mapping can be accepted by CI alone
-(`check --strict` plus conformance fixtures — no human in the loop). A PR adding
-translated **skills** — prose — always needs human review; a wrong translation of a
-guard-adjacent skill fails open. Ingest of a contributor's equipped tree is a
-maintainer-facing check, not a merge-time hope.
+What upstream accepts from a contributor splits by artifact type. A PR adding transliterated hook configs on a **verified** mapping can be accepted by CI alone (`check --strict` plus conformance fixtures — no human in the loop). A PR adding translated **skills** — prose — always needs human review; a wrong translation of a guard-adjacent skill fails open. Ingest of a contributor's equipped tree is a maintainer-facing check, not a merge-time hope.
 
-Edits made to equipped artifacts route by what changed: an improvement to what a skill
-*says* is a PR against the base file in the basecamp store (upstream re-equips from it);
-an equipped copy wrong or stale relative to its base is a bug on the tool, and the
-provenance manifest (source path and content hash per equipped artifact, written at
-equip time) makes that checkable in CI.
+Edits made to equipped artifacts route by what changed: an improvement to what a skill *says* is a PR against the base file in the basecamp store (upstream re-equips from it); an equipped copy wrong or stale relative to its base is a bug on the tool, and the provenance manifest (source path and content hash per equipped artifact, written at equip time) makes that checkable in CI.
 
 ## Companion work
 
@@ -106,8 +79,7 @@ One piece each, tracked beside the slices:
 - gitignore flow for equipped artifacts (contributor posture)
 - provenance manifest: source path and content hash per equipped artifact
 - staleness: `check` warns when an equipped copy's base changed since it was equipped
-- upstream review path: CI-accept transliterated loadouts on verified mappings,
-  human-review prose
+- upstream review path: CI-accept transliterated loadouts on verified mappings, human-review prose
 
 `adopt` (#24) and the Rust rewrite consideration (#25) are filed on the tracker.
 

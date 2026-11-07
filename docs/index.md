@@ -18,5 +18,4 @@ polymorph is experimental and unvetted; read [Limits](limits.md) before relying 
 | Contribute or report a harness | [CONTRIBUTING](../CONTRIBUTING.md) |
 | See what changed | [CHANGELOG](../CHANGELOG.md) |
 
-[SPEC](SPEC.md) is the contract; these pages explain it and describe what the code does.
-Where they disagree, the code is the tiebreaker and the disagreement is a bug to report.
+[SPEC](SPEC.md) is the contract; these pages explain it and describe what the code does. Where they disagree, the code is the tiebreaker and the disagreement is a bug to report.

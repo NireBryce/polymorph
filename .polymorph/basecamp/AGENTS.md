@@ -1,71 +1,31 @@
 # AGENTS.md
 
-> **Written by agents, for agents.** Working notes for a session with no
-> memory of the last one. `README.md` is the human entry point.
+> **Written by agents, for agents.** Working notes for a session with no memory of the last one. `README.md` is the human entry point.
 >
-> This file is canonical; `CLAUDE.md` is a symlink to it. Both resolve into
-> the basecamp store: this file lives at `.polymorph/basecamp/AGENTS.md`, and
-> skills are plain markdown at `.polymorph/basecamp/skills/<name>/SKILL.md`
-> (`.agents/skills` is a symlink into the store, which Claude Code reads
-> through the `.claude/skills` symlink); any agent can read them as files.
+> This file is canonical; `CLAUDE.md` is a symlink to it. Both resolve into the basecamp store: this file lives at `.polymorph/basecamp/AGENTS.md`, and skills are plain markdown at `.polymorph/basecamp/skills/<name>/SKILL.md` (`.agents/skills` is a symlink into the store, which Claude Code reads through the `.claude/skills` symlink); any agent can read them as files.
 
 ## What this is
 
-polymorph reads a repo's Claude Code agent config (`.agents/settings.json`,
-`.agents/hooks/`) and writes hook configs for other coding harnesses from
-declarative per-harness TOML mappings. Python 3.11+, standard library only.
-`docs/SPEC.md` is the contract; `docs/cli.md` the commands. The scope
-pivot's vocabulary — equip (the verb), loadout (what equipping hands over),
-loadout manager (its role), onboarding run, gap report — is fixed in
-`docs/vocabulary.md`; use those words in docs, GitHub issues, and PR bodies.
+polymorph reads a repo's Claude Code agent config (`.agents/settings.json`, `.agents/hooks/`) and writes hook configs for other coding harnesses from declarative per-harness TOML mappings. Python 3.11+, standard library only. `docs/SPEC.md` is the contract; `docs/cli.md` the commands. The scope pivot's vocabulary — equip (the verb), loadout (what equipping hands over), loadout manager (its role), onboarding run, gap report — is fixed in `docs/vocabulary.md`; use those words in docs, GitHub issues, and PR bodies.
 
 ## Hard rules
 
-- **This project is experimental and unvetted.** Never describe it as
-  stable, safe, or production-ready; keep the notice at the top of
-  `README.md`. It sits on a safety path (guard hooks), where a wrong
-  mapping can fail open. Say what a change breaks, since nothing here
-  promises compatibility.
-- **"push" means skill `ship`**: branch, PR, one confirmation covering
-  merge and branch deletion. Work lands on `experimental` by default;
-  `main` takes stabilized updates from it, by PR, once stable. Neither
-  branch takes a direct push.
+- **This project is experimental and unvetted.** Never describe it as stable, safe, or production-ready; keep the notice at the top of `README.md`. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Say what a change breaks, since nothing here promises compatibility.
+- **"push" means skill `ship`**: branch, PR, one confirmation covering merge and branch deletion. Work lands on `experimental` by default; `main` takes stabilized updates from it, by PR, once stable. Neither branch takes a direct push.
 - **Branching work happens in its own worktree** (skill `use-a-worktree`).
-- **File issues and PRs only in `NireBryce/polymorph`**, unless the user
-  names another project in their own message (skill `propose-issue`).
-- **Never run `polymorph capture`, or any real harness, without the user's explicit yes in
-  the conversation.** It spends the user's money and auto-approves tool calls
-  ([Cost and responsibility](README.md#cost-and-responsibility)). Tests use stubs only.
-- **Mapping content is data, never code.** Never run, `eval`, `exec`,
-  shell-expand, or import anything that came from a mapping, a discovery log,
-  or a harness report, and never add a code path that does. Mapping fields
-  are dotted paths and `{placeholder}`s only; extractors and templates are
-  named built-ins shipped in `src/`.
-- **Trust model** (`docs/SPEC.md`, "Trust"): hook scripts must resolve under
-  `.agents/hooks/`; mappings load only from the repo's
-  `.polymorph/basecamp/mappings/`, the built-in `src/polymorph/mappings/`, or a directory
-  given with `--trust-dir`. Do not widen any of these.
-- **A mapping without `verified` stays without it** until its block
-  semantics were seen in a live session (skill `new-mapping`).
+- **File issues and PRs only in `NireBryce/polymorph`**, unless the user names another project in their own message (skill `propose-issue`).
+- **Never run `polymorph capture`, or any real harness, without the user's explicit yes in the conversation.** It spends the user's money and auto-approves tool calls ([Cost and responsibility](README.md#cost-and-responsibility)). Tests use stubs only.
+- **Mapping content is data, never code.** Never run, `eval`, `exec`, shell-expand, or import anything that came from a mapping, a discovery log, or a harness report, and never add a code path that does. Mapping fields are dotted paths and `{placeholder}`s only; extractors and templates are named built-ins shipped in `src/`.
+- **Trust model** (`docs/SPEC.md`, "Trust"): hook scripts must resolve under `.agents/hooks/`; mappings load only from the repo's `.polymorph/basecamp/mappings/`, the built-in `src/polymorph/mappings/`, or a directory given with `--trust-dir`. Do not widen any of these.
+- **A mapping without `verified` stays without it** until its block semantics were seen in a live session (skill `new-mapping`).
 - **Standard library only.** No runtime or test dependency.
-- **Say which rung you reached**: *unit tests* (`just test`), *ran the CLI*
-  (you ran the subcommand and read its output), *ran in a live harness*
-  (a real session fired the hook). Never claim more than you saw.
-- **A change that makes a doc stale fixes it in the same change** (skill
-  `docs-sync`).
-- **Examples are generic** (`REPO`, `/home/USER`, `NAME`), never a real
-  person's machine, path, or repository.
-- **Trailer `Co-Authored-By: Claude`** on agent commits, name only; prose
-  says "the user", never their name.
-- **A test that reads the environment runs the CLI with `PATH` only**
-  (`clean=True` in `tests/test_discover.py`'s `run_cli`), or it passes here
-  and fails on a CI runner (`wiki/agents-lessons-learned.md`).
-- **Read the exit status before the first step that goes outward** (merge,
-  push, delete): `just ci-wait`, then `just ship-land`. A reported cause is
-  a hypothesis until a test fails for that reason.
-- **A check is shown to fail before it is trusted**, and the lesson goes in
-  `wiki/agents-lessons-learned.md` when it surprised you (skill
-  `record-a-lesson`).
+- **Say which rung you reached**: *unit tests* (`just test`), *ran the CLI* (you ran the subcommand and read its output), *ran in a live harness* (a real session fired the hook). Never claim more than you saw.
+- **A change that makes a doc stale fixes it in the same change** (skill `docs-sync`).
+- **Examples are generic** (`REPO`, `/home/USER`, `NAME`), never a real person's machine, path, or repository.
+- **Trailer `Co-Authored-By: Claude`** on agent commits, name only; prose says "the user", never their name.
+- **A test that reads the environment runs the CLI with `PATH` only** (`clean=True` in `tests/test_discover.py`'s `run_cli`), or it passes here and fails on a CI runner (`wiki/agents-lessons-learned.md`).
+- **Read the exit status before the first step that goes outward** (merge, push, delete): `just ci-wait`, then `just ship-land`. A reported cause is a hypothesis until a test fails for that reason.
+- **A check is shown to fail before it is trusted**, and the lesson goes in `wiki/agents-lessons-learned.md` when it surprised you (skill `record-a-lesson`).
 
 ## Commands
 
@@ -84,12 +44,7 @@ just ship-land PR    # merge pinned to the head, sync the base branch --ff-only,
 python3 scripts/run_recipe.py [RECIPE ...]   # without just: lists or runs justfile recipes (same file, same order); `preflight` is what CI runs
 ```
 
-`git add` a new file before `just check` or `just docs`: flakes and the docs
-check (`git ls-files`) ignore untracked files, so a new test, fixture, or page
-silently does not exist to them. Do not pipe a check into a
-filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and
-a failed stage reads as passed. Write the output to a file and read the
-exit status separately, or use `set -o pipefail`.
+`git add` a new file before `just check` or `just docs`: flakes and the docs check (`git ls-files`) ignore untracked files, so a new test, fixture, or page silently does not exist to them. Do not pipe a check into a filter — `tail`, `head`, `grep`: the pipe's exit status is the filter's, and a failed stage reads as passed. Write the output to a file and read the exit status separately, or use `set -o pipefail`.
 
 ## Architecture
 
@@ -136,15 +91,6 @@ exit status separately, or use `set -o pipefail`.
 | `promote-to-main` | bringing `experimental` to `main` with the usage reference, man page, and docs true |
 | `note-a-pattern` | proposing a development pattern for the wiki when you notice one |
 
-Plain prose: say what a thing does and what you saw; no hedging adverbs, no
-"robust", "seamless", or "comprehensive". A list of three or more takes the
-Oxford comma: "skills, rules, and hooks".
+Plain prose: say what a thing does and what you saw; no hedging adverbs, no "robust", "seamless", or "comprehensive". A list of three or more takes the Oxford comma: "skills, rules, and hooks". Markdown is soft-wrapped: one paragraph per line, no hard wraps.
 
-Names read at skimming speed. A function's name is its behavior, a variable's
-name is its content: someone skimming a diff should never need to open a
-function to know what a line does. No one-letter names in code you write
-(`duration_seconds`, not `d`; `flag_results`, not `caps`), unless the letter
-is the idiom of the code right beside it (`rc` for a return code, `i, rec`
-in this repo's existing loops). A name that needs a comment to be decoded
-gets a better name instead. Full code style — comments, renames, shipped
-templates, recorded declines — is in `wiki/code-style.md`.
+Names read at skimming speed. A function's name is its behavior, a variable's name is its content: someone skimming a diff should never need to open a function to know what a line does. No one-letter names in code you write (`duration_seconds`, not `d`; `flag_results`, not `caps`), unless the letter is the idiom of the code right beside it (`rc` for a return code, `i, rec` in this repo's existing loops). A name that needs a comment to be decoded gets a better name instead. Full code style — comments, renames, shipped templates, recorded declines — is in `wiki/code-style.md`.

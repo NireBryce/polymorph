@@ -1,9 +1,6 @@
 # Risk and impact ratings
 
-Every PR body, and every issue that proposes a change, ends with two
-ratings out of 10 and a one-line reason for each, so a reader can triage
-without reading the diff. The PR template, skill `ship`, and skill
-`propose-issue` point here; this page owns the scale.
+Every PR body, and every issue that proposes a change, ends with two ratings out of 10 and a one-line reason for each, so a reader can triage without reading the diff. The PR template, skill `ship`, and skill `propose-issue` point here; this page owns the scale.
 
 ```
 ## Risk and impact
@@ -12,9 +9,7 @@ without reading the diff. The PR template, skill `ship`, and skill
 - **Impact: N/10** -- who gains what, and how much.
 ```
 
-The section goes last, before the generated-by footer. Skip it where
-nothing changes: a harness report, a question, a promotion PR made only
-of PRs already rated (say so in one line instead).
+The section goes last, before the generated-by footer. Skip it where nothing changes: a harness report, a question, a promotion PR made only of PRs already rated (say so in one line instead).
 
 ## Risk: what could go wrong if this change is wrong
 
@@ -28,8 +23,7 @@ Rate the change as written, with its tests; say what the number rests on.
 | 7-8 | The safety path or a breaking change: a hook could run differently | `adapter.py`, `generate.py`, `check.py`, `validate.py`, a mapping, the schema |
 | 9-10 | A wrong result fails open or loses data, and nothing live has checked it | a deny route, a `verified` mapping, trust rules, deleting or moving users' files |
 
-Raise one step when the change was seen only in unit tests and touches a
-harness's behaviour; lower one step when it ran in a live harness.
+Raise one step when the change was seen only in unit tests and touches a harness's behaviour; lower one step when it ran in a live harness.
 
 ## Impact: what this change is worth if it is right
 
@@ -43,9 +37,4 @@ harness's behaviour; lower one step when it ran in a live harness.
 
 ## Writing the blurb
 
-One line each, plain prose. Risk names the failure, not the feeling
-("a recipe the runner parses differently from just would run the wrong
-command; the real justfile is parsed in the tests"), not "low risk".
-Impact names who gains ("agents in containers without just can run
-preflight"). A rating is a judgement, so a reviewer may disagree with
-it in the PR; change the number then, not the scale.
+One line each, plain prose. Risk names the failure, not the feeling ("a recipe the runner parses differently from just would run the wrong command; the real justfile is parsed in the tests"), not "low risk". Impact names who gains ("agents in containers without just can run preflight"). A rating is a judgement, so a reviewer may disagree with it in the PR; change the number then, not the scale.

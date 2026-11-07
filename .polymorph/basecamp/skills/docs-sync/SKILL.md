@@ -8,8 +8,7 @@ when_to_use: At the end of any change to behaviour, the schema, the CLI, a mappi
 
 ## Applies to
 
-The end of any change. A doc that a change made false is fixed in that
-change, not later.
+The end of any change. A doc that a change made false is fixed in that change, not later.
 
 ## Where a fact lives
 
@@ -24,13 +23,8 @@ change, not later.
 
 ## Do
 
-1. `git diff --stat`; for each changed area, open its owner above and read
-   the claims it makes.
-2. `grep -rn` the old name, flag, key, or path across `*.md`, `*.toml`,
-   `.github/`.
-3. Do not copy counts, versions, or `verified` dates into prose; name the
-   file or command instead. A copy drifts silently.
-4. `just docs` for the mechanical part (links, skills listed, every CLI
-   subcommand documented, banner).
-5. Say what you checked, and what you could not (what only a live harness
-   can show).
+1. `git diff --stat`; for each changed area, open its owner above and read the claims it makes.
+2. `grep -rn` the old name, flag, key, or path across `*.md`, `*.toml`, `.github/`.
+3. Do not copy counts, versions, or `verified` dates into prose; name the file or command instead. A copy drifts silently.
+4. `just docs` for the mechanical part (links, skills listed, every CLI subcommand documented, banner).
+5. Say what you checked, and what you could not (what only a live harness can show).
