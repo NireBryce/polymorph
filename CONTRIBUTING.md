@@ -53,7 +53,8 @@ open an issue to discuss it first.
 Run the tests before you send anything:
 
 ```sh
-PYTHONPATH=src python3 -m unittest discover -s tests
+PYTHONPATH=src python3 -m unittest discover -s tests    # or: just test
+just preflight                                          # what CI runs; needs Nix
 ```
 
 They use only the standard library, as does the code (Python 3.11+, `tomllib`, `json`,

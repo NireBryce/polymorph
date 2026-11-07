@@ -1,12 +1,14 @@
 # polymorph
 
-> **Experimental and unvetted.** polymorph is pre-alpha. Its mappings have not been verified
-> against live harnesses beyond the hook files they were written from, its adapter has run
-> only in unit tests and one hand-fed run, and nobody outside the author has reviewed the
-> code. It sits on a safety path (guard hooks), where a wrong mapping can fail open. Do not
-> rely on it to enforce anything; treat `polymorph manage check` output as "the config is
-> consistent", not "the guards work". Interfaces and the mapping schema may change without
-> notice. Reports of problems are welcome.
+> **Experimental and unvetted.** polymorph is pre-alpha. Only the `zcode` mapping has been
+> checked in a live session, and that check found ZCode ignores JSON hook answers. The
+> `claude` mapping rests on hook files and captured payloads; `gemini` is a draft written
+> from an issue. The adapter has run only in unit tests and one hand-fed run, and nobody
+> outside the author has reviewed the code. It sits on a safety path (guard hooks), where a
+> wrong mapping can fail open. Do not rely on it to enforce anything; treat
+> `polymorph manage check` output as "the config is consistent", not "the guards work".
+> Interfaces and the mapping schema may change without notice. Reports of problems are
+> welcome.
 
 ## What polymorph does
 
@@ -68,9 +70,22 @@ Implemented and covered by unit tests:
   `polymorph manage adopt` (move files into the basecamp and symlink them back),
   `polymorph env` and `polymorph equip --harness NAME`.
 
-Not implemented: skills, rules and `AGENTS.md`/`CLAUDE.md` are discovered and reported
-but not transliterated into other harnesses' formats. The plan and its slices are in
-[Loadout pivot plan](docs/plan-loadout-pivot.md).
+Only settings and hooks are translated. Skills, rules and memory files
+(`AGENTS.md`/`CLAUDE.md`) are discovered and reported, not rewritten: harnesses read them as
+plain files, so `equip` creates a symlink where a harness expects a path that does not
+exist. The plan is in [Loadout pivot plan](docs/plan-loadout-pivot.md).
+
+Run in a live harness:
+
+- **ZCode**: two probe rounds on 2026-11-04. Exit 2 blocks a call; JSON answers (deny,
+  ask) are ignored, so a guard that answers JSON deny fails open there; the post-tool event
+  fires; input rewrites are not honoured. Details:
+  [Observed: a live ZCode session](docs/observed-zcode-session.md).
+- **Claude Code**: payloads from a live session matched the mapping, but no deny has been
+  seen to stop a call, so the `claude` mapping has no `verified` field.
+- **Gemini CLI**: nothing; the `gemini` mapping is a draft.
+
+The per-mapping basis is in [Limits](docs/limits.md#what-verified-means).
 
 ## What it is not
 
@@ -81,8 +96,9 @@ but not transliterated into other harnesses' formats. The plan and its slices ar
   hook, a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
   a deny, or reads the file you wrote. See [Limits](docs/limits.md).
-- **Not verified against live harnesses.** Every shipped mapping says in its `verified`
-  field or its header comment what it rests on.
+- **Not verified for real use.** Live checks so far are listed under [Status](#status).
+  Every shipped mapping says in its `verified` field or its header comment what it rests
+  on.
 - **Not a way to run untrusted input.** Mappings are data; nothing in one is executed.
   Hook scripts must live under `.agents/hooks/`. See [Concepts](docs/concepts.md#trust-model).
 - **Not tested on harnesses with built-in memory.** A loadout is a set of initial
@@ -144,20 +160,10 @@ python -m polymorph manage generate
 python -m polymorph manage check
 ```
 
-Step 2 on a repo with a `permissions` block prints something like:
-
-```
-[zcode] would write .zcode/config.json (DRIFT)
-  unmapped setting: permissions.allow (1 entries)
-```
-
-`unmapped setting` means polymorph found a setting with no cross-harness meaning and did
-not translate it. `manage check` before step 3 fails with `generated-drift` because the
-file does not exist yet; after step 3 it passes.
-
 Commit `.zcode/config.json` and run `polymorph manage check --strict` in CI, so CI fails
-when the committed file no longer matches `.agents/settings.json`. Details:
-[Getting started](docs/getting-started.md), [CI](docs/ci.md).
+when the committed file no longer matches `.agents/settings.json`.
+[Getting started](docs/getting-started.md) walks through these steps with their output;
+[CI](docs/ci.md) covers pre-commit and GitHub Actions.
 
 ## Commands
 
@@ -197,9 +203,10 @@ Every flag is in the [CLI reference](docs/cli.md).
 
 ## Contributing
 
-Start with [CONTRIBUTING](CONTRIBUTING.md). The most useful contributions right now are
-reports of how a specific harness's hooks behave, and bug reports with a minimal
-reproduction.
+[CONTRIBUTING](CONTRIBUTING.md) covers reporting a harness, reporting a bug, adding a
+mapping and the rules for code and doc changes. The most useful contributions right now
+are reports of how a specific harness's hooks behave, and bug reports with a minimal
+reproduction. This section is the map you need before opening the code.
 
 Where the code lives:
 
@@ -234,10 +241,7 @@ just install-hooks   # optional: a pre-commit hook that runs docs and lint
 `just` lists every recipe. `just check` and `just preflight` need Nix. Without `just`,
 the unit-test command above works with Python alone.
 
-Rules for changes: mapping content is data and never executed; hook scripts resolve
-under `.agents/hooks/`; a mapping without `verified` stays without it until a live session
-backs it; a change that makes a doc stale fixes the doc in the same change. Never run
-`polymorph capture` or a real harness without reading
+Before running `polymorph capture`, `discover probe` or a real harness, read
 [Cost and responsibility](#cost-and-responsibility).
 
 ## Documentation
