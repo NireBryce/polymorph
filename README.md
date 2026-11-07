@@ -31,7 +31,7 @@ polymorph works in four steps:
 
 The differences between harnesses (config file location, tool names, event names, exit
 code meanings) are recorded in mappings and coverage tables, which are declarative TOML
-files. polymorph needs Python 3.11+ and uses only the standard library., standard library only.
+files. polymorph needs Python 3.11+ and uses only the standard library.
 
 ## Terms
 
@@ -68,14 +68,15 @@ Implemented and covered by unit tests:
   `polymorph manage adopt` (move files into the basecamp and symlink them back),
   `polymorph env` and `polymorph equip --harness NAME`.
 
-Not implemented: skills, rules and `AGENTS.md`/`CLAUDE.md` are discovered and reported but not
-transliterated into other harnesses' formats. The plan and its slices are in
+Not implemented: skills, rules and `AGENTS.md`/`CLAUDE.md` are discovered and reported
+but not transliterated into other harnesses' formats. The plan and its slices are in
 [Loadout pivot plan](docs/plan-loadout-pivot.md).
 
 ## What it is not
 
 - **Not a security boundary.** The hooks it wires up are usually string matchers over a
-  command line. They catch common mistakes. They do not stop an agent that works around them.
+  command line. They catch common mistakes. They do not stop an agent that works around
+  them.
 - **Not proof that your guards work.** `polymorph manage check` is static. It never runs a
   hook, a harness or the network. A clean `check` means the generated files match what the
   mappings say and the scripts exist. It does not mean the harness calls the hook, honours
@@ -155,7 +156,8 @@ not translate it. `manage check` before step 3 fails with `generated-drift` beca
 file does not exist yet; after step 3 it passes.
 
 Commit `.zcode/config.json` and run `polymorph manage check --strict` in CI, so CI fails
-when the committed file no longer matches `.agents/settings.json`. Details: [Getting started](docs/getting-started.md), [CI](docs/ci.md).
+when the committed file no longer matches `.agents/settings.json`. Details:
+[Getting started](docs/getting-started.md), [CI](docs/ci.md).
 
 ## Commands
 
@@ -214,7 +216,7 @@ Where the code lives:
 | `tests/` | unit tests (`fixture_repo/` is a sample agent config) |
 | `docs/` | [SPEC](docs/SPEC.md) is the contract; the rest explains it |
 
-Run the tests before sending a change (standard library only; do not add dependencies):
+Run the tests before sending a change. Do not add dependencies.
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests
