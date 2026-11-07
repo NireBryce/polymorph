@@ -79,6 +79,9 @@ gh pr create --base experimental --title "<subject>" --body-file <file>
   `Refs #N` for one it only touches. `ship-land` closes the `Closes` ones
   after the merge (step 3).
 - Say which rung you reached (unit tests, ran the CLI, live harness).
+- End the body, before the bottom disclosure, with `## Risk and impact`:
+  a risk and an impact out of 10, one line of reason each, on the scale
+  in `wiki/risk-and-impact.md`.
 
 ## 2. Wait for CI, then ask
 

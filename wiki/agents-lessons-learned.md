@@ -1,5 +1,5 @@
 # Lessons agents learned the hard way
-_Last modified: 2026-11-06_
+_Last modified: 2026-11-07_
 
 Past mistakes from building this project, one line each. **Home** is where
 the rule is enforced or stated; a lesson with no Home reaches nobody.
@@ -41,3 +41,4 @@ Skill `record-a-lesson` adds rows.
 | A markdown link added to AGENTS.md failed `just docs`: the link check reads the basecamp store copy (`git ls-files` skips the root symlink), so the link resolved from `.polymorph/basecamp/`, while GitHub renders the root symlink against the repo root. | Store files reference repo paths as backticked paths, never markdown links: no relative link resolves for both the store copy and the root symlink. | `.polymorph/basecamp/README.md` (store paths), `tests/docs.py` (`check_links`) |
 | A scripted word-boundary regex rename edited string literals too: f-string prefixes (`f"..."` became `fetch_proc"..."`), `!r` conversions, the `\n` escape, the `-d` git flag string, and the English article in a doc sentence — five kinds of damage in one pass. | A regex rename edits text, not just identifiers: grep its diff for the new name touching quotes, `!`, backslashes and dashes, and read every changed non-code line before trusting the pass. | `wiki/code-style.md` (Names: scripted renames) |
 | A rename gave a comprehension's loop variable the same name its body used for an outer variable, so the body silently compared each entry against itself and the manifest merge dropped every other harness's entries; the merge test caught it. | After renaming a comprehension's loop variable, re-read every other use of that name inside the comprehension — they rebind to the loop variable, not the outer value. A test asserting the merged output (not just the absence of errors) is what sees this. | `tests/test_review_sweep.py` (manifest-merge test), skill `review` |
+| The bug-report issue form never parsed: a plain YAML value held `: ` ("strongest evidence: unit tests"), so GitHub could not offer the form, and with blank issues disabled there was no bug form at all. `tests/docs.py`'s frontmatter reader split on the first `: ` and passed the same shape in skills. | A YAML value containing `: ` is quoted; a check on YAML reads values the way a YAML parser does, not by splitting the line. | `tests/docs.py` (`check_yaml`), `tests/test_docs.py`, skill `new-skill` |

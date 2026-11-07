@@ -8,6 +8,11 @@ changed and, from the first release that has users, how it breaks them.
 Changes since 0.0.1.dev0, including fixes from a review of it. Several break existing
 use; each entry that does says what breaks.
 
+- **The bug-report issue form parses again:** an unquoted description held `: `, so
+  GitHub could not offer the form (blank issues are disabled). `just docs` now flags an
+  unquoted YAML value holding `: ` in `.github/` files and skill frontmatter. The form
+  gains an optional risk-and-impact field, and PR bodies and change-proposing issues end
+  with a risk and an impact out of 10 (`wiki/risk-and-impact.md`).
 - **`ship-land` closes the issues a PR resolves (issue 99):** after a confirmed merge,
   `scripts/ship_land.py` closes each issue the PR body names with `Closes`, `Fixes` or
   `Resolves #N` (same repository only; an issue already closed is left alone) and comments

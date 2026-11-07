@@ -10,7 +10,7 @@ test:
 check:
     nix flake check
 
-# Mechanical doc checks: skills listed, links resolve, every CLI subcommand documented, banner, no home paths
+# Mechanical doc checks: skills listed, links resolve, every CLI subcommand documented, banner, no home paths, YAML values YAML can parse
 docs:
     python3 tests/docs.py
 

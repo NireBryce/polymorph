@@ -73,7 +73,7 @@ loadout manager (its role), onboarding run, gap report — is fixed in
 just                 # list recipes
 just test            # the unit tests: PYTHONPATH=src python3 -m unittest discover -s tests
 just check           # nix flake check: builds the package and runs the tests in the sandbox
-just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths
+just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths, YAML values YAML can parse
 just lint            # byte-compile, stdlib-only imports, no committed build output
 just self-check      # dogfood: shipped mappings validate, fixtures pass, this repo's own agent layout has no coverage gaps
 just preflight       # test + docs + lint + check + self-check: what CI runs
@@ -112,7 +112,7 @@ exit status separately, or use `set -o pipefail`.
 | `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`); `self_check.py`: `just self-check`; `run_recipe.py`: runs justfile recipes where `just` is not installed (refuses syntax beyond the subset the justfile uses, so recipe logic lives here) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
-| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, and `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written) |
+| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, `risk-and-impact.md` (the 1-10 scale every PR body and change-proposing issue ends with), and `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written) |
 | `.github/` | CI (`check.yml` runs `just preflight`), PR and issue templates |
 | `.githooks/` | opt-in pre-commit (`just install-hooks`) |
 
