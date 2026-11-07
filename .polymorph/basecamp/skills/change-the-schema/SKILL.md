@@ -16,7 +16,7 @@ live in several files and drift apart silently.
 
 | Change | Files |
 |---|---|
-| a mapping key or capability | `src/polymorph/mapping.py` (parse), `validate.py` (unknown keys are errors, so the key must be added), `generate.py`/`adapter.py` (use it), `docs/SPEC.md` "Mapping file", every `src/polymorph/mappings/*.toml` that needs it |
+| a mapping key or capability | `src/polymorph/mapping.py` (`parse_mapping`), `validate.py` (unknown keys are errors, so the key must be added), `generate.py`/`adapter.py` (use it), `docs/SPEC.md` "Mapping file", every `src/polymorph/mappings/*.toml` that needs it |
 | a canonical event or class | `canon.py`, `reader_claude.py`, `mapping.py` events/tools, SPEC "Canonical config", mappings |
 | an extractor or template | `extractors.py` / `generate.py` by name (never from mapping text), `validate.py`'s allowed names, SPEC |
 | a `GUARD_*` variable | `adapter.py`, SPEC "Wire protocol", and the hooks that read it (outside this repo: say so in the PR) |
