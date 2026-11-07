@@ -44,14 +44,14 @@ self-check:
 
     env = dict(os.environ)
     env["PYTHONPATH"] = "src"
-    r = subprocess.run([sys.executable, "-m", "polymorph", "inventory", "--repo", ".", "--json"],
-                       capture_output=True, text=True, env=env)
-    if r.returncode != 0:
-        print(r.stderr, file=sys.stderr)
-        sys.exit(r.returncode)
-    gaps = json.loads(r.stdout)["gaps"]
-    for g in gaps:
-        print(f"gap: {g['harness']} {g['kind']} {g['path']} ({g['reason']})", file=sys.stderr)
+    inventory_proc = subprocess.run([sys.executable, "-m", "polymorph", "inventory", "--repo", ".", "--json"],
+                                    capture_output=True, text=True, env=env)
+    if inventory_proc.returncode != 0:
+        print(inventory_proc.stderr, file=sys.stderr)
+        sys.exit(inventory_proc.returncode)
+    gaps = json.loads(inventory_proc.stdout)["gaps"]
+    for gap in gaps:
+        print(f"gap: {gap['harness']} {gap['kind']} {gap['path']} ({gap['reason']})", file=sys.stderr)
     if gaps:
         print(f"self-check: {len(gaps)} gap(s) in this repo's own agent layout; link or "
               "restructure them, or change the expectation here deliberately", file=sys.stderr)
@@ -70,6 +70,6 @@ install-hooks:
 ci-wait *args:
     python3 scripts/ci_wait.py {{args}}
 
-# Merge a green PR pinned to its head, sync main, delete the branch and its worktree (closes no issues)
+# Merge a green PR pinned to its head, fast-forward its base branch, delete the branch and its worktree (closes no issues)
 ship-land pr *args:
     python3 scripts/ship_land.py {{pr}} {{args}}

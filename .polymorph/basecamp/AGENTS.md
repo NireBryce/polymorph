@@ -80,7 +80,7 @@ just preflight       # test + docs + lint + check + self-check: what CI runs
 just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
 just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)
-just ship-land PR    # merge pinned to the head, sync main --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
+just ship-land PR    # merge pinned to the head, sync the base branch --ff-only, delete branch and worktree; refuses unless ci-wait would pass; closes no issues
 ```
 
 `git add` a new file before `just check` or `just docs`: flakes and the docs

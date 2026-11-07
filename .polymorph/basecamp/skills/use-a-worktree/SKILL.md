@@ -24,13 +24,23 @@ shares `.git`.
 
 ```sh
 git -C <repo> fetch origin
-git -C <repo> worktree add <scratch>/wt-<thing> -b feat/<thing> origin/main
+git -C <repo> worktree add <scratch>/wt-<thing> -b feat/<thing> origin/experimental
 ```
+
+Branch from `origin/experimental`, where work lands by default (skill
+`ship`); the promotion to `main` starts there too (skill `promote-to-main`).
+Branch from `origin/main` only when the user asks for a change based on
+`main`.
 
 Name the branch you will ship. Check `git status -sb` and `pwd` before
 anything that changes state: a tool that resets the working directory puts
 you back in the shared checkout. Prefer `git -C <path>` and absolute paths.
 `git add` a new file before `nix flake check`, or the flake does not see it.
+
+A worktree does not isolate a harness's workspace config: one writer at a
+time for its hook wiring (`.zcode/config.json`, say). A running session
+keeps the wiring it started with, so another session's write lands on disk
+unseen; diff the file before trusting a run's setup.
 
 ## Afterwards
 
