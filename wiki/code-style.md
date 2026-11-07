@@ -48,6 +48,10 @@ Applies to docs, comments, messages, commit messages, and PR bodies.
 - **A list of three or more takes the Oxford comma**: "share it, attach it
   to an issue, or commit it". Without it the last two items can read as one
   pair, and a reader skimming a rule has to stop and parse it.
+- **Markdown stays hard-wrapped**, at the width of the file around it.
+  Soft wraps (one paragraph per line) were considered and declined
+  (2026-11-07): a one-word edit would show the whole paragraph as one
+  changed line, and the docs read well in a terminal without line wrapping.
 
 ## Scripts and templates
 
