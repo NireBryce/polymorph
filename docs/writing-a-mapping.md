@@ -76,9 +76,13 @@ plain identifiers (letters, digits, `_`, `.`, `*`, `-`).
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+stop = "Stop"
+user_prompt_submit = "UserPromptSubmit"
 ```
 
-`[events]` maps the three canonical events to native event names. Leave out one the
+`[events]` maps the five canonical events to native event names. These five are where the
+list stands today; more are added as a harness's behaviour is observed (see
+[SPEC](SPEC.md#canonical-config-canonpy)). Leave out one the
 harness lacks; a hook on it is an undecided `no-event` item (`skip` or `substitute:<native
 event>`), never written on a guess. The same goes for a class whose payload fields
 `[payload_in]` does not map (`missing-field`).

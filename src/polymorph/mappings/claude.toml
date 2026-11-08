@@ -25,6 +25,8 @@ read = ["Read", "Grep", "Glob"]
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+stop = "Stop"
+user_prompt_submit = "UserPromptSubmit"
 
 [capabilities]
 ask = true

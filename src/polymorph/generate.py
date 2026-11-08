@@ -8,7 +8,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .canon import Canon, Hook
+from .canon import NON_TOOL_EVENTS, Canon, Hook
 from .decisions import Applied, Decision, DecisionError, Mismatch, load_decisions, options_for
 from .mapping import Mapping, load_mapping
 from .reader_claude import read_claude
@@ -157,7 +157,7 @@ def _apply(resolution: Resolution, mismatch: Mismatch, decision: Decision, weake
 def _extra_fields_note(canon: Canon, mapping: Mapping) -> list[str]:
     if mapping.delivery == "direct":
         return []
-    tool_hooks = [hook for hook in canon.hooks if hook.event != "session_start"]
+    tool_hooks = [hook for hook in canon.hooks if hook.event not in NON_TOOL_EVENTS]
     classes = {tool_class for hook in tool_hooks for tool_class in (hook.classes or CLASS_FIELDS)}
     used = (set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
             | {field for hook in canon.hooks for field in hook.reads})

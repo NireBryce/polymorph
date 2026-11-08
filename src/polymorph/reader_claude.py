@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dataclasses import replace
 
-from .canon import Canon, Hook
+from .canon import NON_TOOL_EVENTS, Canon, Hook
 from .hook_reads import HOOK_READS_FILE, HookReadsError, load_hook_reads
 
 HOOKS_DIR = ".agents/hooks"
@@ -20,6 +20,8 @@ EVENT_MAP = {
     "SessionStart": "session_start",
     "PreToolUse": "pre_tool",
     "PostToolUse": "post_tool",
+    "Stop": "stop",
+    "UserPromptSubmit": "user_prompt_submit",
 }
 
 _CLASS_RULES = (
@@ -117,7 +119,7 @@ def read_claude(repo: str | Path) -> Canon:
                 unmapped.append(f"hooks.{event}")
                 continue
             for group in groups:
-                classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
+                classes = () if canon_event in NON_TOOL_EVENTS else classify_matcher(group.get("matcher"))
                 for hook_entry in group.get("hooks", []):
                     if hook_entry.get("type", "command") != "command":
                         unmapped.append(f"hooks.{event}[type={hook_entry.get('type')}]")

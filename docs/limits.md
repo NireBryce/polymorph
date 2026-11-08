@@ -80,7 +80,7 @@ covered.
   one as a fault, but it re-reads the file at run time: `loadout-drift` shows a mapping
   that changed after `equip`.
 - `permissions` allow/deny rules, `attribution`, other top-level settings, and hook events
-  other than SessionStart, PreToolUse, and PostToolUse (such as `Stop`) are reported as
+  other than SessionStart, PreToolUse, PostToolUse, Stop, and UserPromptSubmit (such as `PermissionRequest` or `Notification`) are reported as
   unmapped and not carried over. Another harness will not inherit your deny list.
 - `mcp` and `other` tool classes: no shipped mapping names tools for them. A hook scoped
   only to them is skipped for those targets and reported as a gap.

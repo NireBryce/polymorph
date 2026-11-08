@@ -21,7 +21,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 ```python
 @dataclass(frozen=True)
 class Hook:
-    event: str          # "session_start" | "pre_tool" | "post_tool"
+    event: str          # "session_start" | "pre_tool" | "post_tool" | "stop" | "user_prompt_submit"
     classes: tuple[str, ...]   # subset of shell, edit, read, mcp, other; () = all (session_start)
     script: str         # path relative to repo root, must resolve under hooks_dir
     timeout: int | None
@@ -38,6 +38,17 @@ are reported in `unmapped`, never dropped silently. A script outside `.agents/ho
 (after `realpath`) is refused with an error. The resolved script path is embedded in
 generated command lines, so it may contain only plain path characters; quotes, whitespace,
 `$`, backticks, or other shell metacharacters are refused with an error.
+
+Events. The canonical events are `session_start`, `pre_tool`, `post_tool`, `stop`, and
+`user_prompt_submit` (Claude's `SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`,
+`UserPromptSubmit`). The last three have no tool class, so a hook on them is always for
+all and a matcher on them is ignored. This list is where it stands, not a limit: further
+events, such as `PermissionRequest` (seen once under ZCode, with no known trigger beyond
+question prompts), are added when a harness's behaviour for them is observed, and until
+then a Claude settings entry for one is reported as `unmapped`. Adding an event is a
+schema change; see skill `change-the-schema`. A harness that has an event but does not
+honour its answer (ZCode's `Stop` and `UserPromptSubmit`) still maps it: the mapping
+header says what is unhonoured, and the hook runs for its side effects only.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -61,6 +72,8 @@ read  = ["Read", "Grep", "Glob"]
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+stop = "Stop"
+user_prompt_submit = "UserPromptSubmit"
 
 [capabilities]
 ask = false             # exported as GUARD_ASK_ENFORCED=0/1
@@ -292,7 +305,7 @@ note = "optional free text"
 
 Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, or
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, `post_tool`, `stop`, `user_prompt_submit`, or
 `post_tool`), a colon, and the kind. One decision covers every hook of that script on that
 event that has that mismatch in that target. (Schema 1 ids had no event: one script
 registered under several events produced the same id for each, and one decision answered

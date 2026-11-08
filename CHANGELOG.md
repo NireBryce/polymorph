@@ -19,6 +19,16 @@ use; each entry that does says what breaks.
   to report. New `check` warnings: `fail-open-enabled`, and `direct-json-answers-ignored`
   (every `direct` mapping with `json_answers = false`, today `zcode`), so `check --strict`
   now fails on a `zcode` target.
+- **Two more canonical events, `stop` and `user_prompt_submit`:** Claude's `Stop` and
+  `UserPromptSubmit` hooks used to be reported as `unmapped`. They now map to the
+  `claude` and `zcode` mappings (`gemini` has no such event: its hooks on them are
+  `no-event` questions) and are written into those targets' configs. Breaks: a repo
+  with such hooks and `zcode` enabled gets them written on the next `manage generate`
+  (`check` shows `generated-drift` until then), and a repo-local mapping without the new
+  `[events]` entries gets a `no-event` question per hook. ZCode dispatches both events but
+  honours no answer from either (observed 2026-11-04), so those hooks run for side
+  effects only. More events may follow; the list in SPEC "Canonical config" is where it
+  stands today.
 - **Hooks can declare the payload fields they read:** `.polymorph/basecamp/hook-reads.toml`
   (new, optional). polymorph does not read hook scripts and modelled a hook's needs by tool
   class only, so a guard reading `tool_response` or `cwd` went unnoticed on a mapping that

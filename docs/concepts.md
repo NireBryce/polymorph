@@ -25,7 +25,7 @@ A hook has:
 
 | Field | Meaning |
 |---|---|
-| `event` | `session_start`, `pre_tool`, or `post_tool`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`. |
+| `event` | `session_start`, `pre_tool`, `post_tool`, `stop`, or `user_prompt_submit`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`. |
 | `classes` | Which tools it applies to, from `shell`, `edit`, `read`, `mcp`, `other`. Empty means all tools. |
 | `script` | Path of the hook script relative to the repo root, always under `.agents/hooks/`. |
 | `timeout` | Seconds, if the settings give one. |
@@ -40,11 +40,11 @@ Tool classes come from Claude's `matcher` regex, split on `|`:
 | starts with `mcp__` | `mcp` |
 | anything else | `other` |
 
-A missing, empty, or `*` matcher means all tools. `session_start` hooks are always all.
+A missing, empty, or `*` matcher means all tools. `session_start`, `stop`, and `user_prompt_submit` hooks are always all (a matcher on them is ignored).
 
 Everything the reader cannot translate is listed as **unmapped** and reported by `generate`
 and `check`: any top-level key other than `hooks` (`attribution`, `model`, ...), each
-`permissions.*` sub-key, hook events other than the three above (`Stop`, ...), and hooks
+`permissions.*` sub-key, hook events other than the five above (`Notification`, `PermissionRequest`, ...), and hooks
 whose `type` is not `command`. Nothing is dropped silently. In particular, **Claude's
 `permissions` allow/deny rules are never carried to other harnesses.**
 
