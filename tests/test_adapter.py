@@ -197,7 +197,7 @@ class RunAdapterTests(unittest.TestCase):
     def run_it(self, script, stdin):
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "fake", "--repo", str(self.repo), "--", script],
+            ["--harness", "fake", "--fail-open", "--repo", str(self.repo), "--", script],
             stdin=io.StringIO(stdin), stdout=out, stderr=err)
         return code, out.getvalue(), err.getvalue()
 
@@ -260,7 +260,7 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
     def test_missing_mapping_is_not_checked(self):
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "nomap", "--repo", str(self.repo), "--", ".agents/hooks/lazy.sh"],
+            ["--harness", "nomap", "--fail-open", "--repo", str(self.repo), "--", ".agents/hooks/lazy.sh"],
             stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
         self.assertNotEqual(code, 2)
         self.assertIn("NOT checked", out.getvalue() + err.getvalue())
@@ -271,7 +271,7 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
         (other / "fake.toml").write_text(TOML)
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "fake", "--mappings", str(other), "--repo", str(self.repo),
+            ["--harness", "fake", "--fail-open", "--mappings", str(other), "--repo", str(self.repo),
              "--", ".agents/hooks/lazy.sh"],
             stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
         self.assertNotEqual(code, 2)
@@ -282,7 +282,7 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
         for value in ("0", "-1", "inf", "nan"):
             out, err = io.StringIO(), io.StringIO()
             code = adapter.run_adapter(
-                ["--harness", "fake", "--repo", str(self.repo), "--timeout", value,
+                ["--harness", "fake", "--fail-open", "--repo", str(self.repo), "--timeout", value,
                  "--", ".agents/hooks/lazy.sh"],
                 stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
             joined = out.getvalue() + err.getvalue()
@@ -295,7 +295,7 @@ print(json.dumps({{"hookSpecificOutput": {{"permissionDecision": "deny",
         script = self.hook("boom.sh", "#!/bin/sh\nexit 1\n")
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "plain", "--repo", str(self.repo), "--", script],
+            ["--harness", "plain", "--fail-open", "--repo", str(self.repo), "--", script],
             stdin=io.StringIO(self.NATIVE), stdout=out, stderr=err)
         self.assertEqual(code, 1, (out.getvalue(), err.getvalue()))
         self.assertEqual(out.getvalue(), "")
@@ -347,7 +347,7 @@ class ReviewFixTests(unittest.TestCase):
     def run_adapter(self, extra, payload="{}"):
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "fake", "--repo", str(self.repo), *extra, "--", ".agents/hooks/slow.sh"],
+            ["--harness", "fake", "--fail-open", "--repo", str(self.repo), *extra, "--", ".agents/hooks/slow.sh"],
             stdin=io.StringIO(payload), stdout=out, stderr=err)
         return code, out.getvalue(), err.getvalue()
 
@@ -362,7 +362,7 @@ class ReviewFixTests(unittest.TestCase):
             'schema = 1\nname = "broken"\n[capabilities]\nask = "false"\n')
         out, err = io.StringIO(), io.StringIO()
         code = adapter.run_adapter(
-            ["--harness", "broken", "--repo", str(self.repo), "--", ".agents/hooks/slow.sh"],
+            ["--harness", "broken", "--fail-open", "--repo", str(self.repo), "--", ".agents/hooks/slow.sh"],
             stdin=io.StringIO("{}"), stdout=out, stderr=err)
         joined = out.getvalue() + err.getvalue()
         self.assertNotEqual(code, 2, joined)
@@ -374,6 +374,65 @@ class ReviewFixTests(unittest.TestCase):
         joined = out + err
         self.assertNotEqual(code, 2, joined)
         self.assertIn("NOT checked", joined)
+
+
+class FailClosedTests(unittest.TestCase):
+    """A fault blocks the call by default; --fail-open is the opt-in other way."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.repo = Path(self.tmp.name).resolve()
+        (self.repo / ".agents" / "hooks").mkdir(parents=True)
+        (self.repo / ".polymorph" / "basecamp" / "mappings").mkdir(parents=True)
+        (self.repo / ".polymorph" / "basecamp" / "mappings" / "fake.toml").write_text(TOML)
+        crash = self.repo / ".agents" / "hooks" / "crash.sh"
+        crash.write_text("#!/bin/sh\nexit 7\n")
+        crash.chmod(0o755)
+
+    def run_it(self, *flags, harness="fake"):
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(
+            ["--harness", harness, "--repo", str(self.repo), *flags, "--", ".agents/hooks/crash.sh"],
+            stdin=io.StringIO("{}"), stdout=out, stderr=err)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_crashing_hook_blocks_through_the_mappings_deny_route(self):
+        code, out, err = self.run_it()
+        self.assertEqual(code, 2, out + err)   # fake.toml: deny = exit 2 + stderr {reason}
+        self.assertIn("BLOCKED", err)
+        self.assertIn("hook exited 7", err)
+        self.assertNotIn("NOT checked", out + err)
+
+    def test_fail_open_lets_the_call_run_and_says_so(self):
+        code, out, err = self.run_it("--fail-open")
+        self.assertNotEqual(code, 2)
+        self.assertIn("NOT checked", out + err)
+
+    def test_missing_mapping_blocks_with_exit_2(self):
+        code, out, err = self.run_it(harness="nomap")
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("BLOCKED", err)
+
+    def test_usage_error_blocks_and_still_honours_fail_open(self):
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(["--harness", "fake", "--", "a.sh", "b.sh"],
+                                   stdin=io.StringIO("{}"), stdout=out, stderr=err)
+        self.assertEqual(code, 2, out.getvalue() + err.getvalue())
+        out, err = io.StringIO(), io.StringIO()
+        code = adapter.run_adapter(["--harness", "fake", "--fail-open", "--", "a.sh", "b.sh"],
+                                   stdin=io.StringIO("{}"), stdout=out, stderr=err)
+        self.assertNotEqual(code, 2)
+        self.assertIn("NOT checked", out.getvalue() + err.getvalue())
+
+    def test_block_uses_json_when_the_mapping_has_no_deny_route(self):
+        mapping = {**MAPPING, "payload_out": {}}
+        result = adapter.blocked_on_fault(mapping, "boom")
+        self.assertEqual(result["exit"], 0)
+        decision = json.loads(result["stdout"])["hookSpecificOutput"]["permissionDecision"]
+        self.assertEqual(decision, "deny")
+        no_route = {**mapping, "capabilities": {**MAPPING["capabilities"], "json_answers": False}}
+        self.assertEqual(adapter.blocked_on_fault(no_route, "boom")["exit"], 2)
 
 
 if __name__ == "__main__":

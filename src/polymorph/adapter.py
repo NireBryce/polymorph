@@ -1,7 +1,9 @@
 """Runtime adapter: native hook payload -> canonical (Claude) payload -> real hook -> native answer.
 
-Faults in the adapter or its inputs never become a deny: they produce a visible
-"NOT checked" message and a non-blocking exit.
+A fault in the adapter or its inputs (bad payload, crashing hook, timeout, unreadable
+mapping) fails closed by default: the call is blocked with a visible reason, rendered
+through the mapping's own deny route. `--fail-open` is the opt-in other way: the call
+proceeds with a visible "NOT checked" message. Either way the fault is never silent.
 """
 from __future__ import annotations
 
@@ -136,8 +138,26 @@ def translate_out(mapping: dict, answer: dict | None) -> dict:
     return {"stdout": "", "exit": 0, "stderr": text}
 
 
+def blocked_on_fault(mapping: dict | None, why: str) -> dict:
+    """The default result for an adapter fault: block the call, with the reason visible.
+
+    The block is the mapping's own deny route, so it reaches the harness in the form that
+    harness honours (zcode: exit 2 and stderr, since it ignores JSON). Without a usable
+    mapping, or one that cannot express a deny, the canonical block is exit 2 and stderr.
+    """
+    msg = (f"polymorph adapter: this tool call was BLOCKED because the guard hook could not run ({why}). "
+           "Fix the guard, or set fail_open for this harness in .polymorph/basecamp/config.toml.")
+    if mapping:
+        try:
+            return translate_out(mapping, {"hookSpecificOutput": {"permissionDecision": "deny",
+                                                                  "permissionDecisionReason": msg}})
+        except AdapterError:
+            pass
+    return {"stdout": "", "exit": 2, "stderr": msg}
+
+
 def not_checked(mapping: dict | None, why: str) -> dict:
-    """Visible, non-blocking result for an adapter fault. Never a deny."""
+    """The --fail-open result for an adapter fault: visible, non-blocking. Never a deny."""
     msg = f"polymorph adapter: this tool call was NOT checked by the guard hook ({why})."
     caps = (mapping or {}).get("capabilities") or {}
     stdout = json.dumps({"systemMessage": msg}) if caps.get("json_answers") else ""
@@ -237,15 +257,21 @@ def run_adapter(argv: list[str] | None = None, stdin=None, stdout=None, stderr=N
     parser.add_argument("--repo", type=Path)
     parser.add_argument("--timeout", type=float, default=HOOK_TIMEOUT,
                         help="seconds before the hook is killed (a killed hook is NOT checked, never a deny)")
+    parser.add_argument("--fail-open", action="store_true",
+                        help="on an adapter or hook fault, let the call run with a NOT-checked message "
+                             "(default: block it)")
     parser.add_argument("script", help="hook script (after --)")
     stdin, stdout, stderr = stdin or sys.stdin, stdout or sys.stdout, stderr or sys.stderr
     mapping = None
+    # read before parsing: a usage error must still honour the flag the command line carried
+    fail_open = "--fail-open" in (argv or [])[:(argv or []).index("--") if "--" in (argv or []) else None]
+    on_fault = not_checked if fail_open else blocked_on_fault
     try:
         try:
             args = parser.parse_args(argv)
         except SystemExit as e:
-            # a usage error must land in the same visible NOT-checked path as every other
-            # fault: on a harness that reads exit 2 as deny, argparse's exit 2 would deny
+            # a usage error must land in the same fault path as every other fault, not in
+            # argparse's own exit 2
             raise AdapterError(f"usage error ({e.code})") from None
         if not (args.timeout > 0) or args.timeout in (float("inf"), float("nan")):
             raise AdapterError("--timeout must be finite and above 0")
@@ -253,9 +279,9 @@ def run_adapter(argv: list[str] | None = None, stdin=None, stdout=None, stderr=N
         mapping = load_mapping(repo, args.harness, args.mappings, args.trust_dir)
         result = adapt(mapping, repo, args.script, stdin.read(), timeout=args.timeout)
     except AdapterError as e:
-        result = not_checked(mapping, str(e))
-    except Exception as e:  # any fault: still visible, still never a deny
-        result = not_checked(mapping, f"internal error: {type(e).__name__}: {e}")
+        result = on_fault(mapping, str(e))
+    except Exception as e:  # any fault: still visible
+        result = on_fault(mapping, f"internal error: {type(e).__name__}: {e}")
     if result["stdout"]:
         stdout.write(result["stdout"] + ("" if result["stdout"].endswith("\n") else "\n"))
     if result["stderr"]:

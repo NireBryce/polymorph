@@ -86,6 +86,8 @@ grouped by target, then a summary line.
 | `mapping-unverified` | warning | Mapping has no `verified` field. |
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
 | `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
+| `direct-json-answers-ignored` | warning | A `direct` mapping sets `json_answers = false`: the harness ignores a hook's JSON deny or ask, so a guard answering JSON fails open there; the script must exit 2 to block. |
+| `fail-open-enabled` | warning | A target is listed under `fail_open` in `config.toml`: a guard fault lets the call proceed. |
 | `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |
 | `hook-missing` / `hook-not-executable` | error | The script does not exist / lacks the execute bit. |
@@ -269,7 +271,7 @@ git yourself — polymorph never edits `.gitignore`.
 ## `adapter`
 
 ```
-polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] [--timeout S] -- SCRIPT
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] [--timeout S] [--fail-open] -- SCRIPT
 ```
 
 The runtime shim. Generated configs call it; you rarely do, except to test by hand.
@@ -277,11 +279,14 @@ Reads the harness's JSON payload on stdin, runs SCRIPT (which must be a file und
 repo's `.agents/hooks/`; the repo is the nearest ancestor of the working directory with an
 `.agents/` folder), and writes the harness-shaped answer to stdout/stderr and exits with
 its exit code. `--timeout S` kills the hook after S seconds (default 60); a killed or mis-used adapter
-lands in the same NOT-checked path as every other fault -- a usage error, an invalid
-mapping, or a timeout is never a deny and never exit 2. The `--` is required. Details and failure behaviour:
-[Concepts](concepts.md#delivery-direct-and-adapter). Any fault prints
-`polymorph adapter: this tool call was NOT checked by the guard hook (...)` and does not
-deny.
+lands in the same fault path as every other fault -- a usage error, an invalid mapping, or
+a timeout. By default a fault blocks the call (`polymorph adapter: this tool call was BLOCKED
+because the guard hook could not run (...)`, through the mapping's deny route, else exit 2).
+`--fail-open` lets the call run instead and prints
+`polymorph adapter: this tool call was NOT checked by the guard hook (...)`; `generate`
+writes it into the command for targets listed under `fail_open` in `config.toml`. The `--`
+is required. Details and failure behaviour:
+[Concepts](concepts.md#delivery-direct-and-adapter).
 
 ## `manage validate`
 

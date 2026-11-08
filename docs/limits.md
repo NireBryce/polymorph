@@ -63,16 +63,22 @@ covered.
 
 - The adapter has run in unit tests and a hand-fed run, never as the command of a real
   harness. Discovery has not been run against a live harness by this repository's tests.
-- **The adapter fails open, visibly.** A malformed payload, a hook that crashes or prints
-  non-JSON, a 60 second timeout, or an internal fault lets the tool call proceed and prints
-  `polymorph adapter: this tool call was NOT checked by the guard hook (...)`. That is
-  deliberate (never invent a deny), but it means a broken or missing polymorph install
-  silently removes the guard from the model's point of view unless the harness surfaces the
-  message. For an adapter-delivered hook, a failing `python -m polymorph` (not on `PATH`,
-  not importable) is the harness's problem to report, and the harness may treat it as
-  non-blocking.
-- The adapter reads the mapping as raw TOML without validating it. `check` and `validate`
-  do; run them.
+- **The adapter fails closed by default, and not for every fault.** A malformed payload, a
+  hook that crashes or prints non-JSON, a 60 second timeout, or an internal fault blocks
+  the call with `polymorph adapter: this tool call was BLOCKED because the guard hook could
+  not run (...)`. Opting into `--fail-open` (or `fail_open` in `config.toml`) turns that
+  into a visible `NOT checked` message and lets the call run. Neither covers a fault before
+  the adapter starts: for an adapter-delivered hook, a failing `python -m polymorph` (not
+  on `PATH`, not importable) is the harness's problem to report, and the harness may treat
+  it as non-blocking, so a missing install can still remove the guard. Fail-closed also
+  rests on the harness honouring the block (exit 2 or a JSON deny), which only a live test
+  shows; see `json_answers` below.
+- **`direct` delivery has no fault handling at all.** The hook runs bare. On a harness with
+  `json_answers = false` (ZCode) a guard that denies with JSON runs the call anyway;
+  `check` reports `direct-json-answers-ignored`. Only exit 2 blocks there.
+- The adapter validates the mapping it loads (`validate_mapping`) and treats an invalid
+  one as a fault, but it re-reads the file at run time: `loadout-drift` shows a mapping
+  that changed after `equip`.
 - `permissions` allow/deny rules, `attribution`, other top-level settings, and hook events
   other than SessionStart, PreToolUse, and PostToolUse (such as `Stop`) are reported as
   unmapped and not carried over. Another harness will not inherit your deny list.
@@ -96,7 +102,7 @@ combination may cause adverse effects.
 
 **Not built**
 
-- `.polymorph/basecamp/decisions/` and `generated/`, code-generating targets, plugin
+- `.polymorph/basecamp/generated/`, code-generating targets, plugin
   packaging, and capability or timing notes beyond what payloads show.
 - Only a Claude Code reader exists. Canonical config comes from `.agents/settings.json`.
 

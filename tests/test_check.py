@@ -51,9 +51,22 @@ class CheckTest(unittest.TestCase):
         # the shipped zcode mapping is delivery = "direct" with ask = false:
         # nothing sets GUARD_ASK_ENFORCED for a bare hook, and check says so (#34)
         self.assertIn("direct-ask-unenforceable", out)
-        self.assertIn("0 error(s), 1 warning(s)", out)
+        self.assertIn("0 error(s), 2 warning(s)", out)
+        self.assertIn("direct-json-answers-ignored", out)
         rc, out = run("--repo", str(self.repo), "--strict")
         self.assertEqual(rc, 1, out)
+
+    def test_fail_open_target_is_a_warning(self):
+        (self.repo / ".polymorph/basecamp/config.toml").write_text('enabled = ["zcode"]\nfail_open = ["zcode"]\n')
+        findings = [f for f in check.run_check(self.repo) if f.code == "fail-open-enabled"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, "warning")
+
+    def test_direct_mapping_that_ignores_json_answers_is_a_warning(self):
+        # zcode: delivery = "direct", json_answers = false (live: a JSON deny ran the call)
+        findings = [f for f in check.run_check(self.repo) if f.code == "direct-json-answers-ignored"]
+        self.assertEqual([f.target for f in findings], ["zcode"])
+        self.assertIn("exit 2", findings[0].message)
 
     def test_no_targets(self):
         (self.repo / ".polymorph/basecamp/config.toml").unlink()

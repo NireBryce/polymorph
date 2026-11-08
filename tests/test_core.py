@@ -437,5 +437,30 @@ class HookCommandTimeoutTests(unittest.TestCase):
         self.assertNotIn("--timeout", generate.hook_command(direct, "s.sh", 300))
 
 
+class FailOpenConfigTests(unittest.TestCase):
+    def test_fail_open_flag_is_in_the_adapter_command_only_when_asked(self):
+        from polymorph import generate, mapping as mapping_mod
+
+        gemini = mapping_mod.load_mapping("gemini")
+        self.assertNotIn("--fail-open", generate.hook_command(gemini, "s.sh"))
+        self.assertIn(" --fail-open ", generate.hook_command(gemini, "s.sh", 30, fail_open=True))
+        zcode = mapping_mod.load_mapping("zcode")   # direct: no adapter runs, nothing to flag
+        self.assertNotIn("--fail-open", generate.hook_command(zcode, "s.sh", fail_open=True))
+
+    def test_config_reads_fail_open_and_still_rejects_other_keys(self):
+        from polymorph import generate
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / ".polymorph/basecamp").mkdir(parents=True)
+            config = repo / ".polymorph/basecamp/config.toml"
+            config.write_text('enabled = ["gemini"]\nfail_open = ["gemini"]\n')
+            self.assertEqual(generate.fail_open_targets(repo), ["gemini"])
+            self.assertEqual(generate.enabled_targets(repo), ["gemini"])
+            config.write_text('enabled = ["gemini"]\nfail-open = ["gemini"]\n')
+            with self.assertRaises(ValueError):
+                generate.fail_open_targets(repo)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -104,7 +104,7 @@ polymorph equip [--repo REPO] --harness HARNESS [--dry-run] [--no-links] [--giti
 Run a hook script through a harness adapter.
 
 ```
-polymorph adapter --harness HARNESS [--mappings MAPPINGS] [--trust-dir TRUST_DIR ...] [--repo REPO] [--timeout TIMEOUT] script...
+polymorph adapter --harness HARNESS [--mappings MAPPINGS] [--trust-dir TRUST_DIR ...] [--repo REPO] [--timeout TIMEOUT] [--fail-open] script...
 ```
 
 | Argument | Meaning |
@@ -115,6 +115,7 @@ polymorph adapter --harness HARNESS [--mappings MAPPINGS] [--trust-dir TRUST_DIR
 | `--trust-dir TRUST_DIR` | additional directory mappings may be loaded from; repeatable |
 | `--repo REPO` | repository root (default: the nearest directory above the working directory with .agents/) |
 | `--timeout TIMEOUT` | seconds before the hook is killed (default 60); a killed hook is NOT checked, never a deny |
+| `--fail-open` | on an adapter or hook fault, let the call run with a NOT-checked message (default: block it) |
 
 ## polymorph inventory
 

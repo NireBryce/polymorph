@@ -68,8 +68,8 @@ class CliAdapterTests(TmpTest):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_usage_error_is_not_checked_never_exit_2(self):
-        for args in (["adapter", "--harness", "claude", "--bogus", "--", "x"],
-                     ["adapter", "--", ".agents/hooks/ok.sh"]):
+        for args in (["adapter", "--fail-open", "--harness", "claude", "--bogus", "--", "x"],
+                     ["adapter", "--fail-open", "--", ".agents/hooks/ok.sh"]):
             r = cli(args, self.repo, self.payload)
             self.assertNotEqual(r.returncode, 2, (args, r.stderr))
             self.assertIn("NOT checked", r.stderr, args)

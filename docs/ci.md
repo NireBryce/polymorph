@@ -27,7 +27,8 @@ change your CI result. polymorph is experimental and its interfaces may change.
 - `polymorph manage check --strict` fails on warnings too: an unverified mapping
   (`mapping-unverified`), a decision that weakens a guard (`decision-weakens-guard`), a stale decision, missing
   fixtures. An undecided mismatch (`decision-undecided`) is an error even without `--strict`. With the shipped `claude` or `gemini` mapping enabled, `--strict` always fails; that is the
-  point of the warning.
+  point of the warning. So does the shipped `zcode` mapping (`direct-ask-unenforceable`,
+  `direct-json-answers-ignored`), and any target under `fail_open` (`fail-open-enabled`).
 - Notes (`mapping-untested-live`, `setting-unmapped`) never fail a run.
 - Use `--harness NAME` to check one target regardless of `config.toml`.
 

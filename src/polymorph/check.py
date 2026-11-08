@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .conformance import fixture_files, run_fixtures
 from .decisions import DECISIONS_DIR, load_decisions
-from .generate import enabled_targets, generate_target
+from .generate import enabled_targets, fail_open_targets, generate_target
 from .mapping import BUILTIN_DIR, Mapping, MappingError, load_mapping
 from .reader_claude import SETTINGS, ReaderError, read_claude, resolve_script
 from .validate import validate_mapping
@@ -28,6 +28,8 @@ CODES = {
     "mapping-unverified": ("warning", "A mapping has no `verified` field."),
     "mapping-untested-live": ("note", "Block semantics and ask enforcement are unproven without a live test."),
     "direct-ask-unenforceable": ("warning", "A direct-delivery mapping sets ask = false: no adapter runs, so nothing sets GUARD_ASK_ENFORCED and the hook cannot observe the claim (issue #34)."),
+    "direct-json-answers-ignored": ("warning", "A direct-delivery mapping sets json_answers = false: the harness ignores a hook's JSON deny or ask, so a guard that answers JSON fails open there and only exit 2 blocks."),
+    "fail-open-enabled": ("warning", "A target is listed under fail_open in config.toml: when its guard hook cannot run, the adapter lets the tool call proceed."),
     "exit2-unhonoured": ("warning", "A mapping's deny or ask route renders as exit 2 while exit_2_blocks is false: the exit the route relies on is the one the mapping says does not block (issue #49)."),
     "hook-outside-hooks-dir": ("error", "A hook command is not a bare script under .agents/hooks/."),
     "hook-missing": ("error", "A hook script does not exist."),
@@ -120,6 +122,11 @@ def check_mapping(repo: Path, name: str, mapping: Mapping) -> list[Finding]:
                       'delivery = "direct" runs the hook bare: no adapter runs, so nothing sets '
                       "GUARD_ASK_ENFORCED and the hook cannot see the ask = false claim; the hardening "
                       "works only in a script written to detect this harness itself", _rel(repo, mapping.source)))
+    if mapping.delivery == "direct" and mapping.capabilities.get("json_answers") is False:
+        out.append(_f("direct-json-answers-ignored", name,
+                      'delivery = "direct" with json_answers = false: this harness ignores a hook\'s JSON '
+                      "permissionDecision answers, so a guard script that denies with JSON runs the call "
+                      "anyway; the script must exit 2 (stderr is the reason) to block", _rel(repo, mapping.source)))
     if mapping.delivery == "adapter" and (mapping.payload_out.get("deny") or mapping.payload_out.get("ask")) \
             and not mapping.capabilities.get("exit_2_blocks"):
         out.append(_f("exit2-unhonoured", name,
@@ -174,6 +181,7 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
     findings: list[Finding] = []
     try:
         names = list(harnesses or enabled_targets(repo))
+        fail_open_names = set(fail_open_targets(repo))
     except (ValueError, OSError) as e:
         raise ValueError(f"cannot read enabled targets: {e}") from e
     if not names:
@@ -194,6 +202,10 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
             findings.append(_f("mapping-invalid", name, str(e)))
             continue
         findings += check_mapping(repo, name, mapping)
+        if name in fail_open_names:
+            findings.append(_f("fail-open-enabled", name,
+                               f"{name} is listed under fail_open: a fault in the adapter or the guard hook lets "
+                               "the tool call proceed (visibly)", ".polymorph/basecamp/config.toml"))
         findings += check_fixtures(repo, name, mapping)
         findings += check_loadout(repo, name)
         if canon is None:
@@ -202,7 +214,7 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
         decisions, decision_errors = load_decisions(repo, name, set(mapping.events.values()))
         findings += [_f("decision-invalid", name, e, decisions_file) for e in decision_errors]
         try:
-            target_result = generate_target(repo, canon, mapping, decisions)
+            target_result = generate_target(repo, canon, mapping, decisions, fail_open=name in fail_open_names)
         except (ValueError, OSError) as e:
             findings.append(_f("generated-drift", name, f"cannot compute generated file: {e}", mapping.config_path))
             continue
