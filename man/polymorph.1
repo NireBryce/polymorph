@@ -16,7 +16,7 @@ polymorph manage adopt [\-\-repo REPO] [\-\-dry\-run] [\-\-no\-links]
 .br
 polymorph equip [\-\-repo REPO] \-\-harness HARNESS [\-\-dry\-run] [\-\-no\-links] [\-\-gitignore]
 .br
-polymorph adapter \-\-harness HARNESS [\-\-mappings MAPPINGS] [\-\-trust\-dir TRUST_DIR ...] [\-\-repo REPO] [\-\-timeout TIMEOUT] script...
+polymorph adapter \-\-harness HARNESS [\-\-mappings MAPPINGS] [\-\-trust\-dir TRUST_DIR ...] [\-\-repo REPO] [\-\-timeout TIMEOUT] [\-\-fail\-open] script...
 .br
 polymorph inventory [\-\-repo REPO] [\-\-harness NAME ...] [\-\-json]
 .br
@@ -143,7 +143,7 @@ contributor posture: append the marked regenerable\-artifacts section to .gitign
 Run a hook script through a harness adapter.
 .PP
 .nf
-polymorph adapter \-\-harness HARNESS [\-\-mappings MAPPINGS] [\-\-trust\-dir TRUST_DIR ...] [\-\-repo REPO] [\-\-timeout TIMEOUT] script...
+polymorph adapter \-\-harness HARNESS [\-\-mappings MAPPINGS] [\-\-trust\-dir TRUST_DIR ...] [\-\-repo REPO] [\-\-timeout TIMEOUT] [\-\-fail\-open] script...
 .fi
 .TP
 .B script
@@ -163,6 +163,9 @@ repository root (default: the nearest directory above the working directory with
 .TP
 .B \-\-timeout TIMEOUT
 seconds before the hook is killed (default 60); a killed hook is NOT checked, never a deny
+.TP
+.B \-\-fail\-open
+on an adapter or hook fault, let the call run with a NOT\-checked message (default: block it)
 .SS polymorph inventory
 The repo's discover\-and\-report surface and each harness's gaps.
 .PP

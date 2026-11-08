@@ -51,7 +51,7 @@ class ReaderTests(Base):
 
     def test_unmapped_reported(self):
         u = " ".join(read_claude(self.repo).unmapped)
-        for key in ("attribution", "permissions.allow", "permissions.deny", "hooks.Stop"):
+        for key in ("attribution", "permissions.allow", "permissions.deny", "hooks.Notification"):
             self.assertIn(key, u)
 
     def test_script_outside_hooks_refused(self):
@@ -435,6 +435,78 @@ class HookCommandTimeoutTests(unittest.TestCase):
         self.assertNotIn("--timeout", generate.hook_command(m, "s.sh"))
         direct = mapping_mod.load_mapping("zcode")   # direct delivery: the harness owns the timeout
         self.assertNotIn("--timeout", generate.hook_command(direct, "s.sh", 300))
+
+
+class FailOpenConfigTests(unittest.TestCase):
+    def test_fail_open_flag_is_in_the_adapter_command_only_when_asked(self):
+        from polymorph import generate, mapping as mapping_mod
+
+        gemini = mapping_mod.load_mapping("gemini")
+        self.assertNotIn("--fail-open", generate.hook_command(gemini, "s.sh"))
+        self.assertIn(" --fail-open ", generate.hook_command(gemini, "s.sh", 30, fail_open=True))
+        zcode = mapping_mod.load_mapping("zcode")   # direct: no adapter runs, nothing to flag
+        self.assertNotIn("--fail-open", generate.hook_command(zcode, "s.sh", fail_open=True))
+
+    def test_config_reads_fail_open_and_still_rejects_other_keys(self):
+        from polymorph import generate
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / ".polymorph/basecamp").mkdir(parents=True)
+            config = repo / ".polymorph/basecamp/config.toml"
+            config.write_text('enabled = ["gemini"]\nfail_open = ["gemini"]\n')
+            self.assertEqual(generate.fail_open_targets(repo), ["gemini"])
+            self.assertEqual(generate.enabled_targets(repo), ["gemini"])
+            config.write_text('enabled = ["gemini"]\nfail-open = ["gemini"]\n')
+            with self.assertRaises(ValueError):
+                generate.fail_open_targets(repo)
+
+
+class SessionEventTests(Base):
+    """stop and user_prompt_submit: events of the session, with no tool class and no matcher."""
+
+    def setUp(self):
+        super().setUp()
+        settings = self.repo / ".agents/settings.json"
+        doc = json.loads(settings.read_text())
+        script = '"$CLAUDE_PROJECT_DIR/.agents/hooks/session-start.sh"'
+        doc["hooks"]["Stop"] = [{"hooks": [{"type": "command", "command": script}]}]
+        # a matcher on a session event means nothing; it must not become a tool class
+        doc["hooks"]["UserPromptSubmit"] = [{"matcher": "Bash", "hooks": [{"type": "command", "command": script}]}]
+        settings.write_text(json.dumps(doc))
+
+    def test_reader_maps_both_events_to_all_tools(self):
+        events = {hook.event: hook.classes for hook in read_claude(self.repo).hooks}
+        self.assertEqual(events["stop"], ())
+        self.assertEqual(events["user_prompt_submit"], ())
+        self.assertNotIn("hooks.Stop", " ".join(read_claude(self.repo).unmapped))
+
+    def test_builtin_zcode_mapping_writes_both_events_without_a_matcher(self):
+        mapping.BUILTIN_DIR = Path(mapping.__file__).parent / "mappings"   # Base points it at an empty dir
+        (self.repo / ".polymorph/basecamp/mappings/zcode.toml").unlink()
+        doc = None
+        for result in generate(self.repo, ["zcode"]):
+            self.assertEqual(result.undecided, [])
+            doc = json.loads((self.repo / result.path).read_text())
+        events = doc["hooks"]["events"]
+        for native in ("Stop", "UserPromptSubmit"):
+            self.assertEqual(len(events[native]), 1, native)
+            self.assertNotIn("matcher", events[native][0], native)
+
+    def test_target_without_the_event_asks_instead_of_dropping_the_hook(self):
+        # the fixture repo's own zcode mapping predates the events: no-event, undecided
+        result = generate(self.repo, ["zcode"], check=True)[0]
+        ids = {m.id for m in result.undecided}
+        self.assertEqual(ids, {".agents/hooks/session-start.sh:stop:no-event",
+                               ".agents/hooks/session-start.sh:user_prompt_submit:no-event"})
+
+    def test_decision_ids_accept_the_new_events(self):
+        from polymorph.decisions import parse_decisions
+
+        raw = {"schema": 2, "decisions": {".agents/hooks/a.sh:stop:no-event": {"choice": "skip", "date": "2026-11-08"}}}
+        decisions, errors = parse_decisions(raw, {"Stop"})
+        self.assertEqual(errors, [])
+        self.assertIn(".agents/hooks/a.sh:stop:no-event", decisions)
 
 
 if __name__ == "__main__":

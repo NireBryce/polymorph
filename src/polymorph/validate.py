@@ -11,7 +11,7 @@ from .exprs import placeholder_names
 
 EXTRACTORS = ["apply_patch_paths"]  # shipped registry; names only, code lives elsewhere
 CLASSES = ("shell", "edit", "read", "mcp", "other")
-EVENTS = ("session_start", "pre_tool", "post_tool")
+EVENTS = ("session_start", "pre_tool", "post_tool", "stop", "user_prompt_submit")
 CAPS = ("ask", "post_event", "exit_2_blocks", "rewrites_input", "json_answers")
 OUT_KINDS = ("allow", "deny", "ask", "warn", "remind")
 OUT_FIELDS = {"exit": int, "stdout": str, "stderr": str}

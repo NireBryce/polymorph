@@ -21,7 +21,7 @@ out; no control flow in mappings. Python 3.11+, stdlib only (`tomllib`, `json`, 
 ```python
 @dataclass(frozen=True)
 class Hook:
-    event: str          # "session_start" | "pre_tool" | "post_tool"
+    event: str          # "session_start" | "pre_tool" | "post_tool" | "stop" | "user_prompt_submit"
     classes: tuple[str, ...]   # subset of shell, edit, read, mcp, other; () = all (session_start)
     script: str         # path relative to repo root, must resolve under hooks_dir
     timeout: int | None
@@ -38,6 +38,17 @@ are reported in `unmapped`, never dropped silently. A script outside `.agents/ho
 (after `realpath`) is refused with an error. The resolved script path is embedded in
 generated command lines, so it may contain only plain path characters; quotes, whitespace,
 `$`, backticks, or other shell metacharacters are refused with an error.
+
+Events. The canonical events are `session_start`, `pre_tool`, `post_tool`, `stop`, and
+`user_prompt_submit` (Claude's `SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`,
+`UserPromptSubmit`). The last three have no tool class, so a hook on them is always for
+all and a matcher on them is ignored. This list is where it stands, not a limit: further
+events, such as `PermissionRequest` (seen once under ZCode, with no known trigger beyond
+question prompts), are added when a harness's behaviour for them is observed, and until
+then a Claude settings entry for one is reported as `unmapped`. Adding an event is a
+schema change; see skill `change-the-schema`. A harness that has an event but does not
+honour its answer (ZCode's `Stop` and `UserPromptSubmit`) still maps it: the mapping
+header says what is unhonoured, and the hook runs for its side effects only.
 
 ## Mapping file (TOML, `schema = 1`)
 
@@ -61,6 +72,8 @@ read  = ["Read", "Grep", "Glob"]
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+stop = "Stop"
+user_prompt_submit = "UserPromptSubmit"
 
 [capabilities]
 ask = false             # exported as GUARD_ASK_ENFORCED=0/1
@@ -123,10 +136,14 @@ post-call `decision:"block"`, or exit 2 with stderr.
 
 Adapter invocation: `python3 -m polymorph adapter --harness NAME [--mappings DIR] -- SCRIPT`.
 Sets `GUARD_*` capability env vars, runs the script with the canonical payload, maps the
-answer to native form. Translation failure => visible message (stderr + exit code the
-harness shows to the model) and NEVER a deny; never fail open silently. A hook answer
-polymorph cannot translate (an unknown decision shape) is such a failure too: visible,
-never a deny and never a silent allow. `ask` on a harness
+answer to native form. A fault (translation failure, bad payload, crashing or timed-out
+hook, unreadable mapping, usage error) fails closed by default: the call is blocked with a
+visible reason, rendered through the mapping's `payload_out.deny` route (else a JSON deny
+when `json_answers`, else exit 2 and stderr). `--fail-open` (or `fail_open` in
+`config.toml`, which `generate` writes into the command) is the opt-in other way: the call
+proceeds with a visible "NOT checked" message (a `systemMessage` with exit 0 when
+`json_answers`, else stderr with exit 1). Neither is silent. A hook answer polymorph cannot
+translate (an unknown decision shape) is such a fault too: never a silent allow. `ask` on a harness
 with `ask = false` is hardened to deny by the *hook* reading `GUARD_ASK_ENFORCED`, not by
 the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping.
 
@@ -134,10 +151,11 @@ the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping
 
 ```
 .polymorph/basecamp/
-  config.toml            # enabled = ["zcode", ...]  (targets to generate)
+  config.toml            # enabled = ["zcode", ...]  (targets to generate); fail_open = [...] (optional: targets whose adapter commands carry --fail-open)
   mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
   decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
+  hook-reads.toml        # fields a hook script reads beyond its tool classes' defaults; see "Decisions"
   loadout.toml           # equip's provenance manifest: per issued artifact its sha256, source, and the mapping-path + mapping-hash it was generated from; per made symlink its target
   generated/NAME/        # generated shims and plugin files (planned)
 ```
@@ -223,7 +241,7 @@ mappings from outside the repo's `.polymorph/basecamp/mappings/` or the built-in
 
 ```
 polymorph manage generate [--repo .] [--harness NAME ...] [--check] [--mappings DIR] [--trust-dir DIR ...]   # --check: exit 1 on drift
-polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] -- SCRIPT
+polymorph adapter --harness NAME [--mappings DIR] [--trust-dir DIR ...] [--fail-open] -- SCRIPT
 polymorph manage validate FILE.toml
 polymorph manage conformance [--harness NAME]
 polymorph manage check [--repo .] [--harness NAME ...] [--format text|json|sarif] [--strict]
@@ -287,7 +305,7 @@ note = "optional free text"
 
 Top-level keys are `schema` (must be 2) and `decisions`; unknown keys are errors. An entry has
 `choice` and `date` (`YYYY-MM-DD`) and may have `note`. The id is the hook script path relative
-to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, or
+to the repo root, a colon, the hook's canonical event (`session_start`, `pre_tool`, `post_tool`, `stop`, `user_prompt_submit`, or
 `post_tool`), a colon, and the kind. One decision covers every hook of that script on that
 event that has that mismatch in that target. (Schema 1 ids had no event: one script
 registered under several events produced the same id for each, and one decision answered
@@ -312,8 +330,13 @@ for an event the script is not registered under simply matches no mismatch and r
 Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads
 `shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of
 `read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other`, and a hook with no
-class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose
-hooks get the Claude payload unchanged.
+class read none. A guard that reads more says so in `.polymorph/basecamp/hook-reads.toml`
+(`schema = 1`; `[hooks."SCRIPT"]` with `reads = [...]`, each a canonical `payload_in` key such
+as `tool_response`, `cwd`, or `read.path`). The file is data, validated and never executed,
+and closed-world: an unknown key, an unknown field, or a script no registered hook uses is
+an error (`hook-reads-invalid`). A declared field the mapping's `payload_in` does not map
+raises the same `missing-field` question as a class field. `missing-field` is not checked for
+`delivery = "direct"` mappings, whose hooks get the Claude payload unchanged.
 
 Undecided means: `generate` writes nothing for that target, prints each item as a block
 
@@ -368,6 +391,9 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-unverified` | warning | mapping has no `verified` |
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
 | `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
+| `direct-json-answers-ignored` | warning | a `delivery = "direct"` mapping sets `json_answers = false`: the harness ignores a hook's JSON deny or ask, so a guard answering JSON fails open there and only exit 2 blocks |
+| `hook-reads-invalid` | error | `hook-reads.toml` fails validation, or names a script no registered hook uses |
+| `fail-open-enabled` | warning | a target is listed under `fail_open` in `config.toml`: a guard fault lets the call proceed |
 | `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
 | `hook-missing` / `hook-not-executable` | error | script absent / lacks the execute bit |

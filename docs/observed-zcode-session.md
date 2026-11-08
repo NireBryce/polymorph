@@ -250,7 +250,7 @@ Observed on 2026-11-04 in **ZCode 3.17.2**, with a second probe script wired on
 
 Derived for the mapping and the skill: `zcode.toml`'s `session_start = "SessionStart"` is
 live-evidenced as a real event name, but nothing exercised it in the session that carried
-the mapping; `UserPromptSubmit` exists as a raw event with no canonical slot in the schema.
+the mapping; `UserPromptSubmit` and `Stop` have canonical slots (`user_prompt_submit`, `stop`) since 2026-11-08; the mapping wires them, and the actions above stay unhonoured.
 And `new-mapping`'s live check must start the probing session **after** the hook config is
 wired: a session opened before the wiring cannot see it, which reads exactly like a broken
 mapping.

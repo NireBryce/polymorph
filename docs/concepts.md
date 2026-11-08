@@ -25,7 +25,7 @@ A hook has:
 
 | Field | Meaning |
 |---|---|
-| `event` | `session_start`, `pre_tool`, or `post_tool`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`. |
+| `event` | `session_start`, `pre_tool`, `post_tool`, `stop`, or `user_prompt_submit`. Claude's `SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`. |
 | `classes` | Which tools it applies to, from `shell`, `edit`, `read`, `mcp`, `other`. Empty means all tools. |
 | `script` | Path of the hook script relative to the repo root, always under `.agents/hooks/`. |
 | `timeout` | Seconds, if the settings give one. |
@@ -40,11 +40,11 @@ Tool classes come from Claude's `matcher` regex, split on `|`:
 | starts with `mcp__` | `mcp` |
 | anything else | `other` |
 
-A missing, empty, or `*` matcher means all tools. `session_start` hooks are always all.
+A missing, empty, or `*` matcher means all tools. `session_start`, `stop`, and `user_prompt_submit` hooks are always all (a matcher on them is ignored).
 
 Everything the reader cannot translate is listed as **unmapped** and reported by `generate`
 and `check`: any top-level key other than `hooks` (`attribution`, `model`, ...), each
-`permissions.*` sub-key, hook events other than the three above (`Stop`, ...), and hooks
+`permissions.*` sub-key, hook events other than the five above (`Notification`, `PermissionRequest`, ...), and hooks
 whose `type` is not `command`. Nothing is dropped silently. In particular, **Claude's
 `permissions` allow/deny rules are never carried to other harnesses.**
 
@@ -103,12 +103,20 @@ mapping does not check. At run time the adapter:
 5. Reads the script's answer (exit 2 means deny with stderr as the reason; otherwise JSON
    on stdout) and renders it with `payload_out`.
 
-**Adapter faults never become a deny.** A bad payload, an unrunnable or crashing script,
-non-JSON output, a timeout, or an internal error produces a visible message,
-`polymorph adapter: this tool call was NOT checked by the guard hook (...)`, and lets the
-call proceed. If the harness accepts JSON answers the message goes out as a `systemMessage`
-with exit 0; otherwise on stderr with exit 1. This is a deliberate choice (a broken shim
-should not brick every tool call) and it means a broken adapter fails open, visibly. See
+**Adapter faults block by default.** A bad payload, an unrunnable or crashing script,
+non-JSON output, a timeout, or an internal error blocks the call and says why:
+`polymorph adapter: this tool call was BLOCKED because the guard hook could not run (...)`.
+The block goes out through the mapping's own deny route (exit 2 and stderr, or a JSON
+deny), so it reaches the harness in the form that harness honours. A fault is never
+silent and never a quiet allow.
+
+The opposite choice is opt-in. `--fail-open` on the adapter, or `fail_open = ["NAME"]` in
+`.polymorph/basecamp/config.toml` so that `generate` writes the flag into each command,
+lets the call proceed with `polymorph adapter: this tool call was NOT checked by the guard
+hook (...)`: as a `systemMessage` with exit 0 if the harness accepts JSON answers,
+otherwise on stderr with exit 1. This relies on the agent following the guard out of
+politeness; `check` reports it as `fail-open-enabled`. Only the adapter can do either: a
+`direct` hook runs bare, so a fault in it is the harness's to handle. See
 [Limits](limits.md).
 
 ## Capabilities and `GUARD_*` variables
@@ -219,15 +227,16 @@ idempotent section to `.gitignore`. See [the CLI reference](cli.md#equip).
 
 ```
 .polymorph/basecamp/
-  config.toml            enabled = ["zcode", ...]
+  config.toml            enabled = ["zcode", ...]; fail_open = [...] (optional)
   mappings/NAME.toml     repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     what one harness honours of the discover-and-report kinds (see [Inventory](#inventory-and-the-gap-report))
   decisions/NAME.toml    answers to generation-time mismatches (see below)
+  hook-reads.toml        fields a hook script reads beyond its tool classes' defaults
   loadout.toml           equip's provenance manifest: per issued artifact its sha256 and source; per symlink made its target
   generated/NAME/        planned, not built
 ```
 
-`config.toml` accepts only the key `enabled`; anything else is an error. Generated harness
+`config.toml` accepts only the keys `enabled` and `fail_open`; anything else is an error. Generated harness
 configs are not stored here: they are written where the harness reads them, at the
 mapping's `config_path` (`.zcode/config.json`, `.claude/settings.json`, ...). Discovery
 logs live in `.polymorph/discovery/` in the directory you ran `discover init` from, kept

@@ -8,7 +8,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .canon import Canon, Hook
+from .canon import NON_TOOL_EVENTS, Canon, Hook
 from .decisions import Applied, Decision, DecisionError, Mismatch, load_decisions, options_for
 from .mapping import Mapping, load_mapping
 from .reader_claude import read_claude
@@ -32,19 +32,30 @@ class TargetResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def enabled_targets(repo: Path) -> list[str]:
+def _read_config(repo: Path) -> dict:
     config_file = repo / ENABLED_FILE
     if not config_file.is_file():
-        return []
+        return {}
     data = tomllib.loads(config_file.read_text())
-    bad = set(data) - {"enabled"}
+    bad = set(data) - {"enabled", "fail_open"}
     if bad:
         raise ValueError(f"{config_file}: unknown key(s) {sorted(bad)}")
-    return list(data.get("enabled", []))
+    return data
 
 
-def adapter_command(harness: str, script: str, timeout: int | float | None = None) -> str:
+def enabled_targets(repo: Path) -> list[str]:
+    return list(_read_config(repo).get("enabled", []))
+
+
+def fail_open_targets(repo: Path) -> list[str]:
+    """Harnesses whose generated adapter commands carry --fail-open: a guard fault lets the call run."""
+    return list(_read_config(repo).get("fail_open", []))
+
+
+def adapter_command(harness: str, script: str, timeout: int | float | None = None,
+                    fail_open: bool = False) -> str:
     extra = f" --timeout {timeout}" if timeout is not None else ""
+    extra += " --fail-open" if fail_open else ""
     # python3, never python: on a python3-only system a bare `python` fails with
     # exit 127 before polymorph runs, and a nonzero non-2 exit does not block
     return (
@@ -58,10 +69,11 @@ def direct_command(script: str) -> str:
     return f'"$CLAUDE_PROJECT_DIR/{script}"'
 
 
-def hook_command(mapping: Mapping, script: str, timeout: int | float | None = None) -> str:
+def hook_command(mapping: Mapping, script: str, timeout: int | float | None = None,
+                 fail_open: bool = False) -> str:
     if mapping.delivery == "direct":
         return direct_command(script)
-    return adapter_command(mapping.name, script, timeout)
+    return adapter_command(mapping.name, script, timeout, fail_open)
 
 
 def _matcher(hook: Hook, mapping: Mapping) -> tuple[str | None, list[str]]:
@@ -114,10 +126,17 @@ def hook_mismatches(hook: Hook, mapping: Mapping) -> list[Mismatch]:
                             options=options_for("no-tool-class"), **base))
     if mapping.delivery != "direct":  # direct delivery hands the hook the Claude payload unchanged
         lacking = [tool_class for tool_class in hook.classes if tool_class in CLASS_FIELDS and tool_class in mapping.tools and not _provided(mapping, tool_class)]
-        if lacking:
-            fields = ", ".join(CLASS_FIELDS[tool_class][0] if len(CLASS_FIELDS[tool_class]) == 1 else "read.*" for tool_class in lacking)
+        lacking_declared = [field for field in hook.reads if field not in mapping.payload_in
+                            and not (field == "edit.file_path" and "extractor" in mapping.payload_in)]
+        if lacking or lacking_declared:
+            parts = []
+            if lacking:
+                fields = ", ".join(CLASS_FIELDS[tool_class][0] if len(CLASS_FIELDS[tool_class]) == 1 else "read.*" for tool_class in lacking)
+                parts.append(f"{fields}, which a {'/'.join(lacking)} hook reads")
+            if lacking_declared:
+                parts.append(f"{', '.join(lacking_declared)}, which hook-reads.toml says this hook reads")
             out.append(Mismatch(f"{hook.script}:{hook.event}:missing-field", "missing-field",
-                                detail=f"{mapping.name} payload_in does not map {fields}, which a {'/'.join(lacking)} hook reads",
+                                detail=f"{mapping.name} payload_in does not map " + "; ".join(parts),
                                 options=options_for("missing-field"), **base))
     return out
 
@@ -138,9 +157,10 @@ def _apply(resolution: Resolution, mismatch: Mismatch, decision: Decision, weake
 def _extra_fields_note(canon: Canon, mapping: Mapping) -> list[str]:
     if mapping.delivery == "direct":
         return []
-    tool_hooks = [hook for hook in canon.hooks if hook.event != "session_start"]
+    tool_hooks = [hook for hook in canon.hooks if hook.event not in NON_TOOL_EVENTS]
     classes = {tool_class for hook in tool_hooks for tool_class in (hook.classes or CLASS_FIELDS)}
-    used = set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
+    used = (set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
+            | {field for hook in canon.hooks for field in hook.reads})
     extra = sorted(key for key in mapping.payload_in if key != "extractor" and key not in used)
     if not extra:
         return []
@@ -148,7 +168,7 @@ def _extra_fields_note(canon: Canon, mapping: Mapping) -> list[str]:
 
 
 def _claude_shape(canon: Canon, mapping: Mapping, existing: dict, wrapped: bool,
-                  decisions: dict[str, Decision]) -> tuple[str, Resolution]:
+                  decisions: dict[str, Decision], fail_open: bool = False) -> tuple[str, Resolution]:
     """wrapped: ZCode shape (hooks.enabled + hooks.events, per-hook enabled); else Claude Code settings shape."""
     resolution = Resolution()
     resolution.notes += _extra_fields_note(canon, mapping)
@@ -181,7 +201,7 @@ def _claude_shape(canon: Canon, mapping: Mapping, existing: dict, wrapped: bool,
                 drop = True
         if drop or native is None:
             continue
-        entry: dict = {"type": "command", "command": hook_command(mapping, hook.script, hook.timeout)}
+        entry: dict = {"type": "command", "command": hook_command(mapping, hook.script, hook.timeout, fail_open)}
         if wrapped:
             entry["enabled"] = True
         if hook.timeout is not None:
@@ -199,19 +219,20 @@ def _claude_shape(canon: Canon, mapping: Mapping, existing: dict, wrapped: bool,
     return json.dumps(doc, indent=2) + "\n", resolution
 
 
-def _claude_like(canon, mapping, existing, decisions):
-    return _claude_shape(canon, mapping, existing, True, decisions)
+def _claude_like(canon, mapping, existing, decisions, fail_open=False):
+    return _claude_shape(canon, mapping, existing, True, decisions, fail_open)
 
 
-def _claude_settings(canon, mapping, existing, decisions):
-    return _claude_shape(canon, mapping, existing, False, decisions)
+def _claude_settings(canon, mapping, existing, decisions, fail_open=False):
+    return _claude_shape(canon, mapping, existing, False, decisions, fail_open)
 
 
 TEMPLATES = {"claude-like": _claude_like, "claude-settings": _claude_settings}
 
 
 def generate_target(repo: Path, canon: Canon, mapping: Mapping,
-                    decisions: dict[str, Decision] | None = None) -> TargetResult:
+                    decisions: dict[str, Decision] | None = None,
+                    fail_open: bool = False) -> TargetResult:
     """decisions None: load the target's decision file; an invalid one raises DecisionError."""
     if mapping.format != "json" or mapping.template not in TEMPLATES:
         raise ValueError(f"{mapping.name}: unsupported format/template {mapping.format}/{mapping.template}")
@@ -234,7 +255,7 @@ def generate_target(repo: Path, canon: Canon, mapping: Mapping,
         existing = json.loads(previous_content)
         if not isinstance(existing, dict):
             raise ValueError(f"{out}: existing config is not a JSON object; refusing to overwrite it")
-    content, resolution = TEMPLATES[mapping.template](canon, mapping, existing, decisions)
+    content, resolution = TEMPLATES[mapping.template](canon, mapping, existing, decisions, fail_open)
     warnings = []
     if not mapping.verified:
         warnings.append(f"{mapping.name}: mapping has no `verified` field; treat output as unverified")
@@ -258,10 +279,11 @@ def generate(
     repo = Path(repo).resolve()
     canon = read_claude(repo)
     names = harnesses or enabled_targets(repo)
+    fail_open_names = set(fail_open_targets(repo))
     results = []
     for name in names:
         mapping = load_mapping(name, repo, mappings_dir, tuple(trust_dirs))
-        target_result = generate_target(repo, canon, mapping)
+        target_result = generate_target(repo, canon, mapping, fail_open=name in fail_open_names)
         if not check and target_result.drift:
             dest = repo / target_result.path
             dest.parent.mkdir(parents=True, exist_ok=True)

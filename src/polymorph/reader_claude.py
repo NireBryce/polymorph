@@ -8,7 +8,10 @@ import re
 import shlex
 from pathlib import Path
 
-from .canon import Canon, Hook
+from dataclasses import replace
+
+from .canon import NON_TOOL_EVENTS, Canon, Hook
+from .hook_reads import HOOK_READS_FILE, HookReadsError, load_hook_reads
 
 HOOKS_DIR = ".agents/hooks"
 SETTINGS = ".agents/settings.json"
@@ -17,6 +20,8 @@ EVENT_MAP = {
     "SessionStart": "session_start",
     "PreToolUse": "pre_tool",
     "PostToolUse": "post_tool",
+    "Stop": "stop",
+    "UserPromptSubmit": "user_prompt_submit",
 }
 
 _CLASS_RULES = (
@@ -114,7 +119,7 @@ def read_claude(repo: str | Path) -> Canon:
                 unmapped.append(f"hooks.{event}")
                 continue
             for group in groups:
-                classes = () if canon_event == "session_start" else classify_matcher(group.get("matcher"))
+                classes = () if canon_event in NON_TOOL_EVENTS else classify_matcher(group.get("matcher"))
                 for hook_entry in group.get("hooks", []):
                     if hook_entry.get("type", "command") != "command":
                         unmapped.append(f"hooks.{event}[type={hook_entry.get('type')}]")
@@ -133,4 +138,9 @@ def read_claude(repo: str | Path) -> Canon:
         # a malformed entry is a settings problem, not a crash: check reports
         # settings-invalid and keeps going, generate exits 2 with the message
         raise ReaderError(f"malformed hooks entry: {e}") from e
+    try:
+        declared = load_hook_reads(repo, {hook.script for hook in hooks})
+    except HookReadsError as e:
+        raise ReaderError(f"{HOOK_READS_FILE}: {e}") from e
+    hooks = [replace(hook, reads=declared.get(hook.script, ())) for hook in hooks]
     return Canon(tuple(hooks), tuple(unmapped))

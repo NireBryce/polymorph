@@ -57,6 +57,8 @@ def _parser() -> argparse.ArgumentParser:
     adapter_parser.add_argument("--repo", default=None, help="repository root (default: the nearest directory above the working directory with .agents/)")
     adapter_parser.add_argument("--timeout", type=float, default=None,
                    help="seconds before the hook is killed (default 60); a killed hook is NOT checked, never a deny")
+    adapter_parser.add_argument("--fail-open", action="store_true",
+                   help="on an adapter or hook fault, let the call run with a NOT-checked message (default: block it)")
     adapter_parser.add_argument("script", nargs="+", help="after `--`: hook script (and args)")
 
     inventory_parser = sub.add_parser("inventory", help="the repo's discover-and-report surface and each harness's gaps")
@@ -369,6 +371,8 @@ def _cmd_adapter(args) -> int:
         argv += ["--repo", args.repo]
     if args.timeout is not None:
         argv += ["--timeout", str(args.timeout)]
+    if args.fail_open:
+        argv += ["--fail-open"]
     for trust_dir_path in args.trust_dir:
         argv += ["--trust-dir", trust_dir_path]
     argv += ["--", *args.script]

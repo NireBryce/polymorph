@@ -65,6 +65,8 @@ read = ["Read", "Grep", "Glob"]
 session_start = "SessionStart"
 pre_tool = "PreToolUse"
 post_tool = "PostToolUse"
+stop = "Stop"                         # live 2026-11-04: dispatches on every reply end; an exit-2 continuation was NOT honoured
+user_prompt_submit = "UserPromptSubmit"  # live 2026-11-04: dispatches; a block marker still reached the model, stdout context did not land
 
 [capabilities]
 ask = false            # nixos-configs #448/#458; live: a JSON ask ran with no prompt

@@ -8,6 +8,34 @@ changed and, from the first release that has users, how it breaks them.
 Changes since 0.0.1.dev0, including fixes from a review of it. Several break existing
 use; each entry that does says what breaks.
 
+- **The adapter fails closed (breaking):** a fault (bad payload, crashing or timed-out
+  hook, unreadable or invalid mapping, usage error) used to let the call proceed with a
+  `NOT checked` message. It now blocks the call with `BLOCKED because the guard hook could
+  not run`, through the mapping's own deny route (else a JSON deny, else exit 2).
+  `--fail-open` on `polymorph adapter` restores the old behaviour, and `fail_open = [NAME]`
+  in `.polymorph/basecamp/config.toml` makes `manage generate` write the flag into that
+  target's commands. Breaks: any setup that relied on a broken guard letting calls
+  through now sees them blocked; a missing `python3 -m polymorph` is still the harness's
+  to report. New `check` warnings: `fail-open-enabled`, and `direct-json-answers-ignored`
+  (every `direct` mapping with `json_answers = false`, today `zcode`), so `check --strict`
+  now fails on a `zcode` target.
+- **Two more canonical events, `stop` and `user_prompt_submit`:** Claude's `Stop` and
+  `UserPromptSubmit` hooks used to be reported as `unmapped`. They now map to the
+  `claude` and `zcode` mappings (`gemini` has no such event: its hooks on them are
+  `no-event` questions) and are written into those targets' configs. Breaks: a repo
+  with such hooks and `zcode` enabled gets them written on the next `manage generate`
+  (`check` shows `generated-drift` until then), and a repo-local mapping without the new
+  `[events]` entries gets a `no-event` question per hook. ZCode dispatches both events but
+  honours no answer from either (observed 2026-11-04), so those hooks run for side
+  effects only. More events may follow; the list in SPEC "Canonical config" is where it
+  stands today.
+- **Hooks can declare the payload fields they read:** `.polymorph/basecamp/hook-reads.toml`
+  (new, optional). polymorph does not read hook scripts and modelled a hook's needs by tool
+  class only, so a guard reading `tool_response` or `cwd` went unnoticed on a mapping that
+  does not map it. A declared field the mapping lacks now raises the `missing-field`
+  question; a bad file is `hook-reads-invalid`. Breaks nothing unless you add the file.
+- **`limits.md` corrected:** it said the adapter does not validate mappings (it does) and
+  that `decisions/` is not built (it is).
 - **The bug-report issue form parses again:** an unquoted description held `: `, so
   GitHub could not offer the form (blank issues are disabled). `just docs` now flags an
   unquoted YAML value holding `: ` in `.github/` files and skill frontmatter. The form
