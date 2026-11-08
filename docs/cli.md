@@ -87,6 +87,7 @@ grouped by target, then a summary line.
 | `mapping-untested-live` | note | Always, for every target: block and ask behaviour is unproven without a live test. |
 | `direct-ask-unenforceable` | warning | A `direct` mapping sets `ask = false`: the hook runs bare, so nothing sets `GUARD_ASK_ENFORCED` and the hook cannot see the claim. |
 | `direct-json-answers-ignored` | warning | A `direct` mapping sets `json_answers = false`: the harness ignores a hook's JSON deny or ask, so a guard answering JSON fails open there; the script must exit 2 to block. |
+| `hook-reads-invalid` | error | `hook-reads.toml` fails validation, or names a script no registered hook uses. |
 | `fail-open-enabled` | warning | A target is listed under `fail_open` in `config.toml`: a guard fault lets the call proceed. |
 | `exit2-unhonoured` | warning | A `deny`/`ask` route rendered as exit 2 while `exit_2_blocks` is false: the mapping relies on the one code it says does not block. |
 | `hook-outside-hooks-dir` | error | A hook command is not a bare script under `.agents/hooks/`. |

@@ -231,6 +231,7 @@ idempotent section to `.gitignore`. See [the CLI reference](cli.md#equip).
   mappings/NAME.toml     repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     what one harness honours of the discover-and-report kinds (see [Inventory](#inventory-and-the-gap-report))
   decisions/NAME.toml    answers to generation-time mismatches (see below)
+  hook-reads.toml        fields a hook script reads beyond its tool classes' defaults
   loadout.toml           equip's provenance manifest: per issued artifact its sha256 and source; per symlink made its target
   generated/NAME/        planned, not built
 ```

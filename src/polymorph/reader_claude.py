@@ -8,7 +8,10 @@ import re
 import shlex
 from pathlib import Path
 
+from dataclasses import replace
+
 from .canon import Canon, Hook
+from .hook_reads import HOOK_READS_FILE, HookReadsError, load_hook_reads
 
 HOOKS_DIR = ".agents/hooks"
 SETTINGS = ".agents/settings.json"
@@ -133,4 +136,9 @@ def read_claude(repo: str | Path) -> Canon:
         # a malformed entry is a settings problem, not a crash: check reports
         # settings-invalid and keeps going, generate exits 2 with the message
         raise ReaderError(f"malformed hooks entry: {e}") from e
+    try:
+        declared = load_hook_reads(repo, {hook.script for hook in hooks})
+    except HookReadsError as e:
+        raise ReaderError(f"{HOOK_READS_FILE}: {e}") from e
+    hooks = [replace(hook, reads=declared.get(hook.script, ())) for hook in hooks]
     return Canon(tuple(hooks), tuple(unmapped))

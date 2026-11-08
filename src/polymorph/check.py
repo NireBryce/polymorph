@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .conformance import fixture_files, run_fixtures
 from .decisions import DECISIONS_DIR, load_decisions
+from .hook_reads import HOOK_READS_FILE, HookReadsError
 from .generate import enabled_targets, fail_open_targets, generate_target
 from .mapping import BUILTIN_DIR, Mapping, MappingError, load_mapping
 from .reader_claude import SETTINGS, ReaderError, read_claude, resolve_script
@@ -23,6 +24,7 @@ SEVERITIES = ("error", "warning", "note")
 # code -> (default severity, description); the SARIF rules come from here.
 CODES = {
     "no-targets": ("error", "No harness is enabled and none was passed with --harness."),
+    "hook-reads-invalid": ("error", "hook-reads.toml fails validation, or names a script no registered hook uses."),
     "settings-invalid": ("error", "The Claude settings file is missing or unreadable."),
     "mapping-invalid": ("error", "A target's mapping fails validation or cannot be loaded."),
     "mapping-unverified": ("warning", "A mapping has no `verified` field."),
@@ -191,8 +193,10 @@ def run_check(repo: str | Path = ".", harnesses: list[str] | None = None) -> lis
     findings += check_hook_scripts(repo)
     try:
         canon = read_claude(repo)
-    except ReaderError:
-        canon = None  # already reported by check_hook_scripts
+    except ReaderError as e:
+        canon = None  # the settings problems are already reported by check_hook_scripts
+        if isinstance(e.__cause__, HookReadsError):
+            findings.append(_f("hook-reads-invalid", None, str(e), HOOK_READS_FILE))
 
     for name in names:
         try:

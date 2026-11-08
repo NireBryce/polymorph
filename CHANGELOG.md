@@ -19,6 +19,11 @@ use; each entry that does says what breaks.
   to report. New `check` warnings: `fail-open-enabled`, and `direct-json-answers-ignored`
   (every `direct` mapping with `json_answers = false`, today `zcode`), so `check --strict`
   now fails on a `zcode` target.
+- **Hooks can declare the payload fields they read:** `.polymorph/basecamp/hook-reads.toml`
+  (new, optional). polymorph does not read hook scripts and modelled a hook's needs by tool
+  class only, so a guard reading `tool_response` or `cwd` went unnoticed on a mapping that
+  does not map it. A declared field the mapping lacks now raises the `missing-field`
+  question; a bad file is `hook-reads-invalid`. Breaks nothing unless you add the file.
 - **`limits.md` corrected:** it said the adapter does not validate mappings (it does) and
   that `decisions/` is not built (it is).
 - **The bug-report issue form parses again:** an unquoted description held `: `, so

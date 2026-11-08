@@ -14,6 +14,7 @@ class Hook:
     classes: tuple[str, ...]  # subset of CLASSES; () = all
     script: str  # path relative to repo root, under hooks_dir
     timeout: int | float | None = None
+    reads: tuple[str, ...] = ()  # canonical payload fields declared in hook-reads.toml, beyond the class defaults
 
 
 @dataclass(frozen=True)

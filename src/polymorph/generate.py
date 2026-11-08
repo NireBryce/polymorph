@@ -126,10 +126,17 @@ def hook_mismatches(hook: Hook, mapping: Mapping) -> list[Mismatch]:
                             options=options_for("no-tool-class"), **base))
     if mapping.delivery != "direct":  # direct delivery hands the hook the Claude payload unchanged
         lacking = [tool_class for tool_class in hook.classes if tool_class in CLASS_FIELDS and tool_class in mapping.tools and not _provided(mapping, tool_class)]
-        if lacking:
-            fields = ", ".join(CLASS_FIELDS[tool_class][0] if len(CLASS_FIELDS[tool_class]) == 1 else "read.*" for tool_class in lacking)
+        lacking_declared = [field for field in hook.reads if field not in mapping.payload_in
+                            and not (field == "edit.file_path" and "extractor" in mapping.payload_in)]
+        if lacking or lacking_declared:
+            parts = []
+            if lacking:
+                fields = ", ".join(CLASS_FIELDS[tool_class][0] if len(CLASS_FIELDS[tool_class]) == 1 else "read.*" for tool_class in lacking)
+                parts.append(f"{fields}, which a {'/'.join(lacking)} hook reads")
+            if lacking_declared:
+                parts.append(f"{', '.join(lacking_declared)}, which hook-reads.toml says this hook reads")
             out.append(Mismatch(f"{hook.script}:{hook.event}:missing-field", "missing-field",
-                                detail=f"{mapping.name} payload_in does not map {fields}, which a {'/'.join(lacking)} hook reads",
+                                detail=f"{mapping.name} payload_in does not map " + "; ".join(parts),
                                 options=options_for("missing-field"), **base))
     return out
 
@@ -152,7 +159,8 @@ def _extra_fields_note(canon: Canon, mapping: Mapping) -> list[str]:
         return []
     tool_hooks = [hook for hook in canon.hooks if hook.event != "session_start"]
     classes = {tool_class for hook in tool_hooks for tool_class in (hook.classes or CLASS_FIELDS)}
-    used = set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
+    used = (set(BASE_FIELDS) | {field for tool_class in classes for field in CLASS_FIELDS.get(tool_class, ())}
+            | {field for hook in canon.hooks for field in hook.reads})
     extra = sorted(key for key in mapping.payload_in if key != "extractor" and key not in used)
     if not extra:
         return []

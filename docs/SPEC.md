@@ -142,6 +142,7 @@ the adapter, so `validate` rejects any `payload_out.ask` entry on such a mapping
   mappings/NAME.toml     # repo-local mapping; overrides a built-in of the same name, with a warning
   coverage/NAME.toml     # what one harness honours of the discover-and-report kinds; overrides built-in, with a warning
   decisions/NAME.toml    # answers to generation-time mismatches; see "Decisions"
+  hook-reads.toml        # fields a hook script reads beyond its tool classes' defaults; see "Decisions"
   loadout.toml           # equip's provenance manifest: per issued artifact its sha256, source, and the mapping-path + mapping-hash it was generated from; per made symlink its target
   generated/NAME/        # generated shims and plugin files (planned)
 ```
@@ -316,8 +317,13 @@ for an event the script is not registered under simply matches no mismatch and r
 Which fields a hook reads is modelled by tool class, not by scanning the script: `shell` reads
 `shell.command`, `edit` reads `edit.file_path` (an `extractor` counts), `read` reads any of
 `read.file_path`, `read.path`, `read.pattern`, `read.glob`; `mcp`, `other`, and a hook with no
-class read none. `missing-field` is not checked for `delivery = "direct"` mappings, whose
-hooks get the Claude payload unchanged.
+class read none. A guard that reads more says so in `.polymorph/basecamp/hook-reads.toml`
+(`schema = 1`; `[hooks."SCRIPT"]` with `reads = [...]`, each a canonical `payload_in` key such
+as `tool_response`, `cwd`, or `read.path`). The file is data, validated and never executed,
+and closed-world: an unknown key, an unknown field, or a script no registered hook uses is
+an error (`hook-reads-invalid`). A declared field the mapping's `payload_in` does not map
+raises the same `missing-field` question as a class field. `missing-field` is not checked for
+`delivery = "direct"` mappings, whose hooks get the Claude payload unchanged.
 
 Undecided means: `generate` writes nothing for that target, prints each item as a block
 
@@ -373,6 +379,7 @@ Finding: `{severity: error|warning|note, code, target|null, message, file|null}`
 | `mapping-untested-live` | note | every target: block semantics, ask enforcement unproven |
 | `direct-ask-unenforceable` | warning | a `delivery = "direct"` mapping sets `ask = false`: the hook runs bare, no adapter sets `GUARD_ASK_ENFORCED`, and the hardening claim is unobservable by the hook (#34) |
 | `direct-json-answers-ignored` | warning | a `delivery = "direct"` mapping sets `json_answers = false`: the harness ignores a hook's JSON deny or ask, so a guard answering JSON fails open there and only exit 2 blocks |
+| `hook-reads-invalid` | error | `hook-reads.toml` fails validation, or names a script no registered hook uses |
 | `fail-open-enabled` | warning | a target is listed under `fail_open` in `config.toml`: a guard fault lets the call proceed |
 | `exit2-unhonoured` | warning | an adapter mapping's `payload_out.deny`/`.ask` route renders as exit 2 while `exit_2_blocks` is false: the route relies on the one code the mapping itself says does not block (#49) |
 | `hook-outside-hooks-dir` | error | hook command is not a bare script resolving under `.agents/hooks/` |
