@@ -51,8 +51,10 @@ each of these in the same change (skill `docs-sync`):
 
 ## What it does not do
 
-- **Heuristic guards.** A short password written as a plain word passes, and
-  so does a value in a path that exists. A line that mentions sops, a secret or
+- **Heuristic guards.** A short password written as a plain word passes, a
+  short value next to the words `key` or `api` passes (those two are everyday
+  vocabulary here, so they do not force the strict grammar), and so does a value
+  in a path that exists. A line that mentions sops, a secret or
   a key is held to letters only, which blocks values but also blocks normal
   sentences with digits or slashes; rewrite them.
 - **`prune` and `wt=`.** Pruning a live log while its worktree appends to it can

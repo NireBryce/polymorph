@@ -159,6 +159,9 @@ Things to know:
 - `prune` deletes the whole file, including `claim`, `release` and `done` lines
   that were never archived, and the archive it relies on is uncommitted until
   the PR is. Prune only a worktree that is gone, after its PR has merged.
+- A claim whose closing `release` or `abandon` has been archived is hidden by
+  `read` along with it, so a dropped claim does not read as work without an end.
+  `read --archive` shows both.
 - `read` skips live lines that do not parse or carry an impossible timestamp;
   `prune` and `archive` stop on them. A claim with no `paths=` is shown in
   `read` but never in `read --paths`.
@@ -183,8 +186,9 @@ not scrubbed, and the message names the rule, never the matched text.
   checked when an entry is added and when it is archived. `check` does not
   repeat it, so a later rename or delete does not break an old archived line.
 - **Secret shapes.** Token and key prefixes, UUIDs, hex strings of 16 or more
-  characters, runs of 24 or more letters and digits (a `/` ends a run, so
-  long paths pass), URLs with credentials, `key=value` and `key: value`
+  characters, runs of 24 or more letters and digits (a run containing `/`
+  passes as a path unless one piece of 8 or more characters mixes digits with
+  letters, or upper with lower case), URLs with credentials, `key=value` and `key: value`
   pairs, home directory paths. `sha=` is accepted only on `done` entries,
   which are never archived, because a hex token fits in it.
 - **The machine's own values.** The value of any environment variable whose

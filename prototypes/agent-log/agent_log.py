@@ -83,7 +83,7 @@ LINE_RULES = [
     ("a URL with credentials", re.compile(r"://[^/\s]*@")),
     ("a home directory path", re.compile(r"/home/|/Users/|/root/|[A-Za-z]:\\Users\\")),
 ]
-ALNUM_RUN = re.compile(r"[A-Za-z0-9+=]{24,}")
+ALNUM_RUN = re.compile(r"[A-Za-z0-9+=/]{24,}")
 
 # Rules on the text field only.
 KEY_VALUE = re.compile(r"(?i)\b\w*(key|token|secret|passw|credential|auth|bearer)\w*\s*[=:]\s*\S")
@@ -123,9 +123,19 @@ def local_forbidden(environ=None, git_values=None) -> Forbidden:
     return Forbidden(env_values, [word for word in git_values if len(word) >= 4])
 
 
+def mixes_characters(piece: str) -> bool:
+    has_digit, has_upper, has_lower = (any(test(c) for c in piece) for test in (str.isdigit, str.isupper, str.islower))
+    return (has_digit and (has_upper or has_lower)) or (has_upper and has_lower)
+
+
 def alnum_run_problem(text: str) -> bool:
+    """A run of 24 or more letters and digits. A run with '/' is a path unless one piece of it,
+    8 or more characters long, mixes digits with letters or upper with lower case (base64 does)."""
     for run in ALNUM_RUN.findall(text):
-        if any(c.isdigit() for c in run) and any(c.isalpha() for c in run):
+        if "/" not in run:
+            if any(c.isdigit() for c in run) and any(c.isalpha() for c in run):
+                return True
+        elif any(len(piece) >= 8 and mixes_characters(piece) for piece in run.split("/")):
             return True
     return False
 
@@ -394,6 +404,26 @@ def open_claims(lines: list[str]) -> list[str]:
                   key=lambda line: line.split(" ", 1)[0])
 
 
+def closing_entry_ids(lines: list[str]) -> dict[str, str]:
+    """claim id -> id of the release or abandon entry that closed it."""
+    parsed = sorted((m for m in map(parse_entry, lines) if m), key=lambda m: m["ts"])
+    open_by_worktree: dict[str, list[str]] = {}
+    closed_by: dict[str, str] = {}
+    for m in parsed:
+        claim_ids = open_by_worktree.setdefault(m["wt"], [])
+        if m["kind"] == "claim":
+            claim_ids.append(m["id"])
+        elif m["kind"] == "release" and m["ref"]:
+            if m["ref"] in claim_ids:
+                claim_ids.remove(m["ref"])
+                closed_by[m["ref"]] = m["id"]
+        elif m["kind"] in ("release", "abandon"):
+            for claim_id in claim_ids:
+                closed_by[claim_id] = m["id"]
+            claim_ids.clear()
+    return closed_by
+
+
 def paths_overlap(entry_paths: str | None, wanted: list[str]) -> bool:
     if not entry_paths:
         return False
@@ -443,7 +473,16 @@ def command_read(args) -> int:
         shown_lines = all_lines
     else:
         already_archived = archived_ids(archive_dir)
-        shown_lines = [line for line in live_lines if (parse_entry(line) or {"id": None})["id"] not in already_archived]
+        closed_by = closing_entry_ids(readable_entries(all_lines))
+
+        def hidden(line: str) -> bool:
+            match = parse_entry(line)
+            if not match:
+                return False
+            # a claim whose closing entry is archived goes with it, or a dropped claim would read as work without an end
+            return match["id"] in already_archived or (
+                match["kind"] == "claim" and closed_by.get(match["id"]) in already_archived)
+        shown_lines = [line for line in live_lines if not hidden(line)]
     recent = sorted((parse_entry(line) for line in readable_entries(shown_lines)), key=lambda m: m["ts"])
     if wanted:
         recent = [m for m in recent if paths_overlap(m["paths"], wanted)]
@@ -581,28 +620,29 @@ def command_resolve(args) -> int:
     if problems:
         report(problems, "rejected, nothing written (describe what was done, never the value)")
         return 2
-    redacted_file = None
+    new_archive_lines = None
     if args.redact:
         found = find_archived_line(archive_dir, wanted_id)
         if not found:
             raise UsageError("no archived entry has that id")
         path, index, archived = found
         match = parse_entry(archived)
-        lines = path.read_text().splitlines()
-        lines[index] = (f"{match['ts']} id={wanted_id} wt={match['wt']} kind={REDACTED_KIND} | {REDACTED_TEXT}")
-        handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
-        with os.fdopen(handle, "w") as out:
-            out.write("".join(text + "\n" for text in lines))
-        redacted_file = (path, temp_name)
+        new_archive_lines = path.read_text().splitlines()
+        new_archive_lines[index] = (f"{match['ts']} id={wanted_id} wt={match['wt']} kind={REDACTED_KIND} "
+                                    f"| {REDACTED_TEXT}")
+    temp_name = None
     try:
-        if redacted_file:
-            os.replace(redacted_file[1], redacted_file[0])
-            redacted_file = None
+        if new_archive_lines is not None:
+            handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+            with os.fdopen(handle, "w") as out:
+                out.write("".join(text + "\n" for text in new_archive_lines))
+            os.replace(temp_name, path)
+            temp_name = None
         if not create_new_file(flags / f"{wanted_id}.resolved", line + "\n"):
             raise UsageError("that flag is already resolved")
     finally:
-        if redacted_file:
-            os.unlink(redacted_file[1])
+        if temp_name:
+            os.unlink(temp_name)
     return 0
 
 

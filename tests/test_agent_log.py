@@ -64,6 +64,10 @@ class EntryRuleTests(unittest.TestCase):
         self.assertRule(problems("saw " + "q9" * 16), "long alphanumeric string")        # lower case and digits, 32 characters
         self.assertRule(problems("saw abcd1234efgh5678ijkl9012 in output"), "long alphanumeric string")   # 24, one case
         self.assertEqual(problems("saw " + "q9" * 8), [])                                # 16 characters: left alone
+        # a base64 secret with slashes: each piece alone is under 24 characters
+        self.assertRule(problems("saw " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" + " in env"), "long alphanumeric string")
+        self.assertEqual(problems("edited docs/plans/2026/november/notes/x today"), [])
+        self.assertEqual(problems("renamed docs/api/v1/endpoints/users/index today"), [])
 
     def test_url_credentials_and_home_paths(self):
         self.assertRule(problems("cloned from https://" + "user:pw@host/repo"), "a URL with credentials")
@@ -251,6 +255,17 @@ class CliTests(unittest.TestCase):
         self.run_cli("archive", "--branch", "feat/y", "--wt", "beta")
         self.assertIn("open claims: none", self.run_cli("read", "--claims").stdout)
         self.assertIn("kind=abandon", self.run_cli("read", "--archive").stdout)
+
+    def test_plain_read_does_not_show_a_dropped_claim_without_its_abandon(self):
+        self.add_id("claim", "working on a", wt="beta", paths="src/a.py", now="2026-11-09T10:00Z")
+        self.add_id("abandon", "dropped, branch deleted", wt="beta", now="2026-11-09T11:00Z")
+        self.run_cli("archive", "--branch", "feat/y", "--wt", "beta")
+        shown = self.run_cli("read").stdout
+        self.assertNotIn("working on a", shown)
+        self.assertNotIn("dropped, branch deleted", shown)
+        # a claim that is still open stays visible
+        self.add_id("claim", "still working on b", wt="gamma", paths="src/b.py", now="2026-11-09T12:00Z")
+        self.assertIn("still working on b", self.run_cli("read").stdout)
 
     def test_stale_claims_are_marked(self):
         self.add_id("claim", "an old claim", now="2026-11-09T10:00Z")
