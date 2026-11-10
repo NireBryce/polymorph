@@ -1,0 +1,6 @@
+2026-11-10T04:46Z id=5a17342490 wt=wt-agent-log kind=decision | entries are named by a stored id and files only grow, so flags survive a second archive
+2026-11-10T04:46Z id=5d4dd17890 wt=wt-agent-log kind=decision | a sops change is a verb and a path with no text field
+2026-11-10T04:46Z id=6957e50195 wt=wt-agent-log kind=gotcha | a hand run and mutating each rule found a non-ASCII crash and a pass false positive the first tests missed
+2026-11-10T05:02Z id=b7a81c3d73 wt=wt-agent-log kind=gotcha | archiving an abandon reopened its claim because read hid archived lines before computing claims
+2026-11-10T05:03Z id=15a719404d wt=wt-agent-log kind=gotcha | an agent reading only the docs misread the leak order until they were fixed
+2026-11-10T05:03Z id=eab14e7b06 wt=wt-agent-log kind=decision | sha is allowed on done entries only because a hex token fits in it

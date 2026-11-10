@@ -50,7 +50,12 @@ justfile; any recipe below runs the same way.
 
 ## 1. Branch, commit, open the PR
 
-In your own worktree (skill `use-a-worktree`):
+In your own worktree (skill `use-a-worktree`). Archive this worktree's agent
+log first (skill `agent-log`): `just agent-log archive --dry-run`, then
+`just agent-log archive`, and `git add wiki/agent-log/<branch>.log` with the
+other paths. It stops with nothing written if any entry breaks a rule; fix
+the entry, do not skip the step. `just agent-log-check` is part of
+`just preflight`.
 
 ```sh
 git switch -c feat/<thing> origin/experimental

@@ -27,7 +27,7 @@ class RealJustfileTests(unittest.TestCase):
     def test_every_recipe_in_the_real_justfile_is_runnable(self):
         recipes = runner.parse_justfile((ROOT / "justfile").read_text())
         self.assertIn("preflight", recipes)
-        self.assertEqual(recipes["preflight"].deps, ["test", "docs", "lint", "check", "self-check"])
+        self.assertEqual(recipes["preflight"].deps, ["test", "docs", "lint", "check", "self-check", "agent-log-check"])
         self.assertEqual(recipes["ship-land"].params, ["pr", "*args"])
         self.assertTrue(recipes["test"].description)
 
