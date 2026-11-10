@@ -20,6 +20,7 @@ change, not later.
 | flag names and help text, the man page | `cli.py` `help=` strings; `just reference` writes `docs/usage.md` and `man/polymorph.1` | never edited by hand |
 | what each module does | `AGENTS.md` architecture table | |
 | check codes (`polymorph manage check`) | `docs/SPEC.md` | `docs/cli.md` restates the table: change both |
+| agent-log line format, kinds, and guard rules | `scripts/agent_log.py` (the rules), `wiki/agent-log.md` (the style guide) | skill `agent-log`, `AGENTS.md`: change the page and the script together |
 | which mappings are verified | the `verified` key in `src/polymorph/mappings/*.toml` | never copied into prose |
 
 ## Do

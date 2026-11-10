@@ -1,5 +1,5 @@
 # Lessons agents learned the hard way
-_Last modified: 2026-11-07_
+_Last modified: 2026-11-09_
 
 Past mistakes from building this project, one line each. **Home** is where
 the rule is enforced or stated; a lesson with no Home reaches nobody.
@@ -43,3 +43,4 @@ Skill `record-a-lesson` adds rows.
 | A rename gave a comprehension's loop variable the same name its body used for an outer variable, so the body silently compared each entry against itself and the manifest merge dropped every other harness's entries; the merge test caught it. | After renaming a comprehension's loop variable, re-read every other use of that name inside the comprehension — they rebind to the loop variable, not the outer value. A test asserting the merged output (not just the absence of errors) is what sees this. | `tests/test_review_sweep.py` (manifest-merge test), skill `review` |
 | The bug-report issue form never parsed: a plain YAML value held `: ` ("strongest evidence: unit tests"), so GitHub could not offer the form, and with blank issues disabled there was no bug form at all. `tests/docs.py`'s frontmatter reader split on the first `: ` and passed the same shape in skills. | A YAML value containing `: ` is quoted; a check on YAML reads values the way a YAML parser does, not by splitting the line. | `tests/docs.py` (`check_yaml`), `tests/test_docs.py`, skill `new-skill` |
 | A scripted comma pass over the docs put two commas on the wrong conjunction: its item pattern excluded `.`, so a list like `` `draft.toml` and `log.jsonl` `` matched a later "and" in the sentence. | Read every changed line of a scripted prose edit in `git diff --word-diff` before committing. | `wiki/code-style.md` (Prose) |
+| Every test of a time-reading CLI passed a fixed `--now`, so a naive-versus-aware datetime crash in the default clock path shipped untested; a hand run of `read` found it. | A test hook that fixes the clock needs one test on the real clock too; run the new command by hand once with no test flags before calling it done. | `tests/test_agent_log.py` (`test_add_and_read_work_with_the_real_clock`), skill `review` |

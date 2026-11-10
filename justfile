@@ -33,8 +33,16 @@ reference-check:
 self-check:
     python3 scripts/self_check.py
 
+# Add, read, archive, flag or resolve agent-log entries (wiki/agent-log.md); try `just agent-log read`
+agent-log *args:
+    python3 scripts/agent_log.py {{args}}
+
+# Re-run the agent log's rules over the committed archive; fails on a bad line or an unresolved flag (flags from the last N days: `just agent-log check --recent-days N`)
+agent-log-check:
+    python3 scripts/agent_log.py check
+
 # Everything CI runs. Without just: python3 scripts/run_recipe.py preflight
-preflight: test docs lint check self-check
+preflight: test docs lint check self-check agent-log-check
 
 # Point git at .githooks (pre-commit runs docs and lint)
 install-hooks:
