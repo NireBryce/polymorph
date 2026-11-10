@@ -11,13 +11,13 @@ This page holds the decisions and the task list, so work can continue without th
 | 2026-11-10 | The agent log archive keeps `decision`, `gotcha`, `abandon`, and `sops` entries and drops `done` (`git log` has it). | user |
 | 2026-11-10 | Agents run on more than one machine, so cross-machine sharing (stage 2) stays on the plan. | user |
 | 2026-11-10 | Order: cleanup, then the log trial with the read-only work beside it, then stage 2 ahead of the transliteration refactor. Reasoning in [Order](#order). | agent proposed, user agreed |
+| 2026-11-10 | Forks are out of the agent flow: skill `ship` pushes `feat/...` branches to `origin`, and `just ship-land` refuses a PR whose head is in another repository. Stage 2 pushing refs to the upstream repository is inside that flow; fork contributors stay out of scope (they cannot push upstream refs). | read from the skills and `scripts/ship_land.py` |
 | 2026-11-10 | Agent flow lives in the skills and `AGENTS.md`; this page is data (decisions, tasks, tables), not procedure. | user |
 | 2026-11-10 | "Say what happened, not what to do" in log entries is a convention, not a rule the script enforces. | recorded in the [style guide](../prototypes/agent-log/style-guide.md) |
 
 Open, waiting on the user:
 
-- Do contributors or agents push to forks rather than the main repository? Stage 2 pushes refs to the upstream repository, which fork contributors cannot do.
-- A yes to run the secret-scanning test (task T6), because it pushes to GitHub.
+- A yes to run the secret-scanning test (task T6). `AGENTS.md` limits what agents file and push to `NireBryce/polymorph` unless the user names another project, and the test needs a throwaway private repository.
 
 ## Where things stand
 
