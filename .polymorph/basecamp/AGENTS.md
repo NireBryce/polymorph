@@ -48,6 +48,14 @@ loadout manager (its role), onboarding run, gap report — is fixed in
 - **A mapping without `verified` stays without it** until its block
   semantics were seen in a live session (skill `new-mapping`).
 - **Standard library only.** No runtime or test dependency.
+- **A step you would repeat the same way is a script, not prose.** Put it in
+  `scripts/` (standard library, tested with stubs or a temp directory) behind
+  a `just` recipe, and have the skill or this file name the recipe; keep prose
+  for judgment: what to pick, when to stop, what to ask. A prose procedure is
+  re-derived by every session and drifts; a script is run and tested. Before
+  writing a numbered list of shell commands into a skill, write the script.
+  Scripts are repo tooling and follow the same rules as `src/`; nothing from a
+  mapping, a discovery log, or a harness report reaches one as code.
 - **Say which rung you reached**: *unit tests* (`just test`), *ran the CLI*
   (you ran the subcommand and read its output), *ran in a live harness*
   (a real session fired the hook). Never claim more than you saw.
