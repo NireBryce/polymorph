@@ -50,6 +50,10 @@ old; ask the user before treating it as dead.
 - Any line that mentions sops, a secret, a password, a token or similar gets the
   strict form: letters, spaces, `.`, `,` and `-` only, 80 characters. Never say
   what a value, a host or a path was.
+- Try the tool in a temp directory, never against the real log: pass
+  `--log-dir`, `--archive-dir` and `--repo-root` pointing at a scratch
+  location. A made-up entry in the real log reads as history, and an archived
+  one is committed.
 - A rejected entry means a rule fired; the message names the rule. Rewrite
   the sentence. Do not work around the rule.
 

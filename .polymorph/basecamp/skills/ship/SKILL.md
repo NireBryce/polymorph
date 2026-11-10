@@ -96,7 +96,10 @@ just ci-wait <n>
 
 It prints `<sha7> <status> <conclusion>` and the PR's mergeStateStatus, and
 exits 0 only when the run on the PR's current head succeeded and the PR is
-`CLEAN`. Read the exit status before going on. A red check: `gh run view
+`CLEAN`. Read the exit status before going on, and compare the printed
+`<sha7>` with the commit you pushed (`git rev-parse --short HEAD`): right after
+a push, GitHub can still report the previous head, and a green result for it
+says nothing about yours. A red check: `gh run view
 <run> --log-failed`, fix, push, wait again. When it exits 0, show the title,
 URL, commit list, and diff stat, and ask the one combined question. If it
 does not, leave the PR open, say so, and stop.
