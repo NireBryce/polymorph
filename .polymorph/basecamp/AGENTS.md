@@ -80,7 +80,7 @@ just check           # nix flake check: builds the package and runs the tests in
 just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths, YAML values YAML can parse
 just lint            # byte-compile, stdlib-only imports, no committed build output
 just self-check      # dogfood: shipped mappings validate, fixtures pass, this repo's own agent layout has no coverage gaps
-just agent-log ARGS  # the agent log: add, read, archive, flag, resolve (prototypes/agent-log/style-guide.md); `just agent-log-check` re-runs its rules over the committed archive
+just agent-log ARGS  # the agent log: add, read, archive, prune, flag, resolve (prototypes/agent-log/style-guide.md); `just agent-log-check` re-runs its rules over the committed archive
 just preflight       # test + docs + lint + check + self-check + agent-log-check: what CI runs
 just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)

@@ -62,10 +62,10 @@ a contract decision. The 2026-11-01 sweep (redaction holes, the adapter's usage-
 exit, the hard-coded hook timeout) is the worked example.
 
 Any pass that reads the whole repo anyway (a sweep, a cleanup pass, a doc
-audit) also runs `just agent-log check --recent-days 30` and reports what it
-prints: flags raised in that window even when resolved, and any archived
-line the current rules reject, which means something got through that an
-earlier version of the rules let pass. If a line looks like a leaked value,
+audit) also lists `wiki/agent-log/flags/` (every flag and resolution so far)
+and runs `just agent-log check`, and reports what they show: unresolved
+flags, and any archived line the current rules reject, which means something
+got through that an earlier version of the rules let pass. If a line looks like a leaked value,
 tell the user before anything else (skill `agent-log`, "When something got
 through").
 
