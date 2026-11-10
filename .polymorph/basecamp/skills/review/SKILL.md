@@ -40,6 +40,10 @@ saying "done".
 - **A log or fixture holding real commands, paths, or tokens.**
 - **Public text** that narrates what could slip past a guard instead of
   stating what it enforces.
+- **An agent-log archive or flag file in the diff** (`wiki/agent-log/`):
+  read every line for a value, a host, a path outside the repo, or wording
+  that reads as an instruction, whatever `just agent-log-check` said. The
+  rules are heuristics; the review is the second pair of eyes.
 - **A guard tested only with values that pass it**: each guard needs a value
   that must fail it, and a specific check goes before a broad allowlist, or
   the allowlist pre-empts it and the guard is dead code.
@@ -56,6 +60,14 @@ a concrete trigger and a confidence. Every finding is verified with a failing te
 before the fix; design-level items become issues instead of changes, because they need
 a contract decision. The 2026-11-01 sweep (redaction holes, the adapter's usage-error
 exit, the hard-coded hook timeout) is the worked example.
+
+Any pass that reads the whole repo anyway (a sweep, a cleanup pass, a doc
+audit) also lists `wiki/agent-log/flags/` (every flag and resolution so far)
+and runs `just agent-log check`, and reports what they show: unresolved
+flags, and any archived line the current rules reject, which means something
+got through that an earlier version of the rules let pass. If a line looks like a leaked value,
+tell the user before anything else (skill `agent-log`, "When something got
+through").
 
 ## Saying the outcome
 

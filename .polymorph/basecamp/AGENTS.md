@@ -48,6 +48,10 @@ loadout manager (its role), onboarding run, gap report — is fixed in
 - **A mapping without `verified` stays without it** until its block
   semantics were seen in a live session (skill `new-mapping`).
 - **Standard library only.** No runtime or test dependency.
+- **Log your work in the agent log** (skill `agent-log`; a prototype, see `prototypes/agent-log/README.md`):
+  claim paths before editing, a line after each commit or surprise, `abandon`
+  when dropping work, `just agent-log archive` when shipping. Lines say what
+  happened, never what to do, and never carry a value from a secrets store.
 - **Say which rung you reached**: *unit tests* (`just test`), *ran the CLI*
   (you ran the subcommand and read its output), *ran in a live harness*
   (a real session fired the hook). Never claim more than you saw.
@@ -76,7 +80,8 @@ just check           # nix flake check: builds the package and runs the tests in
 just docs            # skills listed, links resolve, every CLI subcommand documented, banner, no home paths, YAML values YAML can parse
 just lint            # byte-compile, stdlib-only imports, no committed build output
 just self-check      # dogfood: shipped mappings validate, fixtures pass, this repo's own agent layout has no coverage gaps
-just preflight       # test + docs + lint + check + self-check: what CI runs
+just agent-log ARGS  # the agent log: add, read, archive, prune, flag, resolve (prototypes/agent-log/style-guide.md); `just agent-log-check` re-runs its rules over the committed archive
+just preflight       # test + docs + lint + check + self-check + agent-log-check: what CI runs
 just reference       # rewrite docs/usage.md and man/polymorph.1 from the argparse parser (just reference-check: fail if stale)
 just install-hooks   # point git at .githooks (pre-commit runs docs and lint)
 just ci-wait [PR|BRANCH]   # wait for CI on the head commit: prints `sha7 status conclusion` and mergeStateStatus; exit 0 only if success and CLEAN (--timeout, default 900s)
@@ -110,9 +115,10 @@ exit status separately, or use `set -o pipefail`.
 | `src/polymorph/mappings/NAME.toml` | built-in per-harness mappings |
 | `src/polymorph/fixtures/NAME/*.json` | one payload/answer fixture per mapping per case |
 | `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`); `self_check.py`: `just self-check`; `run_recipe.py`: runs justfile recipes where `just` is not installed (refuses syntax beyond the subset the justfile uses, so recipe logic lives here) |
+| `prototypes/` | tools kept here until they earn a place elsewhere; each has a README with its status, known problems, and the skills that reference it. `agent-log/`: the shared agent log (`just agent-log`, `just agent-log-check`) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
 | `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
-| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, `risk-and-impact.md` (the 1-10 scale every PR body and change-proposing issue ends with), and `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written) |
+| `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, `risk-and-impact.md` (the 1-10 scale every PR body and change-proposing issue ends with), `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written), and `agent-log/BRANCH.log` (the committed archive of the agent log, written by `just agent-log archive`) |
 | `.github/` | CI (`check.yml` runs `just preflight`), PR and issue templates |
 | `.githooks/` | opt-in pre-commit (`just install-hooks`) |
 
@@ -122,6 +128,7 @@ exit status separately, or use `set -o pipefail`.
 |---|---|
 | `ship` | landing work through a branch, a PR, and one confirmation |
 | `use-a-worktree` | branching work in isolation |
+| `agent-log` | claiming paths, recording work and dropped work where other worktrees can read it, and archiving it per PR |
 | `new-mapping` | adding a harness: discover, draft, review, fixtures, live check |
 | `change-the-schema` | changing the mapping schema or the canonical config |
 | `report-harness` | describing your own harness in an issue |
