@@ -36,7 +36,7 @@ Run it as the standard way of working for the next few PRs, and change nothing a
 
 - **#111, module or tool.** Decide when a second repo wants the log, or when cross-machine work starts. Until then it stays a prototype and stays extractable (no imports from polymorph, configuration in flags).
 - **Cross-machine sharing (stage 2).** One git ref per agent, a `sync` that re-runs the rules before it pushes. A pushed line cannot be recalled, so this is the first step that cannot be undone, and fork contributors would be left out. Do it only if agents run on more than one machine. Before relying on GitHub's secret scanning for custom refs, test whether it sees them, against a throwaway private repository, with the user's yes.
-- **The archive's scope.** The archive keeps `decision`, `gotcha`, `abandon`, and `sops` entries and drops `done`, because `git log` has it. That was chosen without a confirmed yes; widen it if the trial shows a gap.
+- **The archive's scope.** The archive keeps `decision`, `gotcha`, `abandon`, and `sops` entries and drops `done`, because `git log` has it. The user confirmed on 2026-11-10 that dropping `done` is fine; widen it only if the trial shows a gap.
 
 ## Phase D: composable transliteration (#108)
 
@@ -59,6 +59,5 @@ A, then B and D0 in parallel (B is observation, D0 is reading), then D's survey.
 
 ## Questions for the user
 
-1. Is dropping `done` from the archive right?
-2. D first, or B first with D waiting?
-3. Do agents here run on more than one machine? If not, stage 2 is off the plan.
+1. D first, or B first with D waiting?
+2. Do agents here run on more than one machine? If not, stage 2 is off the plan.
