@@ -48,6 +48,18 @@ loadout manager (its role), onboarding run, gap report — is fixed in
 - **A mapping without `verified` stays without it** until its block
   semantics were seen in a live session (skill `new-mapping`).
 - **Standard library only.** No runtime or test dependency.
+- **A step you would repeat the same way is a script, not prose.** Put it in
+  `scripts/` (standard library, tested with stubs or a temp directory) behind
+  a `just` recipe, and have the skill or this file name the recipe; keep prose
+  for judgment: what to pick, when to stop, what to ask. A prose procedure is
+  re-derived by every session and drifts; a script is run and tested. Before
+  writing a numbered list of shell commands into a skill, write the script.
+  Scripts are repo tooling and follow the same rules as `src/`; nothing from a
+  mapping, a discovery log, or a harness report reaches one as code. This is a
+  default, not a ban: when a skill would be a big gain over a script for some
+  step (it has to read context, it differs case by case, or a script for it
+  would be brittle), tell the user and propose the skill instead of choosing
+  silently either way, and do not write a script only to satisfy this rule.
 - **Log your work in the agent log** (skill `agent-log`; a prototype, see `prototypes/agent-log/README.md`):
   claim paths before editing, a line after each commit or surprise, `abandon`
   when dropping work, `just agent-log archive` when shipping. Lines say what
