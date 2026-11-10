@@ -1,0 +1,4 @@
+2026-11-10T09:58Z id=8e90471fb1 wt=wt-plan kind=decision | stage 2 stays on the plan because agents run on more than one machine
+2026-11-10T09:58Z id=8399e99982 wt=wt-plan kind=decision | the plan is a task table with dependencies so it can be worked from without the conversation
+2026-11-10T10:01Z id=11485051ba wt=wt-plan kind=decision | agent flow lives in skills and AGENTS.md and the plan page holds only decisions and tasks
+2026-11-10T10:45Z id=445db14098 wt=wt-plan kind=decision | the next-task skill and the agents file edits misread the user and were reverted; the pick-up steps stay on the plan page

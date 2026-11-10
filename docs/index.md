@@ -15,6 +15,7 @@ polymorph is experimental and unvetted; read [Limits](limits.md) before relying 
 | See what a real harness sent | [Observed: t3code](observed-t3code.md), [Observed: OpenCode](observed-opencode.md) (with an [example plugin](examples/opencode-discovery-plugin.js)), [Observed: a live ZCode session](observed-zcode-session.md) |
 | Use the pivot's words correctly | [Vocabulary](vocabulary.md) |
 | See where the scope goes next | [Loadout pivot plan](plan-loadout-pivot.md) |
+| See the phases after the agent log | [Plan: the phases after the agent log](plan-next-phases.md) |
 | Contribute or report a harness | [CONTRIBUTING](../CONTRIBUTING.md) |
 | See what changed | [CHANGELOG](../CHANGELOG.md) |
 
