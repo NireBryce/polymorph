@@ -55,8 +55,12 @@ each of these in the same change (skill `docs-sync`):
   so does a value in a path that exists. A line that mentions sops, a secret or
   a key is held to letters only, which blocks values but also blocks normal
   sentences with digits or slashes; rewrite them.
-- **A race on `prune`.** Deleting a live log while its worktree appends to it
-  can lose the append. Prune only a worktree that is gone.
+- **`prune` and `wt=`.** Pruning a live log while its worktree appends to it can
+  lose the append, and it drops the unarchived `claim`, `release` and `done`
+  lines with it; prune only a worktree that is gone, after its PR merged. The
+  `wt=` field is free text within its character set.
+- **Instruction wording is a convention.** The rules reject backticks, `$(`,
+  `${` and a few phrases; a line that reads as a command still passes.
 - **No locks.** Claims are advisory.
 - **One clone.** Nothing moves a log between clones or machines.
 - **`--redact` is cosmetic.** The old text stays in git history; rotation is

@@ -83,7 +83,7 @@ LINE_RULES = [
     ("a URL with credentials", re.compile(r"://[^/\s]*@")),
     ("a home directory path", re.compile(r"/home/|/Users/|/root/|[A-Za-z]:\\Users\\")),
 ]
-ALNUM_RUN = re.compile(r"[A-Za-z0-9+/=]{24,}")
+ALNUM_RUN = re.compile(r"[A-Za-z0-9+=]{24,}")
 
 # Rules on the text field only.
 KEY_VALUE = re.compile(r"(?i)\b\w*(key|token|secret|passw|credential|auth|bearer)\w*\s*[=:]\s*\S")
@@ -92,7 +92,7 @@ INJECTION = re.compile(
     r"(?i)(ignore (all |any |previous|prior|the above)|disregard|system prompt|instructions? (say|from|above)"
     r"|as an ai|you are now|new instructions?)")
 SENSITIVE_WORD = re.compile(
-    r"(?i)\b(sops|secrets?|vault|credentials?|keyring|passwords?|passwd|passphrases?|pw|tokens?|keys?|api|pgp|gpg)\b")
+    r"(?i)\b(sops|secrets?|vault|credentials?|keyring|passwords?|passwd|passcodes?|passphrases?|pw|tokens?|pgp|gpg)\b")
 STRICT_TEXT = re.compile(rf"^[A-Za-z .,-]{{1,{STRICT_MAX_TEXT}}}$")
 SECRET_ENV_NAME = re.compile(r"(?i)(key|token|secret|passw|cred|auth|sops)")
 
@@ -125,10 +125,7 @@ def local_forbidden(environ=None, git_values=None) -> Forbidden:
 
 def alnum_run_problem(text: str) -> bool:
     for run in ALNUM_RUN.findall(text):
-        has_digit = any(c.isdigit() for c in run)
-        has_letter = any(c.isalpha() for c in run)
-        mixed_case = any(c.isupper() for c in run) and any(c.islower() for c in run)
-        if has_digit and has_letter and (mixed_case or len(run) >= 32):
+        if any(c.isdigit() for c in run) and any(c.isalpha() for c in run):
             return True
     return False
 
@@ -157,7 +154,7 @@ def text_problems(text: str) -> list[str]:
     if INJECTION.search(text):
         problems.append("contains wording that reads as an instruction to a reader")
     if SENSITIVE_WORD.search(text) and not STRICT_TEXT.match(text):
-        problems.append(f"mentions sops, a secret, a key, a password or similar: letters, spaces, '.', ',' and '-' "
+        problems.append(f"mentions sops, a secret, a password, a token or similar: letters, spaces, '.', ',' and '-' "
                         f"only, {STRICT_MAX_TEXT} characters at most, so no value can ride along")
     return problems
 
@@ -179,7 +176,11 @@ def shape_problems(match, stored: bool) -> list[str]:
     kind, verb, ref, text, paths = (match[name] for name in ("kind", "verb", "ref", "text", "paths"))
     problems = []
     if kind == REDACTED_KIND:
-        return [] if stored else ["kind redacted is only written by resolve --redact"]
+        if not stored:
+            return ["kind redacted is only written by resolve --redact"]
+        if text != REDACTED_TEXT or verb or ref or match["sha"] or paths:
+            return [f"a redacted entry is exactly '{REDACTED_TEXT}' and nothing else"]
+        return []
     if kind not in KINDS:
         return [f"kind must be one of {', '.join(KINDS)}"]
     if kind == "sops":
@@ -194,8 +195,10 @@ def shape_problems(match, stored: bool) -> list[str]:
             problems.append("verb= belongs to sops entries only")
         if text is None:
             problems.append("an entry needs text after ' | '")
-    if ref is not None and kind not in ("release", "abandon"):
-        problems.append("ref= belongs to release and abandon entries only")
+    if ref is not None and kind != "release":
+        problems.append("ref= belongs to release entries only")
+    if match["sha"] is not None and kind != "done":
+        problems.append("sha= belongs to done entries only (done is never archived)")
     if paths is not None and any(item == "" or item.startswith("/") or ".." in item.split("/")
                                  for item in paths.split(",")):
         problems.append("paths must be repo-relative, with no '..' and no empty item")
@@ -206,7 +209,8 @@ def entry_problems(line: str, forbidden: Forbidden, stored: bool = False) -> lis
     match = parse_entry(line)
     if not match:
         return ["not an entry: expected 'TS id=HEX10 wt=NAME kind=KIND [ref=ID] [verb=V] [sha=HEX] [paths=A,B] "
-                f"[| text]' in printable ASCII, text 1-{MAX_TEXT} characters"]
+                f"[| text]' in printable ASCII; this also covers non-ASCII characters, text over {MAX_TEXT} characters, "
+                "and spaces or odd characters in paths="]
     problems = []
     try:
         datetime.strptime(match["ts"], TS_FORMAT)
@@ -403,12 +407,9 @@ def paths_overlap(entry_paths: str | None, wanted: list[str]) -> bool:
 def command_read(args) -> int:
     log_dir = args.log_dir or default_log_dir()
     archive_dir = archive_dir_of(args)
-    lines = [line for path in live_files(log_dir) for line in read_lines(path)]
-    if args.archive:
-        lines += [line for path in archive_files(archive_dir) for line in read_lines(path)]
-    else:
-        already_archived = archived_ids(archive_dir)
-        lines = [line for line in lines if (parse_entry(line) or {"id": None})["id"] not in already_archived]
+    live_lines = [line for path in live_files(log_dir) for line in read_lines(path)]
+    all_lines = live_lines + ([line for path in archive_files(archive_dir) for line in read_lines(path)]
+                              if args.archive else [])
     now = now_from(args)
     wanted = args.paths.split(",") if args.paths else []
 
@@ -416,16 +417,21 @@ def command_read(args) -> int:
         age = now - datetime.strptime(parse_entry(line)["ts"], TS_FORMAT)
         return " [stale]" if age > timedelta(hours=args.stale_hours) else ""
 
-    readable = []
-    for line in lines:
-        match = parse_entry(line)
-        try:
-            if match:
-                datetime.strptime(match["ts"], TS_FORMAT)
-                readable.append(line)
-        except ValueError:
-            continue
-    claims = open_claims(readable)
+    def readable_entries(lines: list[str]) -> list[str]:
+        """Lines that parse and have a real timestamp; the rest are skipped, not fatal."""
+        readable = []
+        for line in lines:
+            match = parse_entry(line)
+            try:
+                if match:
+                    datetime.strptime(match["ts"], TS_FORMAT)
+                    readable.append(line)
+            except ValueError:
+                continue
+        return readable
+
+    # claims come from every line: an archived abandon must still close its worktree's claims
+    claims = open_claims(readable_entries(all_lines))
     if wanted:
         claims = [c for c in claims if paths_overlap(parse_entry(c)["paths"], wanted)]
     print("open claims:" if claims else "open claims: none")
@@ -433,7 +439,12 @@ def command_read(args) -> int:
         print(f"  {claim}{stale_note(claim)}")
     if args.claims:
         return 0
-    recent = sorted((parse_entry(line) for line in readable), key=lambda m: m["ts"])
+    if args.archive:
+        shown_lines = all_lines
+    else:
+        already_archived = archived_ids(archive_dir)
+        shown_lines = [line for line in live_lines if (parse_entry(line) or {"id": None})["id"] not in already_archived]
+    recent = sorted((parse_entry(line) for line in readable_entries(shown_lines)), key=lambda m: m["ts"])
     if wanted:
         recent = [m for m in recent if paths_overlap(m["paths"], wanted)]
     shown = recent[-args.tail:] if args.tail > 0 else []
@@ -509,7 +520,8 @@ def command_prune(args) -> int:
         if unarchived:
             refused = True
             print(f"prune: {name} still has {len(unarchived)} entries not in the archive "
-                  f"(first: {unarchived[0]}); archive them or write them off by hand", file=sys.stderr)
+                  f"(first: {unarchived[0]}); archive them, or delete the line from the live file by hand if it "
+                  "should not be kept", file=sys.stderr)
         else:
             removable.append(path)
     if refused:
@@ -582,12 +594,15 @@ def command_resolve(args) -> int:
         with os.fdopen(handle, "w") as out:
             out.write("".join(text + "\n" for text in lines))
         redacted_file = (path, temp_name)
-    if not create_new_file(flags / f"{wanted_id}.resolved", line + "\n"):
+    try:
+        if redacted_file:
+            os.replace(redacted_file[1], redacted_file[0])
+            redacted_file = None
+        if not create_new_file(flags / f"{wanted_id}.resolved", line + "\n"):
+            raise UsageError("that flag is already resolved")
+    finally:
         if redacted_file:
             os.unlink(redacted_file[1])
-        raise UsageError("that flag is already resolved")
-    if redacted_file:
-        os.replace(redacted_file[1], redacted_file[0])
     return 0
 
 
@@ -602,6 +617,9 @@ def command_check(args) -> int:
                 continue
             count += 1
             problems = entry_problems(line, forbidden, stored=True)
+            match = parse_entry(line)
+            if match and match["kind"] == REDACTED_KIND and not (archive_dir / FLAGS_SUBDIR / f"{match['id']}.resolved").is_file():
+                problems.append("a redacted entry needs a resolved flag with its id")
             if problems:
                 problems_found += len(problems)
                 report(problems, f"{path.name}:{number}")

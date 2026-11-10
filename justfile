@@ -33,11 +33,11 @@ reference-check:
 self-check:
     python3 scripts/self_check.py
 
-# Add, read, archive, flag or resolve agent-log entries (prototypes/agent-log/style-guide.md); try `just agent-log read`
+# Add, read, archive, prune, flag or resolve agent-log entries (prototypes/agent-log/style-guide.md); try `just agent-log read`
 agent-log *args:
     python3 prototypes/agent-log/agent_log.py {{args}}
 
-# Re-run the agent log's rules over the committed archive; fails on a bad line or an unresolved flag (flags from the last N days: `just agent-log check --recent-days N`)
+# Re-run the agent log's rules over the committed archive; fails on a bad line or an unresolved flag
 agent-log-check:
     python3 prototypes/agent-log/agent_log.py check
 

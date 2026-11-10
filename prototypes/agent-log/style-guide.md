@@ -70,7 +70,8 @@ Say how only when the method is the point ("rebased instead of merged because
 the branch had one commit"). Never paste tool output, error text, file contents
 or environment values; write the sentence in your own words. A change to a
 sops file is recorded with the `sops` kind and nothing else: which verb, which
-file. When a lesson deserves to be a rule, it goes to
+file. If the reason matters, add a separate `decision` or `gotcha` in the
+strict form (letters only, no value, host or path). When a lesson deserves to be a rule, it goes to
 `wiki/agents-lessons-learned.md` (skill `record-a-lesson`), not here.
 
 ## Commands
@@ -95,12 +96,34 @@ is `$(git rev-parse --git-common-dir)/agent-log/WORKTREE.log`, shared by every
 worktree of the clone and never committed. A claim older than 24 hours is shown
 `[stale]`; nothing releases it for you.
 
+## Fixing a mistake
+
+Lines are never edited: an edited archived line fails `check` because its id no
+longer matches. Correct a wrong line with a new line that says what is true
+now. A live line that must go is removed by the user by hand (the log is a
+plain file); an archived one goes through `flag` and `resolve --redact`.
+
+## Options and exit codes
+
+Before the subcommand: `--log-dir DIR` (the live log; default the git common
+dir's `agent-log`), `--archive-dir DIR` (default `wiki/agent-log` in the repo
+root) and `--repo-root DIR` (where archived `paths=` must exist; default the git
+top level). Outside a git repository, pass all three and `--wt`. `read` also
+takes `--tail N` (default 30) and `--stale-hours N` (default 24). `archive`
+defaults `--wt` to this worktree's directory name and `--branch` to the current
+branch (on a detached HEAD pass `--branch`).
+
+Exit codes: 0 done; 1 `archive`, `prune` or `check` found a problem (and wrote
+or removed nothing); 2 usage error, or an entry the rules reject.
+
 ## Dropped work
 
 The entries stay. Dropping a branch does not delete its log, and does not need to:
 
-- Write `abandon` (it closes the worktree's open claims). The line stays
-  readable in `read`, so the next agent sees the work was dropped and why.
+- Write `abandon` (it closes the worktree's open claims, even after the entry
+  is archived). The line stays readable in `read` until it is archived, and
+  afterwards in `read --archive` and the archive file, so the next agent sees
+  the work was dropped and why.
 - If the abandoned work is worth keeping on record, archive it with a later
   PR: `just agent-log archive --branch feat/other --wt dropped-worktree`.
   Otherwise it stays local and uncommitted.
@@ -119,16 +142,36 @@ Skill `ship` runs `just agent-log archive` before the commit. It:
    archive to the end of `wiki/agent-log/BRANCH.log` (slashes become dashes),
    which the PR commits;
 3. leaves the live log exactly as it was. `read` hides entries whose id is
-   archived. `prune --wt NAME` deletes a live log whose entries are all archived.
+   archived in this checkout. `prune --wt NAME` deletes a whole live log, and
+   refuses unless every archivable entry in it is archived.
 
 The archive is only appended to: a second archive adds lines at the end and
 moves nothing. Archived lines are public as soon as the PR is.
 
+Things to know:
+
+- The archive is the `wiki/agent-log/` of the checkout you run it in. Another
+  worktree on another branch does not have your archive file until it merges, so
+  its `read` still shows those entries. Archive and `read` dedupe against this
+  checkout only.
+- Two entries with the same text, kind and fields in the same minute have the
+  same id and are archived once.
+- `prune` deletes the whole file, including `claim`, `release` and `done` lines
+  that were never archived, and the archive it relies on is uncommitted until
+  the PR is. Prune only a worktree that is gone, after its PR has merged.
+- `read` skips live lines that do not parse or carry an impossible timestamp;
+  `prune` and `archive` stop on them. A claim with no `paths=` is shown in
+  `read` but never in `read --paths`.
+- A live line that `archive` or `prune` refuses (hand-edited, or caught by a
+  rule added later): delete it from your worktree's live file and add a
+  corrected one. It is a plain local file; the id changes if a line is edited.
+
 ## Guards
 
 All of these run in `add` and again in `archive`; `just agent-log-check` (part
-of `just preflight`, so CI) re-runs the current rules over everything
-committed, so a rule added later reaches old lines. A failing line is rejected,
+of `just preflight`, so CI) re-runs them over everything committed, so a rule
+added later reaches old lines. The one exception is "Paths exist", which is
+checked at `add` and `archive` only. A failing line is rejected,
 not scrubbed, and the message names the rule, never the matched text.
 
 - **Grammar.** Fixed fields, `kind` from the table, repo-relative `paths`,
@@ -136,22 +179,34 @@ not scrubbed, and the message names the rule, never the matched text.
   line (an edited archived line fails `check`).
 - **Paths exist.** For the kinds that get archived, every `paths=` item must be
   a file or directory in the repo or at `HEAD`, so a value cannot ride in a
-  path. Claims may name files not yet created; they are never archived.
-- **Secret shapes.** Token and key prefixes, UUIDs, long hex strings, long
-  alphanumeric runs, URLs with credentials, `key=value` and `key: value`
-  pairs, home directory paths.
+  path. Claims may name files not yet created; they are never archived. This is
+  checked when an entry is added and when it is archived. `check` does not
+  repeat it, so a later rename or delete does not break an old archived line.
+- **Secret shapes.** Token and key prefixes, UUIDs, hex strings of 16 or more
+  characters, runs of 24 or more letters and digits (a `/` ends a run, so
+  long paths pass), URLs with credentials, `key=value` and `key: value`
+  pairs, home directory paths. `sha=` is accepted only on `done` entries,
+  which are never archived, because a hex token fits in it.
 - **The machine's own values.** The value of any environment variable whose
-  name looks like a key, token, secret, password, credential or auth, and the
-  git user name and email.
-- **Instruction shapes.** Backticks, `$(` and `${`, and wording such as
-  "ignore previous".
+  name contains key, token, secret, passw, cred, auth or sops (six characters
+  or more), and the git user name and email (four characters or more, matched
+  as whole words, so write 'the user').
+- **Instruction shapes.** Backticks, `$(` and `${`, and a few phrases such as
+  "ignore previous". That is all: "say what happened, not what to do" is a
+  convention this page asks for, not a rule the script enforces, and a line
+  that reads as a command passes.
 - **sops, and anything near it.** sops is the secrets store. A change to one is
   a `sops` entry: a verb and a path, no text, so there is nothing to scan. The
   rules reject sops ciphertext markers (`ENC[`) and age keys anywhere. Any
-  other line that mentions sops, a secret, a credential, a password, a token, a
-  key, an API, a vault or a key ring is held to a stricter grammar: letters,
+  other line that mentions sops, a secret, a credential, a password, a
+  passcode, a passphrase, `pw`, a token, a vault, a key ring, pgp or gpg is
+  held to a stricter grammar: letters,
   spaces, `.`, `,` and `-` only, 80 characters at most, so no value, identifier,
   host name or path can ride along.
+
+The `wt=` field is whatever `--wt` says (letters, digits, `.`, `_`, `-`, 60
+characters), so a short value can ride there; the default is the worktree's
+directory name.
 
 These are heuristics. They lower the chance a secret reaches a committed
 file. They do not prove it did not: a short password written as a plain word
@@ -161,9 +216,10 @@ violation and sees that rule's own message (`tests/test_agent_log.py`).
 
 ## When something got through
 
-Lines are committed to a public repository, so a leak is a leak: rotate the
-credential first, then record it. Entries are named by id (`read --archive`
-shows it).
+Lines are committed to a public repository, so a leak is a leak. In order:
+tell the user; record it with `flag` (CI goes red on purpose); the user
+rotates the credential; then `resolve`. Entries are named by id
+(`read --archive` shows it).
 
 ```sh
 just agent-log flag 3fa91c0b2e "a token reached this entry"
@@ -179,7 +235,9 @@ just agent-log resolve 3fa91c0b2e "token rotated, entry redacted" --redact
 ```
 
 `--redact` replaces the entry in the working tree with a `kind=redacted` line
-that keeps its id. The old text remains in git history; removing it from
+that keeps its id; use it for a leaked value, and leave it off only if the line
+should stay readable. The flag and `.resolved` files are committed with the PR
+that fixes the leak (skill `ship`). The old text remains in git history; removing it from
 history rewrites a published branch, which is the user's decision, not an
 agent's. `ls wiki/agent-log/flags/` is the record of every flag and resolution.
 
@@ -191,10 +249,11 @@ line.
 
 Stopping is safe at any point; nothing else depends on the log.
 
-1. Stop writing. Remove skill `agent-log` and its row in `AGENTS.md`, the
-   "Log your work" hard rule, and the steps it added to skills
-   `use-a-worktree`, `ship`, `review` and `docs-sync` (`git grep agent-log`
-   lists every place).
+1. Stop writing. Remove skill `agent-log`, and every place the README's
+   "Skills and files that reference it" table lists: the "Log your work" hard
+   rule, the commands line and the architecture and skills rows in `AGENTS.md`,
+   and the steps added to skills `use-a-worktree`, `ship`, `review` and
+   `docs-sync` (`git grep agent-log` lists every place).
 2. Remove `prototypes/agent-log/` (the script, this guide, the README),
    `tests/test_agent_log.py`, the `agent-log` and `agent-log-check` recipes
    (and `agent-log-check` from `preflight`, and its name in

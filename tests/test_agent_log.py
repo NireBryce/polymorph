@@ -62,7 +62,8 @@ class EntryRuleTests(unittest.TestCase):
         self.assertRule(problems("api key " + "550e8400-e29b-41d4-a716-446655440000 set"), "a UUID")
         self.assertRule(problems("saw " + "Zq9" * 9), "long alphanumeric string")        # mixed case, 27 characters, not hex
         self.assertRule(problems("saw " + "q9" * 16), "long alphanumeric string")        # lower case and digits, 32 characters
-        self.assertEqual(problems("saw " + "q9" * 8), [])                                # 16 characters, one case: left alone
+        self.assertRule(problems("saw abcd1234efgh5678ijkl9012 in output"), "long alphanumeric string")   # 24, one case
+        self.assertEqual(problems("saw " + "q9" * 8), [])                                # 16 characters: left alone
 
     def test_url_credentials_and_home_paths(self):
         self.assertRule(problems("cloned from https://" + "user:pw@host/repo"), "a URL with credentials")
@@ -84,8 +85,13 @@ class EntryRuleTests(unittest.TestCase):
         self.assertEqual(problems("added a new entry to sops"), [])
         for text in ("added entry to sops for host2", "rotated the secret from /srv/x", "sops " + "word " * 20,
                      "passwd is Tr0ub4dor3", "pw hunter2 for db", "the passphrase is correcthorse1",
-                     "the key is in vars1", "api endpoint /v1 added"):
+                     "the passcode was 88123"):
             self.assertRule(problems(text), "letters, spaces")
+
+    def test_everyday_vocabulary_is_not_held_to_the_strict_grammar(self):
+        for text in ("unknown keys are errors in schema 1", "tool_name key renamed in mappings",
+                     "the GitHub api rate limit hit twice", "path docs/plans/2026/november/notes/x added"):
+            self.assertEqual(problems(text), [], text)
 
     def test_environment_values_and_the_git_identity(self):
         forbidden = agent_log.local_forbidden({"DEPLOY_TOKEN": "zzzzzz-secret-value", "PATH": "/bin", "USER": "runner"},
@@ -108,9 +114,23 @@ class EntryRuleTests(unittest.TestCase):
         self.assertRule(problems("naïve text"), "not an entry")
         self.assertRule(problems(ts="2026-13-45T10:00Z"), "not a real date")
         self.assertRule(problems(kind="redacted"), "only written by resolve --redact")
-        self.assertRule(problems(ref="0123456789"), "release and abandon entries only")
+        self.assertRule(problems(ref="0123456789"), "release entries only")
+        self.assertRule(problems(kind="abandon", ref="0123456789"), "release entries only")
         self.assertRule(problems(verb="added"), "belongs to sops entries only")
         self.assertRule(agent_log.entry_problems(make_line(text=None), NO_FORBIDDEN), "needs text")
+
+    def test_sha_belongs_to_done_entries_only(self):
+        # a 32-40 character hex token fits sha=, and sha= is stripped before the other rules run
+        self.assertRule(problems(kind="decision", sha="0123456789abcdef0123456789abcdef"), "done entries only")
+        self.assertEqual(problems(kind="done", sha="0123456789abcdef0123456789abcdef"), [])
+
+    def test_a_redacted_entry_is_exactly_the_redacted_line(self):
+        redacted = make_line(kind="redacted", text="redacted after flag")
+        self.assertEqual(agent_log.entry_problems(redacted, NO_FORBIDDEN, stored=True), [])
+        forged = make_line(kind="redacted", text="the deploy pass is hunter")
+        self.assertRule(agent_log.entry_problems(forged, NO_FORBIDDEN, stored=True), "exactly 'redacted after flag'")
+        with_path = make_line(kind="redacted", text="redacted after flag", paths="src/a.py")
+        self.assertRule(agent_log.entry_problems(with_path, NO_FORBIDDEN, stored=True), "exactly")
 
     def test_the_id_must_match_the_line(self):
         tampered = make_line(text="moved the tables").replace("moved", "removed")
@@ -223,6 +243,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("kind=abandon", out)
         self.assertIn("a piece of work", out)
 
+    def test_an_archived_abandon_keeps_its_claims_closed(self):
+        # regression: read hid the archived abandon before computing claims, so the claim came back as open
+        self.add_id("claim", "a piece of work", wt="beta", paths="src/a.py", now="2026-11-09T10:00Z")
+        self.add_id("abandon", "dropped, branch deleted", wt="beta", now="2026-11-09T11:00Z")
+        self.assertIn("open claims: none", self.run_cli("read", "--claims").stdout)
+        self.run_cli("archive", "--branch", "feat/y", "--wt", "beta")
+        self.assertIn("open claims: none", self.run_cli("read", "--claims").stdout)
+        self.assertIn("kind=abandon", self.run_cli("read", "--archive").stdout)
+
     def test_stale_claims_are_marked(self):
         self.add_id("claim", "an old claim", now="2026-11-09T10:00Z")
         self.assertNotIn("[stale]", self.run_cli("read", "--claims", now="2026-11-09T12:00Z").stdout)
@@ -285,6 +314,13 @@ class CliTests(unittest.TestCase):
         grown = (self.archive / "feat-x.log").read_text()
         self.assertTrue(grown.startswith(first))
         self.assertEqual(grown.count("\n"), 2)
+
+    def test_identical_text_in_the_same_minute_is_archived_once(self):
+        first = self.add_id("decision", "chose a split", now="2026-11-09T12:00Z")
+        second = self.add_id("decision", "chose a split", now="2026-11-09T12:00Z")
+        self.assertEqual(first, second)
+        self.run_cli("archive", "--branch", "feat/x", "--wt", "alpha")
+        self.assertEqual((self.archive / "feat-x.log").read_text().count("chose a split"), 1)
 
     def test_archive_dry_run_changes_nothing(self):
         self.add_id("decision", "chose a split")
@@ -352,6 +388,26 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("id does not match", result.stderr)
 
+    def test_check_rejects_a_hand_written_redacted_line_and_one_without_a_resolved_flag(self):
+        self.archive.mkdir(parents=True)
+        forged = make_line(kind="redacted", text="the deploy pass is hunter")
+        (self.archive / "feat-x.log").write_text(forged + "\n")
+        self.assertIn("exactly", self.run_cli("check").stderr)
+        unresolved = make_line(kind="redacted", text="redacted after flag")
+        (self.archive / "feat-x.log").write_text(unresolved + "\n")
+        self.assertIn("needs a resolved flag", self.run_cli("check").stderr)
+
+    def test_check_reads_the_contents_of_flag_files(self):
+        entry = self.archived_entry()
+        self.run_cli("flag", entry, "something reached this entry")
+        self.run_cli("resolve", entry, "handled")
+        fake = "gh" + "p_" + "a" * 12
+        (self.archive / "flags" / f"{entry}.resolved").write_text(
+            f"2026-11-09T15:00Z kind=resolved ref={entry} | rotated {fake}\n")
+        result = self.run_cli("check")
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn(fake, result.stderr)
+
     def test_check_on_a_missing_archive_passes_and_ignores_blank_lines(self):
         self.assertEqual(self.run_cli("check").returncode, 0)
         self.archive.mkdir(parents=True)
@@ -410,6 +466,19 @@ class CliTests(unittest.TestCase):
             self.assertEqual(self.run_cli(*command).returncode, 2, command)
         self.assertEqual(sorted(path.name for path in outside.iterdir()), ["victim.flag"])
         self.assertEqual(self.run_cli("flag", "0123456789", "no such entry").returncode, 2)
+
+    def test_a_failed_redaction_leaves_no_temp_file_in_the_archive(self):
+        # a leftover feat-x.log*.tmp would be committed by `git add wiki/agent-log`
+        from unittest import mock
+        entry = self.archived_entry()
+        self.run_cli("flag", entry, "something reached this entry")
+        before = sorted(path.name for path in self.archive.iterdir())
+        common = ["--log-dir", str(self.live), "--archive-dir", str(self.archive), "--repo-root", str(self.repo)]
+        with mock.patch.object(agent_log.os, "replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                agent_log.main([*common, "resolve", entry, "handled", "--redact"])
+        self.assertEqual(sorted(path.name for path in self.archive.iterdir()), before)
+        self.assertFalse((self.archive / "flags" / f"{entry}.resolved").exists())
 
     def test_flag_and_resolve_state_is_checked(self):
         entry = self.archived_entry()
