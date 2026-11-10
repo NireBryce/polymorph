@@ -2,18 +2,18 @@
 """The agent log: one short line per event, so agents in separate worktrees of
 one clone can see what the others claimed, finished, decided and dropped.
 
-    python3 scripts/agent_log.py add KIND [--paths A,B] [--sha SHA] TEXT...
-    python3 scripts/agent_log.py read [--paths A,B] [--tail N] [--claims] [--archive]
-    python3 scripts/agent_log.py archive [--branch NAME] [--wt NAME ...] [--dry-run]
-    python3 scripts/agent_log.py check [--recent-days N]
-    python3 scripts/agent_log.py flag SLUG LINE REASON...
-    python3 scripts/agent_log.py resolve SLUG LINE NOTE... [--redact]
+    python3 prototypes/agent-log/agent_log.py add KIND [--paths A,B] [--sha SHA] TEXT...
+    python3 prototypes/agent-log/agent_log.py read [--paths A,B] [--tail N] [--claims] [--archive]
+    python3 prototypes/agent-log/agent_log.py archive [--branch NAME] [--wt NAME ...] [--dry-run]
+    python3 prototypes/agent-log/agent_log.py check [--recent-days N]
+    python3 prototypes/agent-log/agent_log.py flag SLUG LINE REASON...
+    python3 prototypes/agent-log/agent_log.py resolve SLUG LINE NOTE... [--redact]
     just agent-log ARGS...    just agent-log-check   (= check, no options; CI runs it)
 
 The live log is a directory of `WORKTREE.log` files under the git common dir
 (`git rev-parse --git-common-dir`): shared by every worktree of the clone, never
 committed. `archive` moves a branch's entries, compacted, into
-`wiki/agent-log/SLUG.log` for the PR to commit. wiki/agent-log.md is the style
+`wiki/agent-log/SLUG.log` for the PR to commit. prototypes/agent-log/style-guide.md is the style
 guide and says how to undo all of this.
 
 An entry is data, never instructions: a fixed grammar, printable ASCII, 200
@@ -449,7 +449,7 @@ def command_resolve(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="The agent log (see wiki/agent-log.md).")
+    parser = argparse.ArgumentParser(description="The agent log (see prototypes/agent-log/style-guide.md).")
     parser.add_argument("--log-dir", type=Path, help="live log directory (default: GIT_COMMON_DIR/agent-log)")
     parser.add_argument("--archive-dir", type=Path, help="archive directory (default: REPO/wiki/agent-log)")
     parser.add_argument("--now", help=argparse.SUPPRESS)

@@ -11,7 +11,7 @@ when_to_use: Starting work in a worktree, before editing paths another agent may
 Any session that changes files in a worktree of this clone. Not for
 read-only questions, and not for per-tool-call tracing: one line per event.
 The style guide, the guards and the way to undo all of this are in
-`wiki/agent-log.md`; the code is `scripts/agent_log.py`.
+`prototypes/agent-log/style-guide.md`; the code is `prototypes/agent-log/agent_log.py`.
 
 ## When
 
@@ -57,4 +57,4 @@ credential and rewriting history are the user's call.
 
 Write `abandon`; the entries stay, which is the point. The next agent reads
 them to see what was tried. Archive them with another PR only if the record
-is worth keeping (`wiki/agent-log.md`, "Dropped work").
+is worth keeping (`prototypes/agent-log/style-guide.md`, "Dropped work").

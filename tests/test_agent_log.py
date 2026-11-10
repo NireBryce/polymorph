@@ -1,4 +1,4 @@
-"""scripts/agent_log.py: the entry rules reject what they should and accept what
+"""prototypes/agent-log/agent_log.py: the entry rules reject what they should and accept what
 the log is for; the CLI writes, reads, archives, checks and flags, with no git
 and a PATH-only environment. Fake secrets are built here at run time, so no
 file in the repo holds a token-shaped string."""
@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "agent_log.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "prototypes" / "agent-log" / "agent_log.py"
 sys.path.insert(0, str(SCRIPT.parent))
 import agent_log  # noqa: E402
 

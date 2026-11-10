@@ -3,11 +3,13 @@
 How agents working in separate worktrees of one clone see each other's work:
 one short, machine-readable line per event, in a shared uncommitted file,
 archived into the PR when the branch ships. Skill `agent-log` is the
-procedure; `scripts/agent_log.py` is the code; this page is the style guide
+procedure; `prototypes/agent-log/agent_log.py` is the code; this page is the style guide
 and the way out.
 
-It is repo tooling, not part of polymorph's product (no mapping, no canon,
-no `src/`). Nothing here promises compatibility.
+It is a prototype (`prototypes/agent-log/README.md` lists its known
+problems and every skill that references it), repo tooling and not part of
+polymorph's product (no mapping, no canon, no `src/`). Nothing here promises
+compatibility.
 
 ## What it is for
 
@@ -74,7 +76,7 @@ just agent-log archive                    # at ship time; --dry-run first if uns
 just agent-log-check                      # the rules over everything committed; CI runs it
 ```
 
-Without `just`: `python3 scripts/agent_log.py ...`. The live log is
+Without `just`: `python3 prototypes/agent-log/agent_log.py ...`. The live log is
 `$(git rev-parse --git-common-dir)/agent-log/WORKTREE.log`, shared by every
 worktree of the clone and never committed. A claim older than 24 hours is
 shown `[stale]`; the script does not release it for you.
@@ -170,9 +172,11 @@ Stopping is safe at any point; nothing else depends on the log.
    "Log your work" hard rule, and the steps it added to skills
    `use-a-worktree`, `ship`, `review` and `docs-sync` (`git grep agent-log`
    lists every place).
-2. Remove `scripts/agent_log.py`, `tests/test_agent_log.py`, the
+2. Remove `prototypes/agent-log/` (the script, this guide, the README), `tests/test_agent_log.py`, the
    `agent-log` and `agent-log-check` recipes (and `agent-log-check` from
-   `preflight`), and this page, then `just docs`.
+   `preflight`, and its name in `tests/test_run_recipe.py`'s preflight
+   assertion), the `wiki/patterns.md` row and the `wiki/agents-lessons-learned.md`
+   row that names `tests/test_agent_log.py`, then `just docs`.
 3. Decide about the archive. `wiki/agent-log/` can be deleted, or kept as a
    record; nothing reads it once the script is gone.
 4. The live log is local: `rm -r "$(git rev-parse --git-common-dir)/agent-log"`
