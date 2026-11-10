@@ -2,7 +2,7 @@
 
 _Status: proposal with decisions recorded, 2026-11-10. Nothing here is built unless it says landed. polymorph is experimental and unvetted ([Limits](limits.md)); every phase says what it could break. This plan follows the [loadout pivot plan](plan-loadout-pivot.md) and does not replace it._
 
-This page is written to be worked from without the conversation that produced it. Start at [How to pick up a task](#how-to-pick-up-a-task), then the [task list](#task-list).
+This page holds the decisions and the task list, so work can continue without the conversation that produced them. How an agent picks up and lands a task is skill `next-task`; this page does not repeat it.
 
 ## Decisions so far
 
@@ -11,6 +11,7 @@ This page is written to be worked from without the conversation that produced it
 | 2026-11-10 | The agent log archive keeps `decision`, `gotcha`, `abandon`, and `sops` entries and drops `done` (`git log` has it). | user |
 | 2026-11-10 | Agents run on more than one machine, so cross-machine sharing (stage 2) stays on the plan. | user |
 | 2026-11-10 | Order: cleanup, then the log trial with the read-only work beside it, then stage 2 ahead of the transliteration refactor. Reasoning in [Order](#order). | agent proposed, user agreed |
+| 2026-11-10 | Agent flow lives in the skills and `AGENTS.md`; this page is data (decisions, tasks, tables), not procedure. | user |
 | 2026-11-10 | "Say what happened, not what to do" in log entries is a convention, not a rule the script enforces. | recorded in the [style guide](../prototypes/agent-log/style-guide.md) |
 
 Open, waiting on the user:
@@ -61,13 +62,11 @@ State is `open`, `blocked`, `in progress`, or `done`. Change a task's state in t
 
 ## How to pick up a task
 
-1. Read, in order: this page, the [agent log README](../prototypes/agent-log/README.md), the open issues named above, and `AGENTS.md`.
-2. Work in your own worktree (skill `use-a-worktree`). Run `just agent-log read`, then claim the paths you will touch.
-3. Check the task's "Depends on" column. A `blocked` task whose dependencies are `done` becomes `open` in your PR.
-4. Land through skill `ship`. Say which rung you reached (unit tests, ran the CLI, or ran in a live harness).
-5. In the same PR: set the task's state, add a row to Decisions if a decision was made, and fix any doc the change made stale (skill `docs-sync`).
-
-Two tasks need the user, not only an agent: T6 (pushes to GitHub) and T7 (a decision). Do not start either without them.
+The flow is in skill `next-task` (and `AGENTS.md`), not on this page: pick an
+`open` task whose dependencies are `done`, work in your own worktree, land
+through skill `ship`, and update the task's state, the decisions, and any table
+the task owns in the same PR. Two tasks need the user, not only an agent: T6
+(pushes to GitHub) and T7 (a decision). Do not start either without them.
 
 ## Trial notes
 

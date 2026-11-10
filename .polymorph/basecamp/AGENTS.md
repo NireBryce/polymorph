@@ -129,7 +129,7 @@ exit status separately, or use `set -o pipefail`.
 | `scripts/` | `ci_wait.py`, `ship_land.py`: the `just ci-wait` / `just ship-land` recipes, tested with a fake `gh` and `git` on PATH (`tests/stubtools.py`); `gen_reference.py`: writes `docs/usage.md` and `man/polymorph.1` from the argparse parser (`just reference`); `self_check.py`: `just self-check`; `run_recipe.py`: runs justfile recipes where `just` is not installed (refuses syntax beyond the subset the justfile uses, so recipe logic lives here) |
 | `prototypes/` | tools kept here until they earn a place elsewhere; each has a README with its status, known problems, and the skills that reference it. `agent-log/`: the shared agent log (`just agent-log`, `just agent-log-check`) |
 | `tests/` | `test_*.py` unit tests, `fixture_repo/` a sample agent config, `docs.py` the doc checks |
-| `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses |
+| `docs/` | `SPEC.md` (contract), `cli.md`, notes on observed harnesses, and `plan-next-phases.md` (decisions and the task list agents pick work from; skill `next-task`) |
 | `wiki/` | `agents-lessons-learned.md` (mistakes, one line each, with its Home), `patterns.md` (how the repo is developed with agents), `code-style.md`, `risk-and-impact.md` (the 1-10 scale every PR body and change-proposing issue ends with), `behavior-NAME.md` (what a harness reads and how its hooks behave, gathered before its modules are written), and `agent-log/BRANCH.log` (the committed archive of the agent log, written by `just agent-log archive`) |
 | `.github/` | CI (`check.yml` runs `just preflight`), PR and issue templates |
 | `.githooks/` | opt-in pre-commit (`just install-hooks`) |
@@ -140,6 +140,7 @@ exit status separately, or use `set -o pipefail`.
 |---|---|
 | `ship` | landing work through a branch, a PR, and one confirmation |
 | `use-a-worktree` | branching work in isolation |
+| `next-task` | picking up and landing a task from the plan's task list, and keeping the list true |
 | `agent-log` | claiming paths, recording work and dropped work where other worktrees can read it, and archiving it per PR |
 | `new-mapping` | adding a harness: discover, draft, review, fixtures, live check |
 | `change-the-schema` | changing the mapping schema or the canonical config |
