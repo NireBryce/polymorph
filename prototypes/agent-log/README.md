@@ -9,6 +9,7 @@ chance of a leak without proving there is none.
 | File | What it is |
 |---|---|
 | `agent_log.py` | the tool: `add`, `read`, `archive`, `prune`, `check`, `flag`, `resolve`; run as `just agent-log ARGS` or `python3 prototypes/agent-log/agent_log.py ARGS` |
+| `stage-2.md` | the design for sharing the log across machines and clones (not built; tasks T8 to T10 in [the plan](../../docs/plan-next-phases.md)) |
 | `style-guide.md` | the line format, what to write, the guards, what to do when something got through, and how to undo all of it |
 | `../../tests/test_agent_log.py` | its unit tests; they run in `just test` so the prototype does not rot |
 
@@ -70,7 +71,7 @@ each of these in the same change (skill `docs-sync`):
 
 ## Where it is going
 
-- **Stage 2 (across machines and clones), only after this has been used:**
+- **Stage 2 (across machines and clones), designed in [stage-2.md](stage-2.md), only after this has been used:**
   one git ref per agent under `refs/agent-log/`, a `sync` that re-runs the gate
   before it pushes and refuses the whole push on a failure, fixed commit
   metadata, advisory claims. A pushed line cannot be recalled, so this stage

@@ -1,0 +1,2 @@
+2026-11-10T09:58Z id=8e90471fb1 wt=wt-plan kind=decision | stage 2 stays on the plan because agents run on more than one machine
+2026-11-10T09:58Z id=8399e99982 wt=wt-plan kind=decision | the plan is a task table with dependencies so it can be worked from without the conversation
